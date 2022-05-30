@@ -1,0 +1,46 @@
+# Parameters for exchanges-wrapper REST API Server exch_srv.py
+# Copyright © 2021 Jerry Fedorenko aka VM
+
+[Path]
+log_path = './log/'
+
+[endpoint]
+api = 'https://api.binance.com'
+ws = 'wss://stream.binance.com:9443'
+
+[endpoint_test]
+api = 'https://testnet.binance.vision'
+ws = 'wss://testnet.binance.vision/ws'
+
+[endpoint_ftx]
+api = 'https://ftx.com/api'
+ws = 'wss://ftx.com/ws/'
+
+# For FTX name var want include substring 'FTX' for main and all subaccount
+# For FTX sub_account_name var is actually subaccount name on FTX exchange
+
+[[accounts]]
+name = 'FTX'
+# sub_account_name = 'main'
+api_key = '*********** Place API key there ************'
+api_secret = '*********** Place secret API key there ************'
+test_net = false
+
+[[accounts]]
+name = 'FTX_sub_01'
+sub_account_name = 'ftx_01'
+api_key = '*********** Place API key there ************'
+api_secret = '*********** Place secret API key there ************'
+test_net = false
+
+[[accounts]]
+name = 'Demo - Binance'
+api_key = '*********** Place API key there ************'
+api_secret = '*********** Place secret API key there ************'
+test_net = true
+
+[[accounts]]
+name = 'Binance'
+api_key = '*********** Place API key there ************'
+api_secret = '*********** Place secret API key there ************'
+test_net = false

@@ -1,3 +1,6 @@
+#!/usr/bin/python3.8
+# -*- coding: utf-8 -*-
+
 class BinancePyError(Exception):
     pass
 
@@ -32,7 +35,7 @@ class RateLimitReached(HTTPError):
     message = "The rate limit has been reached."
 
 
-class IPAdressBanned(HTTPError):
+class IPAddressBanned(HTTPError):
 
     code = 418
     message = "Your IP address has been auto-banned for continuing to send requests after receiving 429 codes."

@@ -1,6 +1,11 @@
-# Enum definitions of the binance REST API
+#!/usr/bin/python3.8
+# -*- coding: utf-8 -*-
+
+# Enum definitions of the exchanges_wrapper REST API
 # see: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#enum-definitions
+
 from enum import Enum
+
 
 # Symbol status (status)
 class SymbolStatus(Enum):

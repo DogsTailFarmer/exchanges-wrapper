@@ -1,0 +1,12 @@
+"""
+REST API and WebSocket asyncio wrapper with grpc powered multiplexer server for crypto exchanges (Binance, FTX, ).
+Utilizes one connection for many accounts and trading pairs.
+For SPOT market only
+"""
+
+__authors__ = ["Th0rgal", "Jerry Fedorenko"]
+__license__ = "MIT"
+__maintainer__ = "Jerry Fedorenko"
+__contact__ = "https://github.com/DogsTailFarmer"
+__email__ = "jerry.fedorenko@yahoo.com"
+__version__ = "1.0b0"

@@ -1,1 +1,4 @@
 aiohttp>=3.6.3
+grpcio>=1.40.0
+grpcio-tools>=1.40.0
+toml>=0.10.2

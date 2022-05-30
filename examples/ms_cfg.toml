@@ -1,0 +1,7 @@
+# Client example parameters for exchanges-wrapper exch_srv.py
+# Accounts name wold be identically accounts.name from exch_srv_cfg.toml in exchanges-wrapper
+exchange = [
+   "Demo - Binance",   # 0
+   "FTX",              # 1
+   "FTX_sub_01",       # 2
+]

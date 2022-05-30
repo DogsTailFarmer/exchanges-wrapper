@@ -1,51 +1,25 @@
-<h1 align="center">
-  <br>
-  <img src="./logo.svg" alt="Binance.py logo" width="256">
-  <br>
-</h1>
 
-<h4 align="center">🦾 A python3 binance API wrapper powered by asyncio and python Decimals.</h4>
+***
+<h1 align="center">Crypto exchanges API/WSS wrapper and grpc powered server</h1>
 
-<p align="center">
-    <a href="https://discord.gg/bhbPCXW" alt="discord">
-        <img src="https://img.shields.io/discord/725070664100216922?label=chat&logo=discord"/>
-    </a>
-    <a href="https://th0rgal.gitbook.io/binance-py/" alt="Docs (gitbook)">
-        <img src="https://img.shields.io/badge/docs-gitbook-brightgreen"/>
-    </a>
-    <a href="https://app.fossa.com/projects/git%2Bgithub.com%2FTh0rgal%2Fbinance.py?ref=badge_shield" alt="FOSSA Status">
-        <img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FTh0rgal%2Fbinance.py.svg?type=shield"/>
-    </a>
-    <a href="https://pypi.org/project/binance.py/">
-        <img src="https://img.shields.io/pypi/dm/binance.py"/>
-    </a>
-    <a href="https://lgtm.com/projects/g/Th0rgal/binance.py/context:python">
-        <img alt="Language grade: Python" src="https://img.shields.io/lgtm/grade/python/g/Th0rgal/binance.py.svg?logo=lgtm"/>
-    </a>
-</p>
+<h2 align="center">Binance, FTX</h2>
 
+<h3 align="center">For SPOT market</h2>
 
-## Get binance.py
+***
+
+***
+
+## Install
+
 To install the library, you can just run the following command:
+
 ```console
-# Linux/macOS
-python3 -m pip install -U binance.py
-
-# Windows
-py -3 -m pip install -U binance.py
+pip install exchanges-wrapper
 ```
-
-Alternatively you can build the package and install it manually:
-```
-python setup.py sdist bdist_wheel
-python -m pip install dist/binance.py-X.X.X-py3-none-any.whl
-```
-
-## Why binance.py?
-The binance api is complex to grasp and using a wrapper saves time but also ensures that the right practices are adopted. Binance.py offers a modern and asynchronous solution.
 
 ## Features
-- Covers general endpoints (test connectivity and get exchange informations)
+- Covers general endpoints (test connectivity and get exchange information's)
 - Covers market data endpoints
 - Covers Account endpoints (create and manage orders)
 - Covers user data stream (receive real time user updates)
@@ -53,38 +27,18 @@ The binance api is complex to grasp and using a wrapper saves time but also ensu
 - Async support
 - Completely free and without limitations
 
-## What it does not
-- Binance.py does not cover the withdraw API
-- Binance.py does not cover the margin trading API
-> If you need these features, don't open an issue to ask me to implement them
 
+## FTX Implementation Features
 
 ## Get started
-
-- [Generate an API Key](https://www.binance.com/en/support/articles/360002502072) and assign relevant permissions.
-- import binance, create a client and send your first test order:
-```python
-import binance
-
-client = binance.Client(API_KEY, API_SECRET)
-await client.load()
-
-order = await client.create_order(
-    "ETHPAX", binance.Side.BUY.value, binance.OrderType.MARKET.value, quantity="1", test=True,
-)
-print(order)
-await client.close()
-```
-- Check some [examples](https://github.com/Th0rgal/binance.py/tree/master/examples)
-
-## License
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FTh0rgal%2Fbinance.py.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FTh0rgal%2Fbinance.py?ref=badge_large)
+- [exchanges_client.py]()
 
 ## Donate
-- ETH (ENS): ``thomas.ethers.xyz``
-- ETH (legacy address): ``0x54c5a92c57A07f33500Ec9977797219D70D506C9``
-- BTC: ``bc1qm9g2k3fznl2a9vghnpnwem87p03txl4y5lahyu``
 
-## Powered by binance.py
-### [martin binance](https://github.com/DogsTailFarmer/martin-binance)
-Free trading system for Binance SPOT market. Adaptive customizable reverse grid strategy based on martingale.
+*BNB*, *BUSD*, *USDT* (BEP20) 0x5b52c6ba862b11318616ee6cef64388618318b92
+
+*USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
+
+## Powered by exchanges-wrapper
+### [martin-binance](https://github.com/DogsTailFarmer/martin-binance)
+Free trading system for Binance and FTX SPOT markets. Adaptive customizable reverse grid strategy based on martingale.

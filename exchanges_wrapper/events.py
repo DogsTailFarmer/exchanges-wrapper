@@ -1,8 +1,11 @@
+#!/usr/bin/python3.8
+# -*- coding: utf-8 -*-
+
 import asyncio
 import functools
 from collections import defaultdict
 
-from .errors import UnknownEventType
+from errors import UnknownEventType
 
 
 # based on: https://stackoverflow.com/a/2022629/10144963
@@ -23,7 +26,7 @@ class Handlers(list):
 # HANDLERS
 # Example usage:
 
-# from binance import events
+# from exchange-wrapper import events
 #
 # def my_order_update_listener(wrapped_event):
 #    print(f"order for symbol {wrapped_event.symbol} updated!")
@@ -34,19 +37,29 @@ class Handlers(list):
 class Events:
     def __init__(self):
         self.handlers = defaultdict(Handlers)
-        self.registered_streams = set()
+        self.registered_streams = defaultdict(set)
 
     def register_user_event(self, listener, event_type):
         self.handlers[event_type].append(listener)
 
-    def register_event(self, listener, event_type):
-        self.registered_streams.add(event_type)
-        self.handlers[event_type].append(listener)
+    def unregister_user_event(self, event_type):
+        self.handlers.pop(event_type)
 
-    def unregister(self, listener, event_type):
-        # self.handlers[event_type].remove(listener)
+    def register_event(self, listener, event_type, exchange='binance'):
+        # print(f"register_event.listener: {listener}, event_type: {event_type}, exchange: {exchange}")
+        self.registered_streams[exchange] |= {event_type}
+        event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
+        self.handlers[event_type].append(listener)
+        # print(f"register_event.registered_streams: {self.registered_streams}")
+        # print(f"register_event.handlers: {self.handlers}")
+
+    def unregister(self, event_type, exchange='binance'):
+        # print(f"unregister.event_type: {event_type}")
+        self.registered_streams[exchange].discard(event_type)
+        event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         self.handlers.pop(event_type, None)
-        self.registered_streams.discard(event_type)
+        # print(f"unregister.handlers: {self.handlers}")
+        # print(f"unregister.registered_streams: {self.registered_streams}")
 
     def wrap_event(self, event_data):
         wrapper_by_type = {
@@ -78,8 +91,8 @@ class Events:
         return wrapper(event_data, self.handlers[stream if stream else event_type])
 
 
-class BinanceEventWrapper:
-    def __init__(self, event_data, handlers):
+class EventWrapper:
+    def __init__(self, _event_data, handlers):
         self.handlers = handlers
 
     async def fire(self):
@@ -90,7 +103,7 @@ class BinanceEventWrapper:
 # MARKET EVENTS
 
 
-class AggregateTradeWrapper(BinanceEventWrapper):
+class AggregateTradeWrapper(EventWrapper):
     def __init__(self, event_data, handlers):  # lgtm [py/similar-function]
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
@@ -106,7 +119,7 @@ class AggregateTradeWrapper(BinanceEventWrapper):
         self.ignore = event_data["M"]
 
 
-class TradeWrapper(BinanceEventWrapper):
+class TradeWrapper(EventWrapper):
     def __init__(self, event_data, handlers):  # lgtm [py/similar-function]
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
@@ -122,7 +135,7 @@ class TradeWrapper(BinanceEventWrapper):
         self.ignore = event_data["M"]
 
 
-class KlineWrapper(BinanceEventWrapper):
+class KlineWrapper(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
@@ -148,7 +161,7 @@ class KlineWrapper(BinanceEventWrapper):
         self.kline_ignore = kline["B"]
 
 
-class SymbolMiniTickerWrapper(BinanceEventWrapper):
+class SymbolMiniTickerWrapper(EventWrapper):
     def __init__(self, event_data, handlers):  # lgtm [py/similar-function]
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
@@ -162,7 +175,7 @@ class SymbolMiniTickerWrapper(BinanceEventWrapper):
         self.total_traded_quote_asset_volume = event_data["q"]
 
 
-class SymbolTickerWrapper(BinanceEventWrapper):
+class SymbolTickerWrapper(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
@@ -190,7 +203,7 @@ class SymbolTickerWrapper(BinanceEventWrapper):
         self.total_trade_numbers = event_data["n"]
 
 
-class SymbolBookTickerWrapper(BinanceEventWrapper):
+class SymbolBookTickerWrapper(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.order_book_updated = event_data["u"]
@@ -201,7 +214,7 @@ class SymbolBookTickerWrapper(BinanceEventWrapper):
         self.best_ask_quantity = event_data["A"]
 
 
-class PartialBookDepthWrapper(BinanceEventWrapper):
+class PartialBookDepthWrapper(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.last_update_id = event_data["lastUpdateId"]
@@ -209,7 +222,7 @@ class PartialBookDepthWrapper(BinanceEventWrapper):
         self.asks = event_data["asks"]
 
 
-class DiffDepthWrapper(BinanceEventWrapper):
+class DiffDepthWrapper(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
@@ -224,7 +237,7 @@ class DiffDepthWrapper(BinanceEventWrapper):
 # ACCOUNT UPDATE
 
 
-class OutboundAccountPositionWrapper(BinanceEventWrapper):
+class OutboundAccountPositionWrapper(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_time = event_data["E"]
@@ -237,7 +250,7 @@ class OutboundAccountPositionWrapper(BinanceEventWrapper):
 # BALANCE UPDATE
 
 
-class BalanceUpdateWrapper(BinanceEventWrapper):
+class BalanceUpdateWrapper(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_time = event_data["E"]
@@ -249,7 +262,7 @@ class BalanceUpdateWrapper(BinanceEventWrapper):
 # ORDER UPDATE
 
 
-class OrderUpdateWrapper(BinanceEventWrapper):
+class OrderUpdateWrapper(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_time = event_data["E"]
@@ -285,7 +298,7 @@ class OrderUpdateWrapper(BinanceEventWrapper):
         self.quote_order_quantity = event_data["Q"]
 
 
-class ListStatus(BinanceEventWrapper):
+class ListStatus(EventWrapper):
     def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_time = event_data["E"]
@@ -296,7 +309,8 @@ class ListStatus(BinanceEventWrapper):
         self.list_order_status = event_data["L"]
         self.list_reject_reason = event_data["r"]
         self.list_client_order_id = event_data["C"]
+        # noinspection PyArgumentList
         self.orders = dict(
-            map(lambda x: (x["s"], {"orderid": x["i"], "clientorderid": x["c"]})),
+            map(lambda x: (x["s"], {"orderId": x["i"], "clientOrderId": x["c"]})),
             event_data["O"],
         )
