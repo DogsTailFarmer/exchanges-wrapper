@@ -10,6 +10,7 @@
 
 ***
 <a href="https://badge.fury.io/py/exchanges-wrapper"><img src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version"></a>
+<a href="https://codeclimate.com/github/DogsTailFarmer/exchanges-wrapper/maintainability"><img src="https://api.codeclimate.com/v1/badges/f333ab9b1f3024699e09/maintainability" /></a>
 ***
 
 ## exchanges-wrapper vs binance.py
@@ -20,9 +21,9 @@ and many trading pairs through one connection. It's powered by [gRPC](https://gr
 Remote Procedure Call framework.
 
 Warning. Coverage of overridden binance.py packages is significant but not complete.
-Overridden methods describes into ```example/exch_client.py```
+Served methods describes into ```example/exch_client.py```
 
-### binance.py features
+### Initial capabilities (inherited from binance.py)
 - Covers general endpoints (test connectivity and get exchange information's)
 - Covers market data endpoints
 - Covers Account endpoints (create and manage orders)
@@ -31,7 +32,8 @@ Overridden methods describes into ```example/exch_client.py```
 - Async support
 - Completely free and without limitations
 
-### Extra capabilities
+### Added Features
+- Multi exchange support
 - Adaptive algorithm to ensure maximum performance and avoid exceeding the rates limits
 - Passthrough logging
 
