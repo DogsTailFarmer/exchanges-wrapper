@@ -6,7 +6,6 @@ from typing import Union
 import decimal
 import math
 import asyncio
-import logging
 import random
 
 from http_client import HttpClient
@@ -163,7 +162,7 @@ class Client:
         return f"{symbol_info.get('baseAsset')}/{symbol_info.get('quoteAsset')}"
 
     def refine_amount(self, symbol, amount: Union[str, decimal.Decimal], quote=False):
-        if type(amount) == str:  # to save time for developers
+        if type(amount) is str:  # to save time for developers
             amount = decimal.Decimal(amount)
         if self.loaded:
             precision = self.symbols[symbol]["baseAssetPrecision"]
@@ -644,9 +643,9 @@ class Client:
                 method="DELETE",
                 signed=True,
              )
-            order_not_cancelled = True
+            order_cancelled = False
             timeout = STATUS_TIMEOUT
-            while order_not_cancelled and timeout:
+            while not order_cancelled and timeout:
                 timeout -= 1
                 binance_res = await self.fetch_order(symbol,
                                                      order_id,
@@ -654,7 +653,7 @@ class Client:
                                                      receive_window,
                                                      response_type=True,
                                                      )
-                order_not_cancelled = False if binance_res.get('status') == 'CANCELED' else True
+                order_cancelled = bool(binance_res.get('status') == 'CANCELED')
                 await asyncio.sleep(1)
         return binance_res
 

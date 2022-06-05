@@ -374,8 +374,8 @@ def ftx_account_trade_list(res: []) -> []:
             "commission": str(trade.get('fee')),
             "commissionAsset": trade.get('feeCurrency'),
             "time": _time,
-            "isBuyer": True if trade.get('liquidity') == 'taker' else False,
-            "isMaker": True if trade.get('liquidity') == 'maker' else False,
+            "isBuyer": bool(trade.get('liquidity') == 'taker'),
+            "isMaker": bool(trade.get('liquidity') == 'maker'),
             "isBestMatch": True,
         }
         binance_trade_list.append(binance_trade)
