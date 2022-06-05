@@ -14,6 +14,9 @@ __contact__ = "https://github.com/DogsTailFarmer"
 import time
 import datetime
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger('exch_srv_logger')
 
 CH_KEY = {
     'miniTicker': ['last'],
@@ -127,7 +130,7 @@ def ftx_order(order: {}, response_type=None) -> {}:
     symbol = str.replace(order.get('market'), '/', '')
     order_id = order.get('id')
     order_list_id = -1
-    client_order_id = order.get('clientId')
+    client_order_id = order.get('clientId', str()) or str()
     price = str(order.get('price') or 0.0)
     orig_qty = str(order.get('size') or 0.0)
     executed_qty = str(order.get('filledSize') or 0.0)
@@ -156,7 +159,6 @@ def ftx_order(order: {}, response_type=None) -> {}:
     update_time = _time
     is_working = True
     orig_quote_order_qty = str(Decimal(orig_qty) * Decimal(price))
-    # orig_quote_order_qty = str(orig_quote_order_qty.quantize(ROUND_PATTERN, rounding=ROUND_HALF_UP))
     if response_type:
         binance_order = {
             "symbol": symbol,
@@ -480,8 +482,8 @@ def ftx_stream_convert(msg: {}, symbol: str = None, ch_type: str = None) -> {}:
                 "t": trade_id,
                 "I": 123456789,
                 "w": True,
-                "m": True,
-                "M": True,
+                "m": False,
+                "M": False,
                 "O": _time,
                 "Z": cumulative_quote_asset,
                 "Y": last_quote_asset,

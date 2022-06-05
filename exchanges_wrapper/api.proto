@@ -1,5 +1,5 @@
 /*
-Protocol buffer definition for exchanges-wrapper REST API Server exch_srv.py
+Protocol buffer definition for exchanges-wrapper exch_srv.py
 https://grpc.io/docs/languages/python/quickstart/
 $ python3.8 -m grpc_tools.protoc --python_out=. -I. --grpc_python_out=. api.proto
 */

@@ -6,7 +6,7 @@ build-backend = "flit_core.buildapi"
 name = "exchanges-wrapper"
 authors = [{name = "Thomas Marchand", email = "thomas.marchand@tuta.io"}, {name = "Jerry Fedorenko", email = "jerry.fedorenko@yahoo.com"}]
 readme = "README.md"
-license = {file = "LICENSE"}
+license = {file = "LICENSE.md"}
 classifiers=["Programming Language :: Python :: 3",
              "Development Status :: 5 - Production/Stable",
              "License :: OSI Approved :: MIT License",

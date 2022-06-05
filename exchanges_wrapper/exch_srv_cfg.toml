@@ -38,9 +38,3 @@ name = 'Demo - Binance'
 api_key = '*********** Place API key there ************'
 api_secret = '*********** Place secret API key there ************'
 test_net = true
-
-[[accounts]]
-name = 'Binance'
-api_key = '*********** Place API key there ************'
-api_secret = '*********** Place secret API key there ************'
-test_net = false

@@ -584,7 +584,6 @@ class Client:
                 params["originClientOrderId"] = origin_client_order_id
             if receive_window:
                 params["recvWindow"] = receive_window
-
             binance_res = await self.http.send_api_call(
                 "/api/v3/order",
                 params=params,
@@ -599,10 +598,9 @@ class Client:
                 f"orders/{order_id}",
                 signed=True,
              )
-            # print(f"fetch_order.res: {res}")
+            logger.debug(f"fetch_order.res: {res}")
             if res and res.get('success'):
                 binance_res = ftx_order(res.get('result'), response_type=response_type)
-        # print(f"fetch_order.binance_res: {binance_res}")
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-order-trade
@@ -1000,8 +998,9 @@ class Client:
                 signed=True,
             )
         elif self.exchange == 'ftx':
-            params = {'market': self.symbol_to_ftx(symbol),
-                      'start_time': int(start_time / 1000)}
+            params = {'market': self.symbol_to_ftx(symbol)}
+            if start_time:
+                params["startTime"] = int(start_time / 1000)
             if from_id:
                 params["orderId"] = from_id
             res = await self.http.send_api_call(

@@ -56,27 +56,28 @@ class EventsDataStream:
             elif msg.type == aiohttp.WSMsgType.CLOSING:
                 logger.info(f"_handle_messages loop is stopped for {symbol} {ch_type}")
                 break
-            msg_data = json.loads(msg.data)
-            # print(f"_handle_messages.msg_data: {msg_data}")
-            if self.exchange == 'binance':
-                # print(f"binance, channel: {ch_type}")
-                await self._handle_event(msg_data)
-            elif self.exchange == 'ftx' and msg_data.get('type') == 'update':
-                # print(f"ftx, channel: {ch_type}")
-                if msg_data.get('channel') not in ('fills', 'orders'):
-                    _msg_data = eval(repr(msg_data))
-                    if ftx_stream_compare(_msg_data, msg_data_prev, ch_type):
-                        # print(f"_handle_messages.msg_data_LAST: {msg_data}")
-                        msg_data_binance = ftx_stream_convert(msg_data, symbol, ch_type)
-                        # print(f"_handle_messages.msg_data_binance: {msg_data_binance}")
-                        await self._handle_event(msg_data_binance)
-                    msg_data_prev = eval(repr(msg_data))
-                else:
-                    # print(f"_handle_messages.msg_data: {msg_data}")
-                    msg_data_binance = ftx_stream_convert(msg_data)
-                    # print(f"_handle_messages.msg_data_binance: {msg_data_binance}")
-                    if msg_data_binance:
-                        await self._handle_event(msg_data_binance)
+            if msg.data:
+                msg_data = json.loads(msg.data)
+                # print(f"_handle_messages.msg_data: {msg_data}")
+                if self.exchange == 'binance':
+                    # print(f"binance, channel: {ch_type}")
+                    await self._handle_event(msg_data)
+                elif self.exchange == 'ftx' and msg_data.get('type') == 'update':
+                    # print(f"ftx, channel: {ch_type}")
+                    if msg_data.get('channel') not in ('fills', 'orders'):
+                        _msg_data = eval(repr(msg_data))
+                        if ftx_stream_compare(_msg_data, msg_data_prev, ch_type):
+                            # logger.debug(f"_handle_messages.msg_data_LAST: {msg_data}")
+                            msg_data_binance = ftx_stream_convert(msg_data, symbol, ch_type)
+                            # logger.debug(f"_handle_messages.msg_data_binance: {msg_data_binance}")
+                            await self._handle_event(msg_data_binance)
+                        msg_data_prev = eval(repr(msg_data))
+                    else:
+                        logger.debug(f"_handle_messages.msg_data: {msg_data}")
+                        msg_data_binance = ftx_stream_convert(msg_data)
+                        logger.debug(f"_handle_messages.msg_data_binance: {msg_data_binance}")
+                        if msg_data_binance:
+                            await self._handle_event(msg_data_binance)
 
 
 class MarketEventsDataStream(EventsDataStream):

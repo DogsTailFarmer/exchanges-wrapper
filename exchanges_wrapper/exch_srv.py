@@ -127,7 +127,7 @@ class Event:
         self.transaction_time = event_data["updateTime"]
         self.trade_id = 1
         self.ignore_a = int()
-        self.in_order_book = False
+        self.in_order_book = True
         self.is_maker_side = False
         self.ignore_b = False
         self.order_creation_time = event_data["time"]
@@ -227,14 +227,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
-            logger.info(f"FetchOrders for {open_client.name}:{request.symbol} exception: {_ex}")
+            logger.error(f"FetchOrders for {open_client.name}:{request.symbol} exception: {_ex}")
         else:
-            # logger.info(f"FetchOrder: {res}")
+            logger.debug(f"FetchOrder: {res}")
             if request.filled_update_call and res.get('status') == 'FILLED':
-                logger.info(f"FetchOrder: {res.get('status')}")
                 event = Event(res)
-                logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{int(event.order_id)}:"
-                            f"{event.order_status}")
+                logger.debug(f"FetchOrder.event: {open_client.name}:{event.symbol}:{int(event.order_id)}:"
+                             f"{event.order_status}")
                 _event = weakref.ref(event)
                 await _queue.put(_event())
             json_format.ParseDict(res, response)
@@ -593,7 +592,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 response.cumulative_filled_quantity = _event.cumulative_filled_quantity
                 response.last_executed_price = _event.last_executed_price
                 response.commission_amount = _event.commission_amount
-                response.commission_asset = _event.commission_asset if _event.commission_asset else ''
+                response.commission_asset = _event.commission_asset or str()
                 response.transaction_time = int(_event.transaction_time)
                 response.trade_id = int(_event.trade_id)
                 response.ignore_a = _event.ignore_a
@@ -740,7 +739,7 @@ async def serve() -> None:
 
 
 if __name__ == '__main__':
-    FILE_LOG = f"{CONFIG.get('Path').get('log_path')}binance_srv.log"
+    FILE_LOG = f"{CONFIG.get('Path').get('log_path')}exch_srv.log"
     logger = logging.getLogger('exch_srv_logger')
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
