@@ -47,9 +47,7 @@ class EventsDataStream:
                 asyncio.ensure_future(self.start())
                 break
             elif msg.type is aiohttp.WSMsgType.ERROR:
-                logger.error(
-                    f"Something went wrong with the websocket, reconnecting..."
-                )
+                logger.error("Something went wrong with the websocket, reconnecting...")
                 asyncio.ensure_future(self.start())
                 break
             elif msg.type == aiohttp.WSMsgType.CLOSING:

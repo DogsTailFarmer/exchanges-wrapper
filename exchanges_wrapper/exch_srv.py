@@ -685,7 +685,7 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def StopStream(self, request: api_pb2.MarketRequest,
                          context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        logger.info(f"StopStream")
+        logger.info("StopStream")
         open_client = OpenClient.get_client(request.client_id)
         response = api_pb2.SimpleResponse()
         open_client.stop_streams_for_symbol = request.symbol

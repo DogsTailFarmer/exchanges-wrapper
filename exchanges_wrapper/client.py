@@ -151,11 +151,8 @@ class Client:
         await asyncio.gather(*stop_list, return_exceptions=False)
 
     def assert_symbol_exists(self, symbol):
-        if self.loaded:
-            if symbol not in self.symbols:
-                raise BinancePyError(
-                    f"Symbol {symbol} is not valid according to the loaded exchange infos."
-                )
+        if self.loaded and symbol not in self.symbols:
+            raise BinancePyError(f"Symbol {symbol} is not valid according to the loaded exchange infos.")
 
     def symbol_to_ftx(self, symbol) -> str:
         symbol_info = self.symbols.get(symbol)

@@ -58,10 +58,8 @@ async def main(_exchange, _symbol):
     loop.create_task(on_order_update(stub, client_id, _symbol))
     # Other market and user methods are used similarly: OnKlinesUpdate, OnFundsUpdate, OnOrderBookUpdate
     # Start WSS
-    '''    
-    The values of market_stream_count and user_stream_count directly depend on the number of market and user
-    ws streams used in the strategy and declared above
-    '''
+    # The values of market_stream_count and user_stream_count directly depend on the number of market and user
+    # ws streams used in the strategy and declared above
     await stub.StartStream(api_pb2.StartStreamRequest(client_id=client_id_msg.client_id,
                                                       symbol=_symbol,
                                                       market_stream_count=1,
