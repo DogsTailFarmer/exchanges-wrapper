@@ -5,7 +5,6 @@ from exchanges_wrapper import __version__
 
 import aiohttp
 import asyncio
-import logging
 import json
 import hmac
 import hashlib
