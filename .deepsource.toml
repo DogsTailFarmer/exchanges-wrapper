@@ -1,7 +1,6 @@
 version = 1
 
-exclude_patterns = ["exchanges_wrapper/api*",
-                    "examples/api*",
+exclude_patterns = ["*/api*.*",
 ]
 
 [[analyzers]]

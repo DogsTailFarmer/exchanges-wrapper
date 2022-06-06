@@ -42,7 +42,7 @@ class HttpClient:
 
     async def handle_errors(self, response):
         if response.status >= 500:
-            logger.warning(f"An issue occurred on exchange's side: {response}")
+            logger.warning(f"An issue occurred on exchange's side: {response.status}: {response.url}")
             return {'success': False}
         if response.status == 429:
             self.rate_limit_reached = True if self.exchange == 'binance' else None
