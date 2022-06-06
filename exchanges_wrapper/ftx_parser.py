@@ -1,16 +1,8 @@
 #!/usr/bin/python3.8
 # -*- coding: utf-8 -*-
 """
-Parser for convert FTX REST API and WS response to Binance like result
-For multi exchange version exchanges_wrapper.py
+Parser for convert FTX REST API/WSS response to Binance like result
 """
-__author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2022 Jerry Fedorenko aka VM"
-__license__ = "MIT"
-__version__ = "1.1rc0"
-__maintainer__ = "Jerry Fedorenko"
-__contact__ = "https://github.com/DogsTailFarmer"
-
 import time
 import datetime
 from decimal import Decimal
@@ -22,6 +14,7 @@ CH_KEY = {
     'miniTicker': ['last'],
     'depth5': ['bid', 'ask'],
 }
+TIMESTAMP_PATTERN = "%Y-%m-%dT%H:%M:%S.%f"
 
 
 def ftx_on_funds_update(res: []) -> {}:
@@ -154,7 +147,7 @@ def ftx_order(order: {}, response_type=None) -> {}:
     iceberg_qty = '0.0'
     #
     ftx_time = order.get('createdAt')
-    _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], "%Y-%m-%dT%H:%M:%S.%f").timestamp() * 1000)
+    _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], TIMESTAMP_PATTERN).timestamp() * 1000)
     #
     update_time = _time
     is_working = True
@@ -362,7 +355,7 @@ def ftx_account_trade_list(res: []) -> []:
         qty = str(trade.get('size') or 0.0)
         quote_qty = str(Decimal(price) * Decimal(qty))
         ftx_time = trade.get('time')
-        _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], "%Y-%m-%dT%H:%M:%S.%f").timestamp() * 1000)
+        _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], TIMESTAMP_PATTERN).timestamp() * 1000)
         binance_trade = {
             "symbol": trade.get('market').replace('/', ''),
             "id": trade.get('tradeId'),
@@ -454,7 +447,7 @@ def ftx_stream_convert(msg: {}, symbol: str = None, ch_type: str = None) -> {}:
             last_quote_asset = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
             quote_order_qty = '0.0'
         if ftx_time:
-            _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], "%Y-%m-%dT%H:%M:%S.%f").timestamp() * 1000)
+            _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], TIMESTAMP_PATTERN).timestamp() * 1000)
             msg_binance = {
                 "e": "executionReport",
                 "E": _time,

@@ -5,17 +5,14 @@ from exchanges_wrapper import __version__
 
 import time
 import weakref
-# from pympler import tracker
 import gc
 
 import asyncio
 import functools
 import json
-# import logging
 import logging.handlers
 import os
 import sys
-# from datetime import datetime
 
 # noinspection PyPackageRequirements
 import grpc
@@ -676,8 +673,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             await asyncio.sleep(HEARTBEAT)
             _market_stream = open_client.client.events.registered_streams
             _market_stream_count = sum([len(_market_stream.get(k)) for k in _market_stream.keys()])
-        # logger.debug(f"StartStream.events.registered_streams: {_market_stream}")
-        # logger.debug(f"StartStream.events.handlers: {open_client.client.events.handlers}")
+        logger.debug(f"StartStream.events.registered_streams: {_market_stream}")
         asyncio.create_task(open_client.client.start_market_events_listener())
         asyncio.create_task(open_client.client.start_user_events_listener(endpoint=open_client.client.endpoint_ws))
         response.success = True

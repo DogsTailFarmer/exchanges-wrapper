@@ -9,8 +9,10 @@ import json
 import hmac
 import hashlib
 import random
+import logging
+import time
 
-from ftx_parser import *
+import ftx_parser as ftx
 
 logger = logging.getLogger('exch_srv_logger')
 
@@ -28,10 +30,10 @@ class EventsDataStream:
         self.try_count = 0
 
     async def start(self, *args, **kwargs):
-        pass
+        pass  # meant to be overridden in a subclass
 
     async def _handle_event(self, *args):
-        pass
+        pass  # meant to be overridden in a subclass
 
     async def _handle_messages(self, web_socket, symbol=None, ch_type=None):
         # logger.debug(f"_handle_messages.START: {web_socket}, symbol: {symbol}, ch_type: {ch_type}")
@@ -63,15 +65,15 @@ class EventsDataStream:
                     # print(f"ftx, channel: {ch_type}")
                     if msg_data.get('channel') not in ('fills', 'orders'):
                         _msg_data = eval(repr(msg_data))
-                        if ftx_stream_compare(_msg_data, msg_data_prev, ch_type):
+                        if ftx.ftx_stream_compare(_msg_data, msg_data_prev, ch_type):
                             # logger.debug(f"_handle_messages.msg_data_LAST: {msg_data}")
-                            msg_data_binance = ftx_stream_convert(msg_data, symbol, ch_type)
+                            msg_data_binance = ftx.ftx_stream_convert(msg_data, symbol, ch_type)
                             # logger.debug(f"_handle_messages.msg_data_binance: {msg_data_binance}")
                             await self._handle_event(msg_data_binance)
                         msg_data_prev = eval(repr(msg_data))
                     else:
                         logger.debug(f"_handle_messages.msg_data: {msg_data}")
-                        msg_data_binance = ftx_stream_convert(msg_data)
+                        msg_data_binance = ftx.ftx_stream_convert(msg_data)
                         logger.debug(f"_handle_messages.msg_data_binance: {msg_data_binance}")
                         if msg_data_binance:
                             await self._handle_event(msg_data_binance)

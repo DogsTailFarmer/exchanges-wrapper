@@ -7,18 +7,21 @@ import decimal
 import math
 import asyncio
 import random
+import logging
+import time
 
 from http_client import HttpClient
 from errors import BinancePyError, RateLimitReached
 from web_sockets import UserEventsDataStream, MarketEventsDataStream, FtxPrivateEventsDataStream
 from definitions import OrderType
 from events import Events
-
-from ftx_parser import *
+import ftx_parser as ftx
 
 logger = logging.getLogger('exch_srv_logger')
 
 STATUS_TIMEOUT = 5  # sec
+BINANCE_ENDPOINT = "https://api.binance.com"
+BINANCE_ENDPOINT_WS = "wss://stream.binance.com:9443"
 
 
 def truncate(f, n):
@@ -31,18 +34,17 @@ class Client:
         api_key=None,
         api_secret=None,
         *,
-        endpoint="https://api.binance.com",
+        endpoint=BINANCE_ENDPOINT,
         user_agent=None,
         proxy=None,
         session=None,
         sub_account=None,
-        endpoint_ws="wss://stream.binance.com:9443",
+        endpoint_ws=BINANCE_ENDPOINT_WS,
     ):
         if api_secret + api_secret == 1:
             raise ValueError(
                 "You cannot only specify a non empty api_key or an api_secret."
             )
-        # print(f"Client.api_key: {api_key}, api_secret: {api_secret}, endpoint: {endpoint}")
         self.api_key = api_key
         self.api_secret = api_secret
         self.sub_account = sub_account
@@ -81,8 +83,6 @@ class Client:
             )
             self.symbols[symbol] = symbol_infos
 
-        # print(self.symbols)
-
         decimal.getcontext().prec = (
             self.highest_precision + 4
         )  # for operations and rounding
@@ -103,7 +103,7 @@ class Client:
         return self._events
 
     async def start_user_events_listener(self, endpoint=None):
-        _endpoint = endpoint or "wss://stream.binance.com:9443"
+        _endpoint = endpoint or BINANCE_ENDPOINT_WS
         if self.exchange == 'binance':
             self.user_data_stream = UserEventsDataStream(self, _endpoint, self.user_agent)
             await self.user_data_stream.start()
@@ -117,7 +117,6 @@ class Client:
             await self.user_data_stream.start()
 
     async def stop_user_events_listener(self):
-        # print(f"stop_user_events_listener()")
         if self.user_data_stream:
             await self.user_data_stream.stop()
 
@@ -127,7 +126,7 @@ class Client:
         start_list = []
         for _exchange in _events.keys():
             if _exchange == 'binance':
-                _endpoint = "wss://stream.binance.com:9443"
+                _endpoint = BINANCE_ENDPOINT_WS
                 market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange)
                 self.market_data_streams.append(market_data_stream)
                 start = market_data_stream.start()
@@ -143,7 +142,6 @@ class Client:
         await asyncio.gather(*start_list, return_exceptions=False)
 
     async def stop_market_events_listener(self):
-        # print(f"stop_market_events_listener()")
         stop_list = []
         for market_data_stream in self.market_data_streams:
             stop = market_data_stream.stop()
@@ -228,8 +226,7 @@ class Client:
             )
             # Convert FTX to Binance Response
             if res and res.get('success'):
-                binance_res = ftx_exchange_info(res.get('result'))
-        # print(f"fetch_exchange_info.binance_res: {binance_res}")
+                binance_res = ftx.ftx_exchange_info(res.get('result'))
         return binance_res
 
     # MARKET DATA ENDPOINTS
@@ -257,14 +254,12 @@ class Client:
                     send_api_key=False,
                     **params,
                 )
-                # print(f"fetch_order_book.res: {res}")
                 if res and res.get('success'):
-                    binance_res = ftx_order_book(res.get('result'))
+                    binance_res = ftx.ftx_order_book(res.get('result'))
         else:
             raise ValueError(
                 f"{limit} is not a valid limit. Valid limits: {valid_limits}"
             )
-        # print(f"fetch_order_book.binance_res: {binance_res}")
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
@@ -327,7 +322,7 @@ class Client:
         self.assert_symbol(symbol)
         interval = self.enum_to_value(interval)
         if self.exchange == 'ftx':
-            interval = ftx_interval(interval)
+            interval = ftx.ftx_interval(interval)
         if not interval:
             raise ValueError("This query requires correct interval value")
         binance_res = []
@@ -359,12 +354,8 @@ class Client:
                 send_api_key=False,
                 **params,
             )
-            # print(f"fetch_klines.res: {res}")
             if res and res.get('success'):
-                # print(f"fetch_klines.len: {len(res.get('result'))}")
-                # print(f"fetch_klines.res: {res.get('result')}")
-                binance_res = ftx_klines(res.get('result'), interval)
-        # print(f"fetch_klines.binance_res: {binance_res}")
+                binance_res = ftx.ftx_klines(res.get('result'), interval)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-average-price
@@ -404,15 +395,12 @@ class Client:
                 send_api_key=False,
                 **params,
             )
-            # print(f"fetch_ticker_price_change_statistics.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_ticker_price_change_statistics(res.get('result'), symbol, end_time)
-        # print(f"fetch_ticker_price_change_statistics.binance_res: {binance_res}")
+                binance_res = ftx.ftx_ticker_price_change_statistics(res.get('result'), symbol, end_time)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-price-ticker
     async def fetch_symbol_price_ticker(self, symbol=None):
-        # print(f"fetch_symbol_price_ticker.symbol: {symbol}")
         if symbol:
             self.assert_symbol_exists(symbol)
             binance_res = {}
@@ -430,10 +418,8 @@ class Client:
                 f"markets/{self.symbol_to_ftx(symbol)}" if symbol else "markets",
                 send_api_key=False,
             )
-            # print(f"fetch_symbol_price_ticker.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_symbol_price_ticker(res.get('result'), symbol)
-        # print(f"fetch_symbol_price_ticker.binance_res: {binance_res}")
+                binance_res = ftx.ftx_symbol_price_ticker(res.get('result'), symbol)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-order-book-ticker
@@ -536,7 +522,7 @@ class Client:
             }
             count = 0
             res = {}
-            while True and count < 10:
+            while count < 10:
                 try:
                     res = await self.http.send_api_call(
                         "orders",
@@ -546,12 +532,12 @@ class Client:
                     )
                     break
                 except RateLimitReached:
-                    logger.info(f"RateLimitReached for {self.symbol_to_ftx(symbol)}, count {count}, try one else")
                     count += 1
+                    logger.info(f"RateLimitReached for {self.symbol_to_ftx(symbol)}, count {count}, try one else")
                     await asyncio.sleep(random.uniform(0.1, 0.3) * count)
             # logger.debug(f"create_order.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_order(res.get('result'), response_type=False)
+                binance_res = ftx.ftx_order(res.get('result'), response_type=False)
                 if binance_res.get('status') != 'NEW':
                     order_id = binance_res.get('orderId')
                     binance_res = await self.fetch_order(symbol, order_id, receive_window)
@@ -596,7 +582,7 @@ class Client:
              )
             logger.debug(f"fetch_order.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_order(res.get('result'), response_type=response_type)
+                binance_res = ftx.ftx_order(res.get('result'), response_type=response_type)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-order-trade
@@ -676,7 +662,6 @@ class Client:
                 signed=True,
                 **params
             )
-            # print(f"cancel_all_orders.res_orders: {res_orders}")
             # Delete it
             res = await self.http.send_api_call(
                 "orders",
@@ -684,10 +669,8 @@ class Client:
                 signed=True,
                 **params
             )
-            # print(f"cancel_all_orders.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_orders(res_orders.get('result'), response_type=True)
-            # print(f"cancel_all_orders.binance_res: {binance_res}")
+                binance_res = ftx.ftx_orders(res_orders.get('result'), response_type=True)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
@@ -710,10 +693,8 @@ class Client:
                 signed=True,
                 **params,
             )
-            # print(f"fetch_open_orders.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_orders(res.get('result'))
-        # print(f"fetch_open_orders.binance_res: {binance_res}")
+                binance_res = ftx.ftx_orders(res.get('result'))
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#all-orders-user_data
@@ -924,10 +905,8 @@ class Client:
             res = await self.http.send_api_call(
                 "wallet/balances",
                 signed=True)
-            # print(f"fetch_account_information.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_account_information(res.get('result'))
-        # print(f"fetch_account_information.binance_res: {binance_res}")
+                binance_res = ftx.ftx_account_information(res.get('result'))
         return binance_res
 
     # https://binance-docs.github.io/apidocs/spot/en/#funding-wallet-user_data
@@ -953,10 +932,8 @@ class Client:
                 "wallet/all_balances",
                 signed=True,
              )
-            # print(f"fetch_funding_wallet.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_fetch_funding_wallet(res.get('result').get('main', []))
-        # print(f"fetch_funding_wallet.binance_res: {binance_res}")
+                binance_res = ftx.ftx_fetch_funding_wallet(res.get('result').get('main', []))
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-trade-list-user_data
@@ -1004,10 +981,8 @@ class Client:
                 signed=True,
                 **params,
             )
-            # print(f"fetch_account_trade_list.res: {res}")
             if res and res.get('success'):
-                binance_res = ftx_account_trade_list(res.get('result')[-limit:])
-        # print(f"fetch_account_trade_list.binance_res: {binance_res}")
+                binance_res = ftx.ftx_account_trade_list(res.get('result')[-limit:])
         return binance_res
     # USER DATA STREAM ENDPOINTS
 

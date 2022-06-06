@@ -46,20 +46,14 @@ class Events:
         self.handlers.pop(event_type)
 
     def register_event(self, listener, event_type, exchange='binance'):
-        # print(f"register_event.listener: {listener}, event_type: {event_type}, exchange: {exchange}")
         self.registered_streams[exchange] |= {event_type}
         event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         self.handlers[event_type].append(listener)
-        # print(f"register_event.registered_streams: {self.registered_streams}")
-        # print(f"register_event.handlers: {self.handlers}")
 
     def unregister(self, event_type, exchange='binance'):
-        # print(f"unregister.event_type: {event_type}")
         self.registered_streams[exchange].discard(event_type)
         event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         self.handlers.pop(event_type, None)
-        # print(f"unregister.handlers: {self.handlers}")
-        # print(f"unregister.registered_streams: {self.registered_streams}")
 
     def wrap_event(self, event_data):
         wrapper_by_type = {
