@@ -133,13 +133,13 @@ class Event:
         self.quote_order_quantity = event_data["origQuoteOrderQty"]
 
 
-# noinspection PyPep8Naming,PyMethodMayBeStatic,PyUnusedLocal
+# noinspection PyPep8Naming,PyMethodMayBeStatic
 class Martin(api_pb2_grpc.MartinServicer):
     rate_limit_reached_time = None
     rate_limiter = None
 
     async def OpenClientConnection(self, request: api_pb2.OpenClientConnectionRequest,
-                                   context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
+                                   _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
         # logger.info(f"OpenClientConnection: {request.account_name}")
         client_id = OpenClient.get_id(request.account_name)
         # print(f"OpenClientConnection.request.account_name: {request.account_name}")
@@ -154,14 +154,14 @@ class Martin(api_pb2_grpc.MartinServicer):
         return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__)
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
-                              context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
+                              _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
         client = OpenClient.get_client(request.client_id).client
         res = await client.fetch_server_time()
         server_time = res.get('serverTime')
         return api_pb2.FetchServerTimeResponse(server_time=server_time)
 
     async def ResetRateLimit(self, request: api_pb2.OpenClientConnectionId,
-                             context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+                             _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
         _success = False
         client = OpenClient.get_client(request.client_id).client
@@ -177,7 +177,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return api_pb2.SimpleResponse(success=_success)
 
     async def FetchOpenOrders(self, request: api_pb2.MarketRequest,
-                              context: grpc.aio.ServicerContext) -> api_pb2.FetchOpenOrdersResponse:
+                              _context: grpc.aio.ServicerContext) -> api_pb2.FetchOpenOrdersResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         # message list
@@ -191,16 +191,16 @@ class Martin(api_pb2_grpc.MartinServicer):
         except errors.RateLimitReached as ex:
             Martin.rate_limit_reached_time = time.time()
             logger.warning(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            context.set_details(f"{ex}")
-            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
         except errors.HTTPError as ex:
             logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            context.set_details(f"{ex}")
-            context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
             logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            context.set_details(f"{ex}")
-            context.set_code(grpc.StatusCode.UNKNOWN)
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
             # logger.info(f"FetchOpenOrders.res: {res}")
             for order in res:
@@ -211,7 +211,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def FetchOrder(self, request: api_pb2.FetchOrderRequest,
-                         context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderResponse:
+                         _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = open_client.on_order_update_queue
@@ -237,7 +237,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def CancelAllOrders(self, request: api_pb2.MarketRequest,
-                              context: grpc.aio.ServicerContext) -> api_pb2.CancelAllOrdersResponse:
+                              _context: grpc.aio.ServicerContext) -> api_pb2.CancelAllOrdersResponse:
         client = OpenClient.get_client(request.client_id).client
         # message list
         response = api_pb2.CancelAllOrdersResponse()
@@ -251,7 +251,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def FetchExchangeInfoSymbol(self, request: api_pb2.MarketRequest,
-                                      context: grpc.aio.ServicerContext
+                                      _context: grpc.aio.ServicerContext
                                       ) -> api_pb2.FetchExchangeInfoSymbolResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.FetchExchangeInfoSymbolResponse()
@@ -307,7 +307,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def FetchAccountInformation(self, request: api_pb2.OpenClientConnectionId,
-                                      context: grpc.aio.ServicerContext
+                                      _context: grpc.aio.ServicerContext
                                       ) -> api_pb2.FetchAccountBalanceResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -331,7 +331,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def FetchFundingWallet(self, request: api_pb2.FetchFundingWalletRequest,
-                                 context: grpc.aio.ServicerContext) -> api_pb2.FetchFundingWalletResponse:
+                                 _context: grpc.aio.ServicerContext) -> api_pb2.FetchFundingWalletResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         response = api_pb2.FetchFundingWalletResponse()
@@ -351,7 +351,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def FetchOrderBook(self, request: api_pb2.MarketRequest,
-                             context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
+                             _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.FetchOrderBookResponse()
         res = await client.fetch_order_book(symbol=request.symbol, limit=5)
@@ -366,7 +366,7 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def FetchSymbolPriceTicker(
             self, request: api_pb2.MarketRequest,
-            context: grpc.aio.ServicerContext) -> api_pb2.FetchSymbolPriceTickerResponse:
+            _context: grpc.aio.ServicerContext) -> api_pb2.FetchSymbolPriceTickerResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.FetchSymbolPriceTickerResponse()
         res = await client.fetch_symbol_price_ticker(symbol=request.symbol)
@@ -375,7 +375,7 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def FetchTickerPriceChangeStatistics(
             self, request: api_pb2.MarketRequest,
-            context: grpc.aio.ServicerContext) -> api_pb2.FetchTickerPriceChangeStatisticsResponse:
+            _context: grpc.aio.ServicerContext) -> api_pb2.FetchTickerPriceChangeStatisticsResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.FetchTickerPriceChangeStatisticsResponse()
         res = await client.fetch_ticker_price_change_statistics(symbol=request.symbol)
@@ -383,7 +383,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def FetchKlines(self, request: api_pb2.FetchKlinesRequest,
-                          context: grpc.aio.ServicerContext) -> api_pb2.FetchKlinesResponse:
+                          _context: grpc.aio.ServicerContext) -> api_pb2.FetchKlinesResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.FetchKlinesResponse()
         try:
@@ -400,7 +400,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def OnKlinesUpdate(self, request: api_pb2.FetchKlinesRequest,
-                             context: grpc.aio.ServicerContext) -> api_pb2.OnKlinesUpdateResponse:
+                             _context: grpc.aio.ServicerContext) -> api_pb2.OnKlinesUpdateResponse:
         response = api_pb2.OnKlinesUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -442,7 +442,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 yield response
 
     async def FetchAccountTradeList(self, request: api_pb2.AccountTradeListRequest,
-                                    context: grpc.aio.ServicerContext) -> api_pb2.AccountTradeListResponse:
+                                    _context: grpc.aio.ServicerContext) -> api_pb2.AccountTradeListResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.AccountTradeListResponse()
         response_trade = api_pb2.AccountTradeListResponse.Trade()
@@ -460,7 +460,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def OnTickerUpdate(self, request: api_pb2.MarketRequest,
-                             context: grpc.aio.ServicerContext) -> api_pb2.OnTickerUpdateResponse:
+                             _context: grpc.aio.ServicerContext) -> api_pb2.OnTickerUpdateResponse:
         response = api_pb2.OnTickerUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -486,7 +486,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 yield response
 
     async def OnOrderBookUpdate(self, request: api_pb2.MarketRequest,
-                                context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
+                                _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
         response = api_pb2.FetchOrderBookResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -513,7 +513,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 yield response
 
     async def OnFundsUpdate(self, request: api_pb2.OnFundsUpdateRequest,
-                            context: grpc.aio.ServicerContext) -> api_pb2.OnFundsUpdateResponse:
+                            _context: grpc.aio.ServicerContext) -> api_pb2.OnFundsUpdateResponse:
         response = api_pb2.OnFundsUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -554,7 +554,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 yield response
 
     async def OnOrderUpdate(self, request: api_pb2.MarketRequest,
-                            context: grpc.aio.ServicerContext) -> api_pb2.OnOrderUpdateResponse:
+                            _context: grpc.aio.ServicerContext) -> api_pb2.OnOrderUpdateResponse:
         response = api_pb2.OnOrderUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -603,7 +603,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 yield response
 
     async def CreateLimitOrder(self, request: api_pb2.CreateLimitOrderRequest,
-                               context: grpc.aio.ServicerContext) -> api_pb2.CreateLimitOrderResponse:
+                               _context: grpc.aio.ServicerContext) -> api_pb2.CreateLimitOrderResponse:
         response = api_pb2.CreateLimitOrderResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -625,18 +625,18 @@ class Martin(api_pb2_grpc.MartinServicer):
                 test=False)
         except errors.HTTPError as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex.args}")
-            context.set_details(f"{ex.args}")
-            context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            _context.set_details(f"{ex.args}")
+            _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            context.set_details(f"{ex}")
-            context.set_code(grpc.StatusCode.UNKNOWN)
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
             json_format.ParseDict(res, response)
         return response
 
     async def CancelOrder(self, request: api_pb2.CancelOrderRequest,
-                          context: grpc.aio.ServicerContext) -> api_pb2.CancelOrderResponse:
+                          _context: grpc.aio.ServicerContext) -> api_pb2.CancelOrderResponse:
         response = api_pb2.CancelOrderResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -652,18 +652,18 @@ class Martin(api_pb2_grpc.MartinServicer):
         except errors.RateLimitReached as ex:
             Martin.rate_limit_reached_time = time.time()
             logger.warning(f"CancelOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            context.set_details(f"{ex}")
-            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
         except Exception as ex:
             logger.error(f"CancelOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            context.set_details(f"{ex}")
-            context.set_code(grpc.StatusCode.UNKNOWN)
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
             json_format.ParseDict(res, response)
         return response
 
     async def StartStream(self, request: api_pb2.StartStreamRequest,
-                          context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+                          _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         open_client = OpenClient.get_client(request.client_id)
         logger.debug(f"Start ws streams for {open_client.name}")
         response = api_pb2.SimpleResponse()
@@ -680,7 +680,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def StopStream(self, request: api_pb2.MarketRequest,
-                         context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+                         _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         logger.info("StopStream")
         open_client = OpenClient.get_client(request.client_id)
         response = api_pb2.SimpleResponse()
