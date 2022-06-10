@@ -1,6 +1,7 @@
 /*
 Protocol buffer definition for exchanges-wrapper exch_srv.py
 https://grpc.io/docs/languages/python/quickstart/
+For compile use next command
 $ python3 -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/exchanges_wrapper/api.proto
 */
 
