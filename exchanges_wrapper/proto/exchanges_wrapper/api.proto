@@ -1,7 +1,7 @@
 /*
 Protocol buffer definition for exchanges-wrapper exch_srv.py
 https://grpc.io/docs/languages/python/quickstart/
-$ python3.8 -m grpc_tools.protoc --python_out=. -I. --grpc_python_out=. api.proto
+$ python3 -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/exchanges_wrapper/api.proto
 */
 
 syntax = "proto3";
@@ -330,10 +330,11 @@ message FetchExchangeInfoSymbolResponse {
   bool ocoAllowed = 12;
   bool quoteOrderQtyMarketAllowed = 13;
   bool allowTrailingStop = 14;
-  bool isSpotTradingAllowed = 15;
-  bool isMarginTradingAllowed = 16;
-  Filters filters = 17;
-  repeated string permissions = 18;
+  bool cancelReplaceAllowed = 15;
+  bool isSpotTradingAllowed = 16;
+  bool isMarginTradingAllowed = 17;
+  Filters filters = 18;
+  repeated string permissions = 19;
 }
 
 message CancelAllOrdersResponse {

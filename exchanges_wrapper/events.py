@@ -5,7 +5,7 @@ import asyncio
 import functools
 from collections import defaultdict
 
-from errors import UnknownEventType
+from exchanges_wrapper.errors import UnknownEventType
 
 
 # based on: https://stackoverflow.com/a/2022629/10144963

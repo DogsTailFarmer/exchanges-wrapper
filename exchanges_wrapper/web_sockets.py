@@ -12,7 +12,7 @@ import random
 import logging
 import time
 
-import ftx_parser as ftx
+import exchanges_wrapper.ftx_parser as ftx
 
 logger = logging.getLogger('exch_srv_logger')
 

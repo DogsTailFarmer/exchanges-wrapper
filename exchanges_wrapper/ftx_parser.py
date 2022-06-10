@@ -100,6 +100,7 @@ def ftx_exchange_info(res: []) -> {}:
                 "ocoAllowed": False,
                 "quoteOrderQtyMarketAllowed": False,
                 "allowTrailingStop": False,
+                "cancelReplaceAllowed": False,
                 "isSpotTradingAllowed": True,
                 "isMarginTradingAllowed": False,
                 "filters": [_price_filter, _lot_size, _min_notional],

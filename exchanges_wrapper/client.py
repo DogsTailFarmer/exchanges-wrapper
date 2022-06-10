@@ -10,12 +10,12 @@ import random
 import logging
 import time
 
-from http_client import HttpClient
-from errors import BinancePyError, RateLimitReached
-from web_sockets import UserEventsDataStream, MarketEventsDataStream, FtxPrivateEventsDataStream
-from definitions import OrderType
-from events import Events
-import ftx_parser as ftx
+from exchanges_wrapper.http_client import HttpClient
+from exchanges_wrapper.errors import BinancePyError, RateLimitReached
+from exchanges_wrapper.web_sockets import UserEventsDataStream, MarketEventsDataStream, FtxPrivateEventsDataStream
+from exchanges_wrapper.definitions import OrderType
+from exchanges_wrapper.events import Events
+import exchanges_wrapper.ftx_parser as ftx
 
 logger = logging.getLogger('exch_srv_logger')
 
@@ -68,29 +68,27 @@ class Client:
 
     async def load(self):
         infos = await self.fetch_exchange_info()
-
-        # load available symbols
-        self.highest_precision = 8
-
-        original_symbol_infos = infos["symbols"]
-        for symbol_infos in original_symbol_infos:
-            symbol = symbol_infos.pop("symbol")
-            precision = symbol_infos["baseAssetPrecision"]
-            if precision > self.highest_precision:
-                self.highest_precision = precision
-            symbol_infos["filters"] = dict(
-                map(lambda x: (x.pop("filterType"), x), symbol_infos["filters"])
-            )
-            self.symbols[symbol] = symbol_infos
-
-        decimal.getcontext().prec = (
-            self.highest_precision + 4
-        )  # for operations and rounding
-
-        # load rate limits
-        self.rate_limits = infos["rateLimits"]
-
-        self.loaded = True
+        if infos.get('success') or infos.get('serverTime'):
+            # load available symbols
+            self.highest_precision = 8
+            original_symbol_infos = infos["symbols"]
+            for symbol_infos in original_symbol_infos:
+                symbol = symbol_infos.pop("symbol")
+                precision = symbol_infos["baseAssetPrecision"]
+                if precision > self.highest_precision:
+                    self.highest_precision = precision
+                symbol_infos["filters"] = dict(
+                    map(lambda x: (x.pop("filterType"), x), symbol_infos["filters"])
+                )
+                self.symbols[symbol] = symbol_infos
+            decimal.getcontext().prec = (
+                self.highest_precision + 4
+            )  # for operations and rounding
+            # load rate limits
+            self.rate_limits = infos["rateLimits"]
+            self.loaded = True
+        else:
+            raise Exception("Can't get exchange info, check availability and operational status of the exchange")
 
     async def close(self):
         await self.http.close_session()
@@ -580,9 +578,9 @@ class Client:
                 f"orders/{order_id}",
                 signed=True,
              )
-            logger.debug(f"fetch_order.res: {res}")
             if res and res.get('success'):
                 binance_res = ftx.ftx_order(res.get('result'), response_type=response_type)
+        logger.debug(f"fetch_order.res: {binance_res}")
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-order-trade

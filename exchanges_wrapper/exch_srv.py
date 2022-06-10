@@ -20,13 +20,9 @@ import toml
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
 
-import events
-import errors
-import ftx_parser as ftx
-from client import Client
-from definitions import Side, OrderType, TimeInForce, ResponseType
-import api_pb2
-import api_pb2_grpc
+from exchanges_wrapper import events, errors, ftx_parser as ftx, api_pb2, api_pb2_grpc
+from exchanges_wrapper.client import Client
+from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 #
 #
 sys.tracebacklimit = 0
@@ -140,15 +136,19 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def OpenClientConnection(self, request: api_pb2.OpenClientConnectionRequest,
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
-        # logger.info(f"OpenClientConnection: {request.account_name}")
         client_id = OpenClient.get_id(request.account_name)
-        # print(f"OpenClientConnection.request.account_name: {request.account_name}")
         if not client_id and get_account(request.account_name):
             open_client = OpenClient(request.account_name)
-            # print(f"OpenClientConnection.open_client.name: {open_client.name}")
             if open_client:
-                await open_client.client.load()
-                client_id = id(open_client)
+                try:
+                    await open_client.client.load()
+                    client_id = id(open_client)
+                except asyncio.CancelledError:
+                    pass  # Task cancellation should not be logged as an error
+                except Exception as ex:
+                    logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
+                    _context.set_details(f"{ex}")
+                    _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
         # Set rate_limiter
         Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
         return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__)
@@ -224,9 +224,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
-            logger.error(f"FetchOrders for {open_client.name}:{request.symbol} exception: {_ex}")
+            logger.error(f"FetchOrders for {open_client.name}: {request.symbol} exception: {_ex}")
         else:
-            logger.debug(f"FetchOrder: {res}")
             if request.filled_update_call and res.get('status') == 'FILLED':
                 event = Event(res)
                 logger.debug(f"FetchOrder.event: {open_client.name}:{event.symbol}:{int(event.order_id)}:"

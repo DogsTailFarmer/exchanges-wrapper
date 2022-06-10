@@ -10,8 +10,7 @@ import toml
 import grpc
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
-import api_pb2
-import api_pb2_grpc
+from exchanges_wrapper import api_pb2, api_pb2_grpc
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -29,14 +28,25 @@ async def main(_exchange, _symbol):
     # Create connection to the grpc powered server
     channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
     stub = api_pb2_grpc.MartinStub(channel)
-
+    client_id = None
     # Register client and get client_id for reuse connection
-    client_id_msg = await stub.OpenClientConnection(api_pb2.OpenClientConnectionRequest(
-        account_name=_exchange,
-        rate_limiter=RATE_LIMITER))
-    client_id = client_id_msg.client_id
-    print(f"main.client_id: {client_id}")
-    print(f"main.srv_version: {client_id_msg.srv_version}")
+    # Example of exception handling by grpc connection
+    try:
+        client_id_msg = await stub.OpenClientConnection(api_pb2.OpenClientConnectionRequest(
+            account_name=_exchange,
+            rate_limiter=RATE_LIMITER))
+    except asyncio.CancelledError:
+        pass  # Task cancellation should not be logged as an error.
+    except grpc.RpcError as ex:
+        # noinspection PyUnresolvedReferences
+        status_code = ex.code()
+        # noinspection PyUnresolvedReferences
+        print(f"Exception on register client: {status_code.name}, {ex.details()}")
+        return
+    else:
+        client_id = client_id_msg.client_id
+        print(f"main.client_id: {client_id}")
+        print(f"main.srv_version: {client_id_msg.srv_version}")
 
     # Sample async call server method
     _exchange_info_symbol = await stub.FetchExchangeInfoSymbol(api_pb2.MarketRequest(
@@ -60,7 +70,7 @@ async def main(_exchange, _symbol):
     # Start WSS
     # The values of market_stream_count and user_stream_count directly depend on the number of market and user
     # ws streams used in the strategy and declared above
-    await stub.StartStream(api_pb2.StartStreamRequest(client_id=client_id_msg.client_id,
+    await stub.StartStream(api_pb2.StartStreamRequest(client_id=client_id,
                                                       symbol=_symbol,
                                                       market_stream_count=1,
                                                       user_stream_count=1))

@@ -9,7 +9,7 @@ import aiohttp
 import hashlib
 import hmac
 import time
-from errors import (
+from exchanges_wrapper.errors import (
     RateLimitReached,
     BinanceError,
     WAFLimitViolated,

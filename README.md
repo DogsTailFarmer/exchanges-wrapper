@@ -72,7 +72,7 @@ fee
 * For [binance.py](https://th0rgal.gitbook.io/binance-py/) use original
 * Served methods and examples of their use are described at ```example/exch_client.py```
 * For [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/overview) serializing structured data
-see ```exchanges_wrapper/api.proto```
+see ```proto/exchanges_wrapper/api.proto```
 
 ## Donate
 *BNB*, *BUSD*, *USDT* (BEP20) 0x5b52c6ba862b11318616ee6cef64388618318b92
