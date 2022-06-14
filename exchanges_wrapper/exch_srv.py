@@ -112,7 +112,7 @@ class Event:
         self.order_status = event_data["status"]
         self.order_reject_reason = "NONE"
         self.order_id = event_data["orderId"]
-        self.last_executed_quantity = event_data["executedQty"]
+        self.last_executed_quantity = "0.0"
         self.cumulative_filled_quantity = event_data["executedQty"]
         self.last_executed_price = event_data["price"]
         self.commission_amount = "0.0"

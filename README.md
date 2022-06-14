@@ -37,7 +37,7 @@ Served methods describes into ```example/exch_client.py```
 - Completely free and without limitations
 
 ### Added Features
-- Multi exchange support
+- Multi exchanges support
 - Adaptive algorithm to ensure maximum performance and avoid exceeding the rates limits
 - Passthrough logging
 
