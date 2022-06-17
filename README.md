@@ -80,29 +80,9 @@ see ```proto/exchanges_wrapper/api.proto```
 *USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
 
 ## Powered by exchanges-wrapper
+<p align="left">
+    <img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50">
+</p>
 
-<html>
- <head>
-  <style>
-   figcaption {
-    text-align: center;
-   }
-   .left {
-    float: left;
-    margin: 0 1em 1em 0;
-   }
-   .right{
-    float: right;
-    margin: 0 0 1em 1em;
-   }
-  </style>
- </head>
- <body>
-  <figure class="left">
-   <img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width=50" alt="">
-  </figure>
-    <a href="https://github.com/DogsTailFarmer/martin-binance">martin-binance</a>
- </body>
-</html>
-
+[martin-binance](https://github.com/DogsTailFarmer/martin-binance)
 Free trading system for crypto exchanges SPOT markets. Adaptive customizable reverse grid strategy based on martingale.
