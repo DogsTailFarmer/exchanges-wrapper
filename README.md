@@ -81,7 +81,7 @@ see ```proto/exchanges_wrapper/api.proto```
 
 ## Powered by exchanges-wrapper
 <p align="left">
-    <img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50">
+    <a href="https://github.com/DogsTailFarmer/martin-binance"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50">
 </p>
 
 [martin-binance](https://github.com/DogsTailFarmer/martin-binance)
