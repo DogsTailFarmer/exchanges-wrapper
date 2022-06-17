@@ -88,7 +88,7 @@ class Client:
             self.rate_limits = infos["rateLimits"]
             self.loaded = True
         else:
-            raise Exception("Can't get exchange info, check availability and operational status of the exchange")
+            raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
 
     async def close(self):
         await self.http.close_session()

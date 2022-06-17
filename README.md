@@ -13,7 +13,7 @@
 <a href="https://codeclimate.com/github/DogsTailFarmer/exchanges-wrapper/maintainability"><img src="https://api.codeclimate.com/v1/badges/f333ab9b1f3024699e09/maintainability" /></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper.svg/?label=resolved+issues&token=XuG5PmzMiKlDL921-qREIuX_"/></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper.svg/?label=active+issues&token=XuG5PmzMiKlDL921-qREIuX_"/></a>
-<a><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_exchanges-wrapper&metric=alert_status"/></a>
+<a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_exchanges-wrapper" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_exchanges-wrapper&metric=alert_status"/></a>
 ***
 
 ## exchanges-wrapper vs binance.py
@@ -80,5 +80,29 @@ see ```proto/exchanges_wrapper/api.proto```
 *USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
 
 ## Powered by exchanges-wrapper
-### [martin-binance](https://github.com/DogsTailFarmer/martin-binance)
-Free trading system for Binance and FTX SPOT markets. Adaptive customizable reverse grid strategy based on martingale.
+
+<html>
+ <head>
+  <style>
+   figcaption {
+    text-align: center;
+   }
+   .left {
+    float: left;
+    margin: 0 1em 1em 0;
+   }
+   .right{
+    float: right;
+    margin: 0 0 1em 1em;
+   }
+  </style>
+ </head>
+ <body>
+  <figure class="left">
+   <img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width=50" alt="">
+  </figure>
+    <a href="https://github.com/DogsTailFarmer/martin-binance">martin-binance</a>
+ </body>
+</html>
+
+Free trading system for crypto exchanges SPOT markets. Adaptive customizable reverse grid strategy based on martingale.
