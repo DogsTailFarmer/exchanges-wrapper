@@ -58,6 +58,7 @@ pip install exchanges-wrapper
 ### Prepare exchange account
 * Create account on [Binance](https://accounts.binance.com/en/register?ref=QCS4OGWR) and get 10% discount on all trading
 fee
+* Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
 * Create account on [FTX](https://ftx.com/profile#a=62025440)
 * For test purpose log in at [Binance Spot Test Network](https://testnet.binance.vision/)
 * Create API Key
