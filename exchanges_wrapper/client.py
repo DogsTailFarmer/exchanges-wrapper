@@ -109,7 +109,7 @@ class Client:
     def events(self):
         if not hasattr(self, "_events"):
             # noinspection PyAttributeOutsideInit
-            self._events = Events()
+            self._events = Events()  # skipcq: PYL-W0201
         return self._events
 
     async def start_user_events_listener(self):
