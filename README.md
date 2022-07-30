@@ -88,4 +88,3 @@ see ```proto/exchanges_wrapper/api.proto```
 
 [martin-binance](https://github.com/DogsTailFarmer/martin-binance)
 Free trading system for crypto exchanges SPOT markets. Adaptive customizable reverse grid strategy based on martingale.
-
