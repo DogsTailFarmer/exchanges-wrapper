@@ -646,7 +646,7 @@ class Client:
                         {'filledTime': int(),
                          'origQty': quantity,
                          'executedQty': "0",
-                         'lastEvent': tuple(),
+                         'lastEvent': (),
                          'cancelled': False
                          }
                      }
@@ -776,7 +776,7 @@ class Client:
                 )
             params = {'id': order_id}
             res = await self.http.send_api_call(
-                f"v2/auth/w/order/cancel",
+                "v2/auth/w/order/cancel",
                 method="POST",
                 signed=True,
                 **params

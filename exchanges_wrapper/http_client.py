@@ -53,11 +53,10 @@ class HttpClient:
             raise RateLimitReached(RateLimitReached.message)
         # print(f"handle_errors.response: {response}")
         payload = await response.json()
-        if payload:
-            if "code" in payload:
-                # as defined here: https://github.com/binance/binance-spot-api-docs/blob/
-                # master/errors.md#error-codes-for-binance-2019-09-25
-                raise ExchangeError(payload["msg"])
+        if payload and "code" in payload:
+            # as defined here: https://github.com/binance/binance-spot-api-docs/blob/
+            # master/errors.md#error-codes-for-binance-2019-09-25
+            raise ExchangeError(payload["msg"])
         if response.status >= 400:
             logger.error(f"handle_errors.response.status >= 400: {payload}")
             if response.status == 400 and payload and payload.get("error", str()) == "ERR_RATE_LIMIT":

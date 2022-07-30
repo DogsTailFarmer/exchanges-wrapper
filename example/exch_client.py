@@ -323,8 +323,7 @@ async def create_limit_order(_stub, _client_id, _symbol, _id: int, buy: bool, am
         status_code = ex.code()
         print(f"Exception creating order {_id}: {status_code.name}, {ex.details()}")
         if status_code == grpc.StatusCode.FAILED_PRECONDITION:
-            # Do something. See except declare in exch_srv.CreateLimitOrder()
-            pass
+            print("Do something. See except declare in exch_srv.CreateLimitOrder()")
     except Exception as _ex:
         print(f"Exception creating order {_id}: {_ex}")
     else:

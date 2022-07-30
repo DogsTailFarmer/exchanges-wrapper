@@ -54,7 +54,7 @@ class OrderBook:
 
 def get_symbols(symbols_details: []) -> str:
     symbols = []
-    res = f",t"
+    res = ",t"
     for symbol_details in symbols_details:
         symbol = symbol_details['pair']
         if 'f0' not in symbol:
@@ -591,7 +591,7 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
         "t": res[0],
         "I": 123456789,
         "w": True,
-        "m": True if res[8] == 1 else False,
+        "m": bool(res[8] == 1),
         "M": False,
         "O": res[2],
         "Z": "0.0",

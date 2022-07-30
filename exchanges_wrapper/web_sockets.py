@@ -289,8 +289,6 @@ class FtxPrivateEventsDataStream(EventsDataStream):
 
 
 class BfxPrivateEventsDataStream(EventsDataStream):
-    def __init__(self, client, endpoint, user_agent, exchange):
-        super().__init__(client, endpoint, user_agent, exchange)
 
     async def stop(self):
         """
@@ -354,8 +352,6 @@ class BfxPrivateEventsDataStream(EventsDataStream):
 
 
 class UserEventsDataStream(EventsDataStream):
-    def __init__(self, client, endpoint, user_agent, exchange):
-        super().__init__(client, endpoint, user_agent, exchange)
 
     async def _heartbeat(
         self, listen_key, interval=60 * 30

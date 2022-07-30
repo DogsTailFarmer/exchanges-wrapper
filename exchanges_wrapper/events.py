@@ -21,7 +21,7 @@ class Handlers(list):
             loop.run_in_executor(None, func, *args)
 
     def __repr__(self):
-        return "Handlers(%s)" % list.__repr__(self)
+        return f"Handlers({list.__repr__(self)})"
 
 # HANDLERS
 # Example usage:
@@ -53,11 +53,6 @@ class Events:
         elif exchange == 'bitfinex':
             event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
         self.handlers[event_type].append(listener)
-        '''
-        print(f"register_event.registered_streams: {self.registered_streams},"
-              f" event_type: {event_type},"
-              f" handlers: {self.handlers}")
-        '''
 
     def unregister(self, event_type, exchange):
         self.registered_streams[exchange].discard(event_type)
