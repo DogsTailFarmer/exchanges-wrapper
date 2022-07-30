@@ -30,10 +30,10 @@ class EventsDataStream:
         self.web_socket = None
         self.try_count = 0
 
-    async def start(self, *args, **kwargs):
+    async def start(self):
         await self.stop()
 
-    async def stop(self, *args, **kwargs):
+    async def stop(self):
         pass  # meant to be overridden in a subclass
 
     async def upstream_bitfinex(self, request, symbol=None, ch_type=str()):
@@ -341,7 +341,6 @@ class BfxPrivateEventsDataStream(EventsDataStream):
                 self.client.active_orders[order_id]['executedQty'] = executed_qty = str(Decimal(executed_qty) +
                                                                                         Decimal(last_qty))
                 if Decimal(executed_qty) >= orig_qty:
-                    # o['lastEvent'] = (trade_id, order_qty, price)
                     self.client.active_orders[order_id]['lastEvent'] = (msg_data[2][0], last_qty, str(msg_data[2][5]))
                     logger.debug(f"USER_handle_event: id: {order_id}: {self.client.active_orders[order_id]}")
                 else:
