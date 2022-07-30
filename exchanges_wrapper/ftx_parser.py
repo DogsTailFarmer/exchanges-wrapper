@@ -17,7 +17,7 @@ CH_KEY = {
 TIMESTAMP_PATTERN = "%Y-%m-%dT%H:%M:%S.%f"
 
 
-def ftx_on_funds_update(res: []) -> {}:
+def on_funds_update(res: []) -> {}:
     binance_funds = {
         'e': 'outboundAccountPosition',
         'E': int(time.time() * 1000),
@@ -35,7 +35,7 @@ def ftx_on_funds_update(res: []) -> {}:
     return binance_funds
 
 
-def ftx_interval(interval: str) -> int:
+def interval(_interval: str) -> int:
     resolution = {
         '1m': 60,
         '5m': 300,
@@ -44,10 +44,10 @@ def ftx_interval(interval: str) -> int:
         '4h': 14400,
         '1d': 86400,
     }
-    return resolution.get(interval, 0)
+    return resolution.get(_interval, 0)
 
 
-def ftx_exchange_info(res: []) -> {}:
+def exchange_info(res: []) -> {}:
     symbols = []
     for market in res:
         market_type = market.get("type")
@@ -119,22 +119,22 @@ def ftx_exchange_info(res: []) -> {}:
     return _binance_res
 
 
-def ftx_order(order: {}, response_type=None) -> {}:
-    # print(f"ftx_order.order: {order}")
-    symbol = str.replace(order.get('market'), '/', '')
-    order_id = order.get('id')
+def order(_order: {}, response_type=None) -> {}:
+    # print(f"order._order: {_order}")
+    symbol = str.replace(_order.get('market'), '/', '')
+    order_id = _order.get('id')
     order_list_id = -1
-    client_order_id = order.get('clientId', str()) or str()
-    price = str(order.get('price') or 0.0)
-    orig_qty = str(order.get('size') or 0.0)
-    executed_qty = str(order.get('filledSize') or 0.0)
-    avg_fill_price = str(order.get('avgFillPrice') or 0.0)
+    client_order_id = _order.get('clientId', str()) or str()
+    price = str(_order.get('price') or 0.0)
+    orig_qty = str(_order.get('size') or 0.0)
+    executed_qty = str(_order.get('filledSize') or 0.0)
+    avg_fill_price = str(_order.get('avgFillPrice') or 0.0)
     cummulative_quote_qty = str(Decimal(executed_qty) * Decimal(avg_fill_price))
     #
-    ftx_status = order.get('status')
+    ftx_status = _order.get('status')
     if ftx_status in ('new', 'open') and not float(executed_qty):
         status = 'NEW'
-    elif ftx_status in ('new', 'open') and float(executed_qty) and order.get('remainingSize'):
+    elif ftx_status in ('new', 'open') and float(executed_qty) and _order.get('remainingSize'):
         status = 'PARTIALLY_FILLED'
     elif ftx_status == 'closed' and orig_qty == executed_qty:
         status = 'FILLED'
@@ -143,11 +143,11 @@ def ftx_order(order: {}, response_type=None) -> {}:
     #
     time_in_force = "GTC"
     _type = "LIMIT"
-    side = order.get('side').upper()
+    side = _order.get('side').upper()
     stop_price = '0.0'
     iceberg_qty = '0.0'
     #
-    ftx_time = order.get('createdAt')
+    ftx_time = _order.get('createdAt')
     _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], TIMESTAMP_PATTERN).timestamp() * 1000)
     #
     update_time = _time
@@ -206,21 +206,21 @@ def ftx_order(order: {}, response_type=None) -> {}:
             "type": _type,
             "side": side,
         }
-    # print(f"ftx_order.binance_order: {binance_order}")
+    # print(f"order.binance_order: {binance_order}")
     return binance_order
 
 
-def ftx_orders(res: {}, response_type=None) -> []:
-    # print(f"ftx_orders.res: {res}")
+def orders(res: {}, response_type=None) -> []:
+    # print(f"orders.res: {res}")
     binance_orders = []
-    for order in res:
-        i_order = ftx_order(order, response_type=response_type)
+    for _order in res:
+        i_order = order(_order, response_type=response_type)
         binance_orders.append(i_order)
-    # print(f"ftx_orders.binance_orders: {binance_orders}")
+    # print(f"orders.binance_orders: {binance_orders}")
     return binance_orders
 
 
-def ftx_fetch_funding_wallet(res: []) -> []:
+def fetch_funding_wallet(res: []) -> []:
     balances = []
     for balance in res:
         free = str(balance.get('free') or 0.0)
@@ -239,7 +239,7 @@ def ftx_fetch_funding_wallet(res: []) -> []:
     return balances
 
 
-def ftx_account_information(res: []) -> {}:
+def account_information(res: []) -> {}:
     balances = []
     for balance in res:
         free = str(balance.get('free') or 0.0)
@@ -271,7 +271,7 @@ def ftx_account_information(res: []) -> {}:
     return binance_account_info
 
 
-def ftx_order_book(res: {}) -> {}:
+def order_book(res: {}) -> {}:
     binance_order_book = {"lastUpdateId": int(time.time() * 1000)}
     binance_order_book.update(
         {key: [[str(y) for y in x] for x in value] for key, value in res.items()}
@@ -279,7 +279,7 @@ def ftx_order_book(res: {}) -> {}:
     return binance_order_book
 
 
-def ftx_symbol_price_ticker(res: [], symbol):
+def symbol_price_ticker(res: [], symbol):
     if symbol:
         binance_price_ticker = {
             "symbol": symbol,
@@ -296,7 +296,7 @@ def ftx_symbol_price_ticker(res: [], symbol):
     return binance_price_ticker
 
 
-def ftx_ticker_price_change_statistics(res: [], symbol, end_time):
+def ticker_price_change_statistics(res: [], symbol, end_time):
     _res = res[-1]
     ftx_time = _res.get('startTime')
     _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], "%Y-%m-%dT%H:%M:%S").timestamp())
@@ -326,7 +326,7 @@ def ftx_ticker_price_change_statistics(res: [], symbol, end_time):
     return binance_price_ticker
 
 
-def ftx_klines(res: [], interval: int) -> []:
+def klines(res: [], _interval: int) -> []:
     binance_klines = []
     for i in res:
         start_time = int(datetime.datetime.strptime(i.get('startTime').split('+')[0],
@@ -338,7 +338,7 @@ def ftx_klines(res: [], interval: int) -> []:
             str(i.get('low') or 0.0),
             str(i.get('close') or 0.0),
             str(i.get('volume') or 0.0),
-            start_time + interval * 1000,
+            start_time + _interval * 1000,
             '0.0',
             0,
             '0.0',
@@ -349,7 +349,7 @@ def ftx_klines(res: [], interval: int) -> []:
     return binance_klines
 
 
-def ftx_account_trade_list(res: []) -> []:
+def account_trade_list(res: []) -> []:
     binance_trade_list = []
     for trade in res:
         price = str(trade.get('price') or 0.0)
@@ -376,7 +376,7 @@ def ftx_account_trade_list(res: []) -> []:
     return binance_trade_list
 
 
-def ftx_stream_compare(msg_new: {}, msg_prev: {}, ch_type: str) -> bool:
+def stream_compare(msg_new: {}, msg_prev: {}, ch_type: str) -> bool:
     if not msg_prev:
         return True
     else:
@@ -389,7 +389,7 @@ def ftx_stream_compare(msg_new: {}, msg_prev: {}, ch_type: str) -> bool:
 
 
 # noinspection PyUnboundLocalVariable
-def ftx_stream_convert(msg: {}, symbol: str = None, ch_type: str = None) -> {}:
+def stream_convert(msg: {}, symbol: str = None, ch_type: str = None) -> {}:
     msg_binance = {}
     data = msg.get('data')
     _symbol = (symbol if symbol else data.get('market')).replace('/', '').lower()

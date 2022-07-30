@@ -41,21 +41,31 @@ class Events:
 
     def register_user_event(self, listener, event_type):
         self.handlers[event_type].append(listener)
+        # print(f"register_user_event.handlers: {self.handlers}")
 
     def unregister_user_event(self, event_type):
         self.handlers.pop(event_type)
 
-    def register_event(self, listener, event_type, exchange='binance'):
+    def register_event(self, listener, event_type, exchange):
         self.registered_streams[exchange] |= {event_type}
-        event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
+        if exchange == 'ftx':
+            event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
+        elif exchange == 'bitfinex':
+            event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
         self.handlers[event_type].append(listener)
+        '''
+        print(f"register_event.registered_streams: {self.registered_streams},"
+              f" event_type: {event_type},"
+              f" handlers: {self.handlers}")
+        '''
 
-    def unregister(self, event_type, exchange='binance'):
+    def unregister(self, event_type, exchange):
         self.registered_streams[exchange].discard(event_type)
         event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         self.handlers.pop(event_type, None)
 
     def wrap_event(self, event_data):
+        # print(f"wrap_event.event_data: {event_data}")
         wrapper_by_type = {
             "outboundAccountPosition": OutboundAccountPositionWrapper,
             "balanceUpdate": BalanceUpdateWrapper,

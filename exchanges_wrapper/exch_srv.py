@@ -1,6 +1,5 @@
 #!/usr/bin/python3.8
 # -*- coding: utf-8 -*-
-
 from exchanges_wrapper import __version__
 
 import time
@@ -12,7 +11,6 @@ import functools
 import json
 import logging.handlers
 import os
-import sys
 
 # noinspection PyPackageRequirements
 import grpc
@@ -23,9 +21,8 @@ from google.protobuf import json_format
 from exchanges_wrapper import events, errors, ftx_parser as ftx, api_pb2, api_pb2_grpc
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
+import exchanges_wrapper.bitfinex_parser as bfx
 #
-#
-sys.tracebacklimit = 0
 FILE_CONFIG = 'exch_srv_cfg.toml'
 CONFIG = None
 if os.path.exists(FILE_CONFIG):
@@ -38,39 +35,54 @@ HEARTBEAT = 1  # Sec
 
 
 def get_account(_account_name: str) -> ():
-    # print(f"get_account")
     accounts = CONFIG.get('accounts')
-    sub_account = None
+    res = ()
     for account in accounts:
-        # print(f"get_account.account: {account}")
         if account.get('name') == _account_name:
-            if account.get('test_net'):
-                real_market = False
-                api = CONFIG.get('endpoint_test').get('api')
-                ws = CONFIG.get('endpoint_test').get('ws')
-            else:
-                if 'FTX' in _account_name:
-                    real_market = True
-                    api = CONFIG.get('endpoint_ftx').get('api')
-                    ws = CONFIG.get('endpoint_ftx').get('ws')
-                    sub_account = account.get('sub_account_name')
-                else:
-                    real_market = True
-                    api = CONFIG.get('endpoint').get('api')
-                    ws = CONFIG.get('endpoint').get('ws')
-            return account.get('api_key'), account.get('api_secret'), api, ws, real_market, sub_account
-    return ()
+            exchange = account['exchange']
+            sub_account = account.get('sub_account_name')
+            test_net = account['test_net']
+            #
+            api_key = account['api_key']
+            api_secret = account['api_secret']
+            #
+            endpoint = CONFIG['endpoint'][exchange]
+            #
+            api_public = endpoint['api_public']
+            ws_public = endpoint['ws_public']
+            api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
+            ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
+            #
+            res = (exchange,        # 0
+                   sub_account,     # 1
+                   test_net,        # 2
+                   api_key,         # 3
+                   api_secret,      # 4
+                   api_public,      # 5
+                   ws_public,       # 6
+                   api_auth,        # 7
+                   ws_auth)         # 8
+            break
+    return res
 
 
 class OpenClient:
     open_clients = []
 
     def __init__(self, _account_name: str):
-        # lgtm [py/mismatched-multiple-assignment]
-        api_key, api_secret, api, ws, real_mrkt, sub_account = get_account(_account_name)
+        account = get_account(_account_name)
         self.name = _account_name
-        self.real_market = real_mrkt
-        self.client = Client(api_key, api_secret, endpoint=api, sub_account=sub_account, endpoint_ws=ws)
+        self.real_market = not account[2]
+        self.client = Client(
+            account[0],     # exchange
+            account[1],     # sub_account
+            account[3],     # api_key
+            account[4],     # api_secret
+            account[5],     # api_public
+            account[6],     # ws_public
+            account[7],     # api_auth
+            account[8]      # ws_auth
+        )
         self.stop_streams_for_symbol = None
         self.stream_queue = []
         self.on_order_update_queue = asyncio.Queue()
@@ -114,18 +126,18 @@ class Event:
         self.order_id = event_data["orderId"]
         self.last_executed_quantity = "0.0"
         self.cumulative_filled_quantity = event_data["executedQty"]
-        self.last_executed_price = event_data["price"]
+        self.last_executed_price = "0.0"
         self.commission_amount = "0.0"
         self.commission_asset = ""
         self.transaction_time = event_data["updateTime"]
-        self.trade_id = 1
+        self.trade_id = -1
         self.ignore_a = int()
         self.in_order_book = True
         self.is_maker_side = False
         self.ignore_b = False
         self.order_creation_time = event_data["time"]
         self.quote_asset_transacted = event_data["cummulativeQuoteQty"]
-        self.last_quote_asset_transacted = event_data["cummulativeQuoteQty"]
+        self.last_quote_asset_transacted = "0.0"
         self.quote_order_quantity = event_data["origQuoteOrderQty"]
 
 
@@ -137,21 +149,23 @@ class Martin(api_pb2_grpc.MartinServicer):
     async def OpenClientConnection(self, request: api_pb2.OpenClientConnectionRequest,
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
         client_id = OpenClient.get_id(request.account_name)
-        if not client_id and get_account(request.account_name):
+        if not client_id:
             open_client = OpenClient(request.account_name)
-            if open_client:
-                try:
-                    await open_client.client.load()
-                    client_id = id(open_client)
-                except asyncio.CancelledError:
-                    pass  # Task cancellation should not be logged as an error
-                except Exception as ex:
-                    logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
-                    _context.set_details(f"{ex}")
-                    _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            try:
+                await open_client.client.load()
+                client_id = id(open_client)
+            except asyncio.CancelledError:
+                pass  # Task cancellation should not be logged as an error
+            except Exception as ex:
+                logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
+                _context.set_details(f"{ex}")
+                _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+        else:
+            OpenClient.get_client(client_id).client.http.rate_limit_reached = False
         # Set rate_limiter
         Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
-        return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__)
+        exchange = OpenClient.get_client(client_id).client.exchange
+        return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
                               _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
@@ -202,11 +216,15 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            # logger.info(f"FetchOpenOrders.res: {res}")
+            # logger.debug(f"FetchOpenOrders.res: {res}")
+            active_orders = []
             for order in res:
+                active_orders.append(order['orderId'])
                 new_order = json_format.ParseDict(order, response_order)
-                # logger.info(f"FetchOpenOrders.new_order: {new_order}")
+                # logger.debug(f"FetchOpenOrders.new_order: {new_order}")
                 response.items.append(new_order)
+            if client.exchange == 'bitfinex':
+                client.active_orders_clear(active_orders)
         response.rate_limiter = Martin.rate_limiter
         return response
 
@@ -226,12 +244,25 @@ class Martin(api_pb2_grpc.MartinServicer):
         except Exception as _ex:
             logger.error(f"FetchOrders for {open_client.name}: {request.symbol} exception: {_ex}")
         else:
-            if request.filled_update_call and res.get('status') == 'FILLED':
-                event = Event(res)
-                logger.debug(f"FetchOrder.event: {open_client.name}:{event.symbol}:{int(event.order_id)}:"
-                             f"{event.order_status}")
-                _event = weakref.ref(event)
-                await _queue.put(_event())
+            if request.filled_update_call:
+                if res.get('status') == 'FILLED':
+                    event = Event(res)
+                    logger.debug(f"FetchOrder.event: {open_client.name}:{event.symbol}:{int(event.order_id)}:"
+                                 f"{event.order_status}")
+                    _event = weakref.ref(event)
+                    await _queue.put(_event())
+                elif res.get('status') == 'PARTIALLY_FILLED':
+                    try:
+                        trades = await client.fetch_order_trade_list(symbol=request.symbol, order_id=request.order_id)
+                    except asyncio.CancelledError:
+                        pass  # Task cancellation should not be logged as an error
+                    except Exception as _ex:
+                        logger.error(f"Fetch order trades for {open_client.name}: {request.symbol} exception: {_ex}")
+                    else:
+                        logger.debug(f"FetchOrder.trades: {trades}")
+                        for trade in trades:
+                            content = bfx.on_order_trade(trade, "0")
+                            await client.events.wrap_event(content).fire()
             json_format.ParseDict(res, response)
         return response
 
@@ -313,7 +344,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.FetchAccountBalanceResponse()
         response_balance = api_pb2.FetchAccountBalanceResponse.Balances()
         account_information = await client.fetch_account_information(receive_window=None)
-        # logger.info(f"account_information: {account_information}")
+        # logger.debug(f"account_information: {account_information}")
         # Send only balances
         res = account_information.get('balances', [])
         # Create consolidated list of asset balances from SPOT and Funding wallets
@@ -323,7 +354,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _locked = float(i.get('locked'))
             if _free or _locked:
                 balances.append({'asset': i.get('asset'), 'free': i.get('free'), 'locked': i.get('locked')})
-        # logger.info(f"account_information.balances: {balances}")
+        # logger.debug(f"account_information.balances: {balances}")
         for balance in balances:
             new_balance = json_format.ParseDict(balance, response_balance)
             response.balances.extend([new_balance])
@@ -336,14 +367,14 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.FetchFundingWalletResponse()
         response_balance = api_pb2.FetchFundingWalletResponse.Balances()
         res = []
-        if open_client.real_market and client.exchange in ('binance', 'ftx'):
+        if client.exchange == 'bitfinex' or (open_client.real_market and client.exchange in ('binance', 'ftx')):
             try:
                 res = await client.fetch_funding_wallet(asset=request.asset,
                                                         need_btc_valuation=request.need_btc_valuation,
                                                         receive_window=request.receive_window)
             except AttributeError:
                 logger.error("Can't get Funding Wallet balances")
-        # logger.info(f"funding_wallet: {res}")
+        logger.info(f"funding_wallet: {res}")
         for balance in res:
             new_balance = json_format.ParseDict(balance, response_balance)
             response.balances.extend([new_balance])
@@ -353,7 +384,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                              _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.FetchOrderBookResponse()
-        res = await client.fetch_order_book(symbol=request.symbol, limit=5)
+        limit = 1 if client.exchange == 'bitfinex' else 5
+        res = await client.fetch_order_book(symbol=request.symbol, limit=limit)
         res_bids = res.get('bids', [])
         res_asks = res.get('asks', [])
         response.lastUpdateId = res.get('lastUpdateId')
@@ -391,9 +423,9 @@ class Martin(api_pb2_grpc.MartinServicer):
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
-            logger.info(f"FetchKlines for {request.symbol} interval: {request.interval}, exception: {_ex}")
+            logger.error(f"FetchKlines for {request.symbol} interval: {request.interval}, exception: {_ex}")
         else:
-            # logger.info(res)
+            # logger.debug(res)
             for candle in res:
                 response.klines.append(json.dumps(candle))
         return response
@@ -409,19 +441,25 @@ class Martin(api_pb2_grpc.MartinServicer):
         _intervals = json.loads(request.interval)
         event_types = []
         # Register streams for intervals
+        if client.exchange == 'bitfinex':
+            exchange = 'bitfinex'
+            _symbol = client.symbol_to_bfx(request.symbol)
+        else:
+            exchange = 'binance'
+            _symbol = request.symbol.lower()
         for i in _intervals:
-            _event_type = f"{request.symbol.lower()}@kline_{i}"
+            _event_type = f"{_symbol}@kline_{i}"
             event_types.append(_event_type)
-            client.events.register_event(functools.partial(on_klines_update, _queue), _event_type)
+            client.events.register_event(functools.partial(on_klines_update, _queue), _event_type, exchange)
         while True:
             if open_client.stop_streams_for_symbol == request.symbol:
-                [open_client.client.events.unregister(_event_type) for _event_type in event_types]
+                [open_client.client.events.unregister(_event_type, exchange) for _event_type in event_types]
                 logger.info(f"OnKlinesUpdate: Stop market stream for {open_client.name}:{request.symbol}:"
                             f"{_intervals}")
                 break
             _event = await _queue.get()
             if _event:
-                # logger.info(f"OnKlinesUpdate.event: {_event.symbol}:{_event.kline_interval}")
+                # logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
                 response.symbol = _event.symbol
                 response.interval = _event.kline_interval
                 candle = [_event.kline_start_time,
@@ -466,7 +504,12 @@ class Martin(api_pb2_grpc.MartinServicer):
         _queue = asyncio.Queue()
         open_client.stream_queue.append(_queue)
         open_client.stop_streams_for_symbol = str()
-        _symbol = client.symbol_to_ftx(request.symbol) if client.exchange == 'ftx' else request.symbol.lower()
+        if client.exchange == 'ftx':
+            _symbol = client.symbol_to_ftx(request.symbol)
+        elif client.exchange == 'bitfinex':
+            _symbol = client.symbol_to_bfx(request.symbol)
+        else:
+            _symbol = request.symbol.lower()
         _event_type = f"{_symbol}@miniTicker"
         client.events.register_event(functools.partial(on_ticker_update, _queue), _event_type, client.exchange)
         while True:
@@ -492,7 +535,12 @@ class Martin(api_pb2_grpc.MartinServicer):
         _queue = asyncio.Queue()
         open_client.stream_queue.append(_queue)
         open_client.stop_streams_for_symbol = str()
-        _symbol = client.symbol_to_ftx(request.symbol) if client.exchange == 'ftx' else request.symbol.lower()
+        if client.exchange == 'ftx':
+            _symbol = client.symbol_to_ftx(request.symbol)
+        elif client.exchange == 'bitfinex':
+            _symbol = client.symbol_to_bfx(request.symbol)
+        else:
+            _symbol = request.symbol.lower()
         _event_type = f"{_symbol}@depth5"
         client.events.register_event(functools.partial(on_order_book_update, _queue), _event_type, client.exchange)
         while True:
@@ -517,7 +565,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         open_client.stop_streams_for_symbol = str()
-        if client.exchange == 'binance':
+        if client.exchange in ('binance', 'bitfinex'):
             _queue = asyncio.Queue()
             open_client.stream_queue.append(_queue)
             client.events.register_user_event(functools.partial(on_funds_update, _queue), 'outboundAccountPosition')
@@ -529,7 +577,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 client.events.unregister_user_event('outboundAccountPosition')
                 logger.info(f"OnFundsUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 break
-            if client.exchange == 'binance':
+            if client.exchange in ('binance', 'bitfinex'):
                 # noinspection PyUnboundLocalVariable
                 _event = await _queue.get()
             elif client.exchange == 'ftx':
@@ -544,7 +592,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     assets_balances = list(filter(lambda item: item['asset'] in assets, balances))
                     if assets_balances and assets_balances != balances_prev:
                         # logger.info(f"OnFundsUpdate.assets_balances: {assets_balances}")
-                        content = ftx.ftx_on_funds_update(assets_balances)
+                        content = ftx.on_funds_update(assets_balances)
                         balances_prev = assets_balances.copy()
                         _event = client.events.wrap_event(content)
             if _event:
@@ -568,7 +616,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 break
             _event = await _queue.get()
             if _event:
-                # logger.debug(f"OnOrderUpdate._event: {int(_event.order_id)}, {_event.order_status}")
+                logger.debug(f"OnOrderUpdate._event: {int(_event.order_id)}, {_event.order_status}")
                 response.symbol = _event.symbol
                 response.client_order_id = _event.client_order_id
                 response.side = _event.side
@@ -623,8 +671,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                 receive_window=None,
                 test=False)
         except errors.HTTPError as ex:
-            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex.args}")
-            _context.set_details(f"{ex.args}")
+            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
+            _context.set_details(f"{ex.message}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
@@ -632,6 +680,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
             json_format.ParseDict(res, response)
+            logger.info(f"CreateLimitOrder: created: {res.get('orderId')}")
         return response
 
     async def CancelOrder(self, request: api_pb2.CancelOrderRequest,
@@ -672,9 +721,10 @@ class Martin(api_pb2_grpc.MartinServicer):
             await asyncio.sleep(HEARTBEAT)
             _market_stream = open_client.client.events.registered_streams
             _market_stream_count = sum([len(_market_stream.get(k)) for k in _market_stream.keys()])
+            print(f"StartStream: wait market registered streams : {request.market_stream_count - _market_stream_count}")
         logger.debug(f"StartStream.events.registered_streams: {_market_stream}")
         asyncio.create_task(open_client.client.start_market_events_listener())
-        asyncio.create_task(open_client.client.start_user_events_listener(endpoint=open_client.client.endpoint_ws))
+        asyncio.create_task(open_client.client.start_user_events_listener())
         response.success = True
         return response
 
@@ -747,6 +797,7 @@ if __name__ == '__main__':
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     stream_handler.setLevel(logging.INFO)
+    stream_handler.setLevel(logging.DEBUG)
     logger.addHandler(stream_handler)
     #
     loop = asyncio.get_event_loop()

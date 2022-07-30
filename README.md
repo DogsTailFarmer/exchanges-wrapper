@@ -4,7 +4,7 @@
 ***
 <h1 align="center">Crypto exchanges API/WSS wrapper with grpc powered server</h1>
 
-<h2 align="center">Binance, FTX</h2>
+<h2 align="center">Binance, FTX, Bitfinex</h2>
 
 <h3 align="center">For SPOT markets</h2>
 
@@ -15,9 +15,12 @@
 <a href="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper.svg/?label=active+issues&token=XuG5PmzMiKlDL921-qREIuX_"/></a>
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_exchanges-wrapper" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_exchanges-wrapper&metric=alert_status"/></a>
 ***
+Format ```exchanges_wrapper/exch_srv_cfg.toml``` changed from 1.2.0 version. Before update, save old file and transfer
+configuration data into new.
+***
 
 ## exchanges-wrapper vs binance.py
-The main difference is the development of the project for trading with many exchanges, including DeFi platforms.
+The main difference is the development of the project for trading with many exchanges, including DeFi platforms shortly.
 
 Next is adding a new module ```exchanges_wrapper/exch_srv.py``` as a multiplexer layer, providing simultaneous async interaction for many accounts
 and many trading pairs through one connection. It's powered by [gRPC](https://grpc.io/about/)
@@ -81,9 +84,8 @@ see ```proto/exchanges_wrapper/api.proto```
 *USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
 
 ## Powered by exchanges-wrapper
-<p align="left">
-    <a href="https://github.com/DogsTailFarmer/martin-binance"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50">
-</p>
+<p align="left"><a href="https://github.com/DogsTailFarmer/martin-binance"></a><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50"></p>
 
 [martin-binance](https://github.com/DogsTailFarmer/martin-binance)
 Free trading system for crypto exchanges SPOT markets. Adaptive customizable reverse grid strategy based on martingale.
+

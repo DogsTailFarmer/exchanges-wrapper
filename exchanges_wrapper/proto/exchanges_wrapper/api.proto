@@ -433,6 +433,7 @@ message OpenClientConnectionId {
   int64 client_id = 1;
   string srv_version = 2;
   int32 rate_limiter = 3;
+  string exchange = 4;
 }
 
 message FetchServerTimeRequest {

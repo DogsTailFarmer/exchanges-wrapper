@@ -45,6 +45,8 @@ async def main(_exchange, _symbol):
         return
     else:
         client_id = client_id_msg.client_id
+        exchange = client_id_msg.exchange
+        print(f"main.exchange: {exchange}")
         print(f"main.client_id: {client_id}")
         print(f"main.srv_version: {client_id_msg.srv_version}")
 

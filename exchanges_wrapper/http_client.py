@@ -6,12 +6,11 @@ from urllib.parse import urlencode
 from exchanges_wrapper import __version__
 import logging
 import aiohttp
-import hashlib
-import hmac
 import time
+from exchanges_wrapper.c_structures import generate_signature
 from exchanges_wrapper.errors import (
     RateLimitReached,
-    BinanceError,
+    ExchangeError,
     WAFLimitViolated,
     IPAddressBanned,
     HTTPError,
@@ -22,8 +21,15 @@ logger = logging.getLogger('exch_srv_logger')
 
 
 class HttpClient:
-    def __init__(self, api_key, api_secret, endpoint, user_agent, proxy,
-                 session, exchange='binance', sub_account=None):
+    def __init__(self,
+                 api_key,
+                 api_secret,
+                 endpoint,
+                 user_agent,
+                 proxy,
+                 session,
+                 exchange,
+                 sub_account):
         self.api_key = api_key
         self.api_secret = api_secret
         self.endpoint = endpoint
@@ -37,91 +43,105 @@ class HttpClient:
         self.exchange = exchange
         self.sub_account = sub_account
 
-    def _generate_signature(self, data):
-        return hmac.new(self.api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
-
     async def handle_errors(self, response):
         if response.status >= 500:
-            logger.warning(f"An issue occurred on exchange's side: {response.status}: {response.url}")
+            logger.warning(f"An issue occurred on exchange's side: {response.status}: {response.url}:"
+                           f" {response.reason}")
             return {'success': False}
         if response.status == 429:
             self.rate_limit_reached = True if self.exchange == 'binance' else None
-            raise RateLimitReached()
+            raise RateLimitReached(RateLimitReached.message)
         # print(f"handle_errors.response: {response}")
         payload = await response.json()
-        if payload and "code" in payload:
-            # as defined here: https://github.com/binance/binance-spot-api-docs/blob/
-            # master/errors.md#error-codes-for-binance-2019-09-25
-            raise BinanceError(payload["msg"])
+        if payload:
+            if "code" in payload:
+                # as defined here: https://github.com/binance/binance-spot-api-docs/blob/
+                # master/errors.md#error-codes-for-binance-2019-09-25
+                raise ExchangeError(payload["msg"])
         if response.status >= 400:
             logger.error(f"handle_errors.response.status >= 400: {payload}")
-            if response.status == 403:
-                raise WAFLimitViolated()
+            if response.status == 400 and payload and payload.get("error", str()) == "ERR_RATE_LIMIT":
+                raise RateLimitReached(RateLimitReached.message)
+            elif response.status == 403:
+                raise WAFLimitViolated(WAFLimitViolated.message)
             elif response.status == 418:
-                raise IPAddressBanned()
+                raise IPAddressBanned(IPAddressBanned.message)
             else:
                 raise HTTPError(f"Malformed request: {payload}")
-        # print(f"handle_errors.payload: {payload}")
         return payload
 
     async def send_api_call(
-        self, path, method="GET", signed=False, send_api_key=True, **kwargs
+        self, path, method="GET", signed=False, send_api_key=True, endpoint=None, **kwargs
     ):
         if self.rate_limit_reached:
             raise QueryCanceled(
-                "Rate limit reached, to avoid an IP ban, this query has been automatically cancelled"
+                "Rate limit reached, to avoid an IP ban, this query has been cancelled"
             )
         # return the JSON body of a call to Binance REST API
-        # print(f"send_api_call.kwargs: {kwargs}")
+        _endpoint = endpoint or self.endpoint
         query_kwargs = {}
         content = str()
         ftx_post = self.exchange == 'ftx' and method == 'POST'
-        _params = json.dumps(kwargs) if ftx_post else None
-        url = f'{self.endpoint}{path}' if self.exchange == 'binance' else f'{self.endpoint}/{path}'
+        bfx_post = self.exchange == 'bitfinex' and ((method == 'POST' and kwargs) or "params" in kwargs)
+        _params = json.dumps(kwargs) if ftx_post or bfx_post else None
+        url = f'{_endpoint}{path}' if self.exchange == 'binance' else f'{_endpoint}/{path}'
+        ts = int(time.time() * 1000)
         if self.exchange == 'binance':
             query_kwargs = dict({"headers": {"User-Agent": self.user_agent}}, **kwargs,)
             if send_api_key:
                 query_kwargs["headers"]["X-MBX-APIKEY"] = self.api_key
-        elif self.exchange == 'ftx':
+        elif self.exchange in ('ftx', 'bitfinex'):
             # https://help.ftx.com/hc/en-us/articles/360052595091-2020-11-20-Ratelimit-Updates
-            query_kwargs = {"headers": {"FTX-KEY": self.api_key}}
+            query_kwargs = {"headers": {"Accept": 'application/json'}}
+            if self.exchange == 'ftx':
+                query_kwargs["headers"]["FTX-KEY"] = self.api_key
+                if self.sub_account:
+                    query_kwargs["headers"]["FTX-SUBACCOUNT"] = self.sub_account
             content += urlencode(kwargs, safe='/')
-            # print(f"send_api_call.content: {content}")
-            if content and not ftx_post:
+            if content and not ftx_post and not bfx_post:
                 url += f'?{content}'
-            # print(f"send_api_call.url: {url}")
-            if self.sub_account:
-                query_kwargs["headers"]["FTX-SUBACCOUNT"] = self.sub_account
+            if bfx_post and "params" in kwargs:
+                query_kwargs.update({'data': _params})
         if signed:
+            query_kwargs["headers"]["Content-Type"] = 'application/json'
             if self.exchange == 'binance':
                 location = "params" if "params" in kwargs else "data"
-                query_kwargs[location]["timestamp"] = str(int(time.time() * 1000))
+                query_kwargs[location]["timestamp"] = str(ts)
                 if "params" in kwargs:
                     content += urlencode(kwargs["params"])
                 if "data" in kwargs:
                     content += urlencode(kwargs["data"])
-                query_kwargs[location]["signature"] = self._generate_signature(content)
+                query_kwargs[location]["signature"] = generate_signature(self.exchange, self.api_secret, content)
                 if self.proxy:
                     query_kwargs["proxy"] = self.proxy
             elif self.exchange == 'ftx':
                 if ftx_post:
-                    query_kwargs["headers"]["Content-Type"] = 'application/json'
                     query_kwargs.update({'data': _params})
                     content = f"{_params}"
-                ts = int(time.time() * 1000)
                 signature_payload = f'{ts}{method}/api/{path}'
                 if content:
                     if ftx_post:
                         signature_payload += f'{content}'
                     else:
                         signature_payload += f'?{content}'
-                # print(f"send_api_call.signature_payload: {signature_payload}")
-                signature = self._generate_signature(signature_payload)
-                query_kwargs["headers"]["FTX-SIGN"] = signature
+                query_kwargs["headers"]["FTX-SIGN"] = generate_signature(self.exchange,
+                                                                         self.api_secret,
+                                                                         signature_payload)
                 query_kwargs["headers"]["FTX-TS"] = str(ts)
-        # logger.debug(f"send_api_call: method: {method}, url: {url}, **query_kwargs: {query_kwargs}")
+            elif self.exchange == 'bitfinex':
+                if bfx_post:
+                    query_kwargs.update({'data': _params})
+                if send_api_key:
+                    query_kwargs["headers"]["bfx-apikey"] = self.api_key
+                signature_payload = f'/api/{path}{ts}'
+                if _params:
+                    signature_payload += f"{_params}"
+                query_kwargs["headers"]["bfx-signature"] = generate_signature(self.exchange,
+                                                                              self.api_secret,
+                                                                              signature_payload)
+                query_kwargs["headers"]["bfx-nonce"] = str(ts)
         async with self.session.request(method, url, **query_kwargs) as response:
-            # logger.debug(f"send_api_call.response: {response}")
+            logger.debug(f"send_api_call.response: url: {response.url}, status: {response.status}")
             return await self.handle_errors(response)
 
     async def close_session(self):
