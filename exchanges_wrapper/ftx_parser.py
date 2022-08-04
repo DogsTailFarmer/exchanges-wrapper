@@ -7,6 +7,7 @@ import time
 import datetime
 from decimal import Decimal
 import logging
+import zlib
 
 logger = logging.getLogger('exch_srv_logger')
 
@@ -15,6 +16,68 @@ CH_KEY = {
     'depth5': ['bid', 'ask'],
 }
 TIMESTAMP_PATTERN = "%Y-%m-%dT%H:%M:%S.%f"
+
+
+class OrderBook:
+    def __init__(self, _order_book, symbol) -> None:
+        self.symbol = symbol.replace('/', '').lower()
+        self.last_update_id = int(_order_book.get('time', 0) * 1000)
+        self.asks = {}
+        self.bids = {}
+        for i in _order_book.get('bids', []):
+            self.bids[str(i[0])] = str(i[1])
+        for i in _order_book.get('asks', []):
+            self.asks[str(i[0])] = str(i[1])
+
+    def sort_order_book(self) -> ():
+        bids = list(map(list, self.bids.items()))
+        bids.sort(key=lambda x: float(x[0]), reverse=True)
+        asks = list(map(list, self.asks.items()))
+        asks.sort(key=lambda x: float(x[0]), reverse=False)
+        return bids, asks
+
+    def get_book(self) -> dict:
+        bids, asks = self.sort_order_book()
+        return {
+            'stream': f"{self.symbol}@depth5",
+            'data': {'lastUpdateId': self.last_update_id,
+                     'bids': bids[0:5],
+                     'asks': asks[0:5],
+                     }
+        }
+
+    def checksum(self) -> int:
+        raw = str()
+        bids, asks = self.sort_order_book()
+        bids_max = len(bids)
+        asks_max = len(asks)
+        for i in range(max(bids_max, asks_max)):
+            if i < bids_max:
+                raw += f"{':' if i else ''}{bids[i][0]}:{bids[i][1]}"
+            if i < asks_max:
+                raw += f":{asks[i][0]}:{asks[i][1]}"
+        res = zlib.crc32(raw.encode('utf8'))
+        return res
+
+    def update_book(self, _update) -> int:
+        self.last_update_id = int(_update.get('time', 0) * 1000)
+        bids = _update.get('bids', [])
+        for bid in bids:
+            if bid[1]:
+                self.bids[str(bid[0])] = str(bid[1])
+            else:
+                self.bids.pop(str(bid[0]), None)
+
+        asks = _update.get('asks', [])
+        for ask in asks:
+            if ask[1]:
+                self.asks[str(ask[0])] = str(ask[1])
+            else:
+                self.asks.pop(str(ask[0]), None)
+        return self.checksum()
+
+    def __call__(self):
+        return self
 
 
 def on_funds_update(res: []) -> {}:
@@ -376,24 +439,13 @@ def account_trade_list(res: []) -> []:
     return binance_trade_list
 
 
-def stream_compare(msg_new: {}, msg_prev: {}, ch_type: str) -> bool:
-    if not msg_prev:
-        return True
-    else:
-        _msg_new = msg_new.get('data')
-        _msg_prev = msg_prev.get('data')
-        for i in CH_KEY.get(ch_type):
-            if _msg_prev.get(i) != _msg_new.get(i):
-                return True
-        return False
-
-
 # noinspection PyUnboundLocalVariable
 def stream_convert(msg: {}, symbol: str = None, ch_type: str = None) -> {}:
+    # print(f"stream_convert: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
     msg_binance = {}
     data = msg.get('data')
     _symbol = (symbol if symbol else data.get('market')).replace('/', '').lower()
-    if ch_type == 'miniTicker':
+    if ch_type == 'ticker':
         msg_binance = {
             'stream': f"{_symbol}@miniTicker",
             'data': {
@@ -406,15 +458,6 @@ def stream_convert(msg: {}, symbol: str = None, ch_type: str = None) -> {}:
                 "l": "0.0",
                 "v": "0",
                 "q": "0"
-            }
-        }
-    elif ch_type == 'depth5':
-        msg_binance = {
-            'stream': f"{_symbol}@depth5",
-            'data': {
-                "lastUpdateId": int(data.get('time') * 1000),
-                "bids": [[str(data.get('bid') or 0.0), "0.0"]],
-                "asks": [[str(data.get('ask') or 0.0), "0.0"]]
             }
         }
     else:
