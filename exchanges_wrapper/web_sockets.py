@@ -31,7 +31,7 @@ class EventsDataStream:
         self.try_count = 0
 
     async def start(self):
-        await self.stop()
+        pass  # meant to be overridden in a subclass
 
     async def stop(self):
         pass  # meant to be overridden in a subclass
@@ -56,11 +56,11 @@ class EventsDataStream:
     async def _handle_messages(self, web_socket, symbol=None, ch_type=str()):
         logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}")
         self.try_count = 0
-        msg_data_prev = {}
         order_book = None
+        price = None
         while True:
             msg = await web_socket.receive()
-            # print(f"_handle_messages.msg: {msg}")
+            # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
             if msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSE):
                 logger.error(
                     "Trying to receive something while the websocket is closed! Trying to reconnect."
@@ -78,20 +78,17 @@ class EventsDataStream:
                 msg_data = json.loads(msg.data)
                 if self.exchange == 'binance':
                     await self._handle_event(msg_data)
-                elif self.exchange == 'ftx' and msg_data.get('type') == 'update':
-                    if msg_data.get('channel') not in ('fills', 'orders'):
-                        _msg_data = eval(repr(msg_data))
-                        if ftx.stream_compare(_msg_data, msg_data_prev, ch_type):
-                            # logger.debug(f"_handle_messages.msg_data_LAST: {msg_data}")
-                            msg_data_binance = ftx.stream_convert(msg_data, symbol, ch_type)
-                            # logger.debug(f"_handle_messages.msg_data_binance: {msg_data_binance}")
-                            await self._handle_event(msg_data_binance)
-                        msg_data_prev = eval(repr(msg_data))
-                    else:
-                        msg_data_binance = ftx.stream_convert(msg_data)
-                        logger.debug(f"_handle_messages.msg_data_binance: {msg_data_binance}")
-                        if msg_data_binance:
-                            await self._handle_event(msg_data_binance)
+                elif self.exchange == 'ftx':
+                    if ch_type == 'orderbook' and msg_data.get('type') == 'partial':
+                        order_book = ftx.OrderBook(msg_data.get('data', {}), symbol)
+                    elif msg_data.get('type') == 'update':
+                        if ch_type == 'ticker':
+                            _price = msg_data.get('data', {}).get('last', None)
+                            if price != _price:
+                                price = _price
+                                await self._handle_event(msg_data, symbol, ch_type, order_book)
+                        else:
+                            await self._handle_event(msg_data, symbol, ch_type, order_book)
                 elif self.exchange == 'bitfinex':
                     # info and error handling
                     if isinstance(msg_data, dict):
@@ -142,14 +139,17 @@ class MarketEventsDataStream(EventsDataStream):
         """
         Stop market data stream
         """
-        logger.debug('MarketEventsDataStream.stop()')
         if self.web_socket:
+            logger.debug('MarketEventsDataStream.stop()')
             await self.web_socket.close()
         # print(f"stop.web_socket: {self.web_socket}, _state: {self.web_socket.closed}")
 
     async def start(self):
+        await self.stop()
         registered_streams = self.client.events.registered_streams.get(self.exchange)
-        logger.debug(f"MarketEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
+        logger.debug(f"MarketEventsDataStream.start(): exchange: {self.exchange},"
+                     f" channel: {self.channel},"
+                     f" endpoint: {self.endpoint}")
         try:
             async with aiohttp.ClientSession() as session:
                 if self.exchange == 'binance':
@@ -171,6 +171,8 @@ class MarketEventsDataStream(EventsDataStream):
                 if self.exchange == 'ftx':
                     if ch_type == 'miniTicker':
                         ch_type = 'ticker'
+                    elif ch_type == 'depth5':
+                        ch_type = 'orderbook'
                     if self.client.proxy:
                         self.web_socket = await session.ws_connect(
                             self.endpoint, heartbeat=15, proxy=self.client.proxy)
@@ -211,7 +213,7 @@ class MarketEventsDataStream(EventsDataStream):
             asyncio.ensure_future(self.start())
 
     async def _handle_event(self, content, symbol=None, ch_type=str(), order_book=None):
-        # print(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
+        # logger.debug(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
         if self.exchange == 'bitfinex':
             if 'candles' in ch_type:
                 if isinstance(content[1][-1], list):
@@ -228,6 +230,19 @@ class MarketEventsDataStream(EventsDataStream):
             elif ch_type == 'book' and isinstance(order_book, bfx.OrderBook):
                 order_book.update_book(content[1])
                 content = order_book.get_book()
+        elif self.exchange == 'ftx':
+            if ch_type == 'orderbook' and isinstance(order_book, ftx.OrderBook):
+                if content['data']['checksum'] == order_book.update_book(content['data']):
+                    content = order_book.get_book()
+                else:
+                    logger.warning("For orderbook WSS lost the current state, restarting the stream")
+                    await asyncio.sleep(1)
+                    raise aiohttp.ClientOSError
+            elif ch_type == 'ticker':
+                content = ftx.stream_convert(content, symbol, ch_type)
+            else:
+                return
+        #
         stream_name = None
         if "stream" in content:
             stream_name = content["stream"]
@@ -251,11 +266,12 @@ class FtxPrivateEventsDataStream(EventsDataStream):
         """
         Stop data stream
         """
-        logger.info('FtxPrivateEventsDataStream.stop()')
         if self.web_socket:
+            logger.info('FtxPrivateEventsDataStream.stop()')
             await self.web_socket.close()
 
     async def start(self):
+        await self.stop()
         logger.debug(f"FtxPrivateEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
         async with aiohttp.ClientSession() as session:
             if self.client.proxy:
@@ -282,10 +298,13 @@ class FtxPrivateEventsDataStream(EventsDataStream):
             await self.web_socket.send_json(request)
             await self._handle_messages(self.web_socket)
 
-    async def _handle_event(self, content):
-        # logger.debug(f"FtxPrivateEventsDataStream._handle_event.content: {content}")
-        event = self.client.events.wrap_event(content)
-        await event.fire()
+    async def _handle_event(self, msg_data, *args):
+        content = None
+        if msg_data.get('channel') in ('fills', 'orders'):
+            content = ftx.stream_convert(msg_data)
+        if content:
+            logger.debug(f"FtxPrivateEventsDataStream._handle_event.content: {content}")
+            await self.client.events.wrap_event(content).fire()
 
 
 class BfxPrivateEventsDataStream(EventsDataStream):
@@ -294,11 +313,12 @@ class BfxPrivateEventsDataStream(EventsDataStream):
         """
         Stop data stream
         """
-        logger.info('BfxPrivateEventsDataStream.stop()')
         if self.web_socket:
+            logger.info('BfxPrivateEventsDataStream.stop()')
             await self.web_socket.close()
 
     async def start(self):
+        await self.stop()
         logger.debug(f"BfxPrivateEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
         async with aiohttp.ClientSession() as session:
             if self.client.proxy:
@@ -319,7 +339,7 @@ class BfxPrivateEventsDataStream(EventsDataStream):
             await self.upstream_bitfinex(request)
 
     async def _handle_event(self, msg_data, *args):
-        # logger.debug(f"USER_handle_event.msg_data: {int(time.time() * 1000)}, {msg_data}")
+        logger.debug(f"USER_handle_event.msg_data: {msg_data}")
         content = None
         if msg_data[1] in ('wu', 'ws'):
             content = bfx.on_funds_update(msg_data[2])
@@ -342,7 +362,6 @@ class BfxPrivateEventsDataStream(EventsDataStream):
                                                                                         Decimal(last_qty))
                 if Decimal(executed_qty) >= orig_qty:
                     self.client.active_orders[order_id]['lastEvent'] = (msg_data[2][0], last_qty, str(msg_data[2][5]))
-                    logger.debug(f"USER_handle_event: id: {order_id}: {self.client.active_orders[order_id]}")
                 else:
                     executed_qty = self.client.active_orders.get(order_id, {}).get('executedQty', '0')
                     content = bfx.on_order_trade(msg_data[2], executed_qty)
@@ -364,11 +383,12 @@ class UserEventsDataStream(EventsDataStream):
         """
         Stop user data stream
         """
-        # logger.info(f"UserEventsDataStream.stop: {self.client}")
         if self.web_socket:
+            logger.info(f"UserEventsDataStream.stop: {self.client}")
             await self.web_socket.close()
 
     async def start(self):
+        await self.stop()
         logger.debug(f"UserEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
         async with aiohttp.ClientSession() as session:
             listen_key = (await self.client.create_listen_key())["listenKey"]
@@ -384,6 +404,6 @@ class UserEventsDataStream(EventsDataStream):
             await self._handle_messages(self.web_socket)
 
     async def _handle_event(self, content):
-        # print(f"user _handle_event.content: {content}")
+        logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
         event = self.client.events.wrap_event(content)
         await event.fire()

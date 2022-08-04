@@ -374,7 +374,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                                                         receive_window=request.receive_window)
             except AttributeError:
                 logger.error("Can't get Funding Wallet balances")
-        logger.info(f"funding_wallet: {res}")
+        logger.debug(f"funding_wallet: {res}")
         for balance in res:
             new_balance = json_format.ParseDict(balance, response_balance)
             response.balances.extend([new_balance])
@@ -519,7 +519,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 break
             _event = await _queue.get()
             if _event:
-                # logger.debug(f"OnTickerUpdate.event: {_event.symbol}, _event.close_price: {_event.close_price}")
+                logger.debug(f"OnTickerUpdate.event: {_event.symbol}, _event.close_price: {_event.close_price}")
                 ticker_24h = {'symbol': _event.symbol,
                               'open_price': _event.open_price,
                               'close_price': _event.close_price,
@@ -550,7 +550,6 @@ class Martin(api_pb2_grpc.MartinServicer):
                 break
             _event = await _queue.get()
             if _event:
-                # logger.info(f"OnOrderBookUpdate._event: {_event}")
                 response.Clear()
                 response.lastUpdateId = _event.last_update_id
                 for bid in _event.bids:
@@ -596,7 +595,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                         balances_prev = assets_balances.copy()
                         _event = client.events.wrap_event(content)
             if _event:
-                # logger.info(f"OnFundsUpdate: {_event.balances.items()}")
+                logger.debug(f"OnFundsUpdate: {_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
                 yield response
 
@@ -680,7 +679,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
             json_format.ParseDict(res, response)
-            logger.info(f"CreateLimitOrder: created: {res.get('orderId')}")
+            logger.debug(f"CreateLimitOrder: created: {res.get('orderId')}")
         return response
 
     async def CancelOrder(self, request: api_pb2.CancelOrderRequest,
@@ -713,7 +712,7 @@ class Martin(api_pb2_grpc.MartinServicer):
     async def StartStream(self, request: api_pb2.StartStreamRequest,
                           _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         open_client = OpenClient.get_client(request.client_id)
-        logger.debug(f"Start ws streams for {open_client.name}")
+        logger.info(f"Start ws streams for {open_client.name}")
         response = api_pb2.SimpleResponse()
         _market_stream = None
         _market_stream_count = 0
@@ -721,8 +720,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             await asyncio.sleep(HEARTBEAT)
             _market_stream = open_client.client.events.registered_streams
             _market_stream_count = sum([len(_market_stream.get(k)) for k in _market_stream.keys()])
-            print(f"StartStream: wait market registered streams : {request.market_stream_count - _market_stream_count}")
-        logger.debug(f"StartStream.events.registered_streams: {_market_stream}")
+        logger.info(f"StartStream.events.registered_streams: {_market_stream}")
         asyncio.create_task(open_client.client.start_market_events_listener())
         asyncio.create_task(open_client.client.start_user_events_listener())
         response.success = True
@@ -797,7 +795,7 @@ if __name__ == '__main__':
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     stream_handler.setLevel(logging.INFO)
-    stream_handler.setLevel(logging.DEBUG)
+    # stream_handler.setLevel(logging.DEBUG)
     logger.addHandler(stream_handler)
     #
     loop = asyncio.get_event_loop()

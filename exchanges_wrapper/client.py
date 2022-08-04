@@ -138,7 +138,7 @@ class Client:
         _events = self.events.registered_streams
         start_list = []
         for _exchange in _events.keys():
-            print(f"start_market_events_listener._exchange: {_exchange}")
+            logger.info(f"start_market_events_listener._exchange: {_exchange}")
             if _exchange == 'binance':
                 _endpoint = BINANCE_ENDPOINT_WS
                 market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange)
@@ -147,7 +147,7 @@ class Client:
             else:
                 _endpoint = self.endpoint_ws_public
                 for channel in self.events.registered_streams.get(_exchange):
-                    print(f"start_market_events_listener.channel: {channel}")
+                    logger.info(f"start_market_events_listener.channel: {channel}")
                     market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange, channel)
                     self.market_data_streams.append(market_data_stream)
                     start_list.append(market_data_stream.start())
@@ -768,7 +768,7 @@ class Client:
                                                      response_type=True,
                                                      )
                 order_cancelled = bool(binance_res.get('status') == 'CANCELED')
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
         elif self.exchange == 'bitfinex':
             if not order_id:
                 raise ValueError(

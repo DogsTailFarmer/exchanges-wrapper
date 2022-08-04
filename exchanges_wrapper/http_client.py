@@ -140,7 +140,7 @@ class HttpClient:
                                                                               signature_payload)
                 query_kwargs["headers"]["bfx-nonce"] = str(ts)
         async with self.session.request(method, url, **query_kwargs) as response:
-            logger.debug(f"send_api_call.response: url: {response.url}, status: {response.status}")
+            # logger.debug(f"send_api_call.response: url: {response.url}, status: {response.status}")
             return await self.handle_errors(response)
 
     async def close_session(self):

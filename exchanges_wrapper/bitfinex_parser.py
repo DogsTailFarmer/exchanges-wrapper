@@ -506,16 +506,15 @@ def on_order_update(res: [], last_event: tuple) -> {}:
         last_executed_quantity = last_event[1]
         last_executed_price = last_event[2]
     last_quote_asset_transacted = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
-
     status = str()
-    if Decimal(order_quantity) > Decimal(cumulative_filled_quantity) > 0:
+    if 'CANCELED' in res[13]:
+        status = 'CANCELED'
+    elif Decimal(order_quantity) > Decimal(cumulative_filled_quantity) > 0:
         status = 'PARTIALLY_FILLED'
     elif  Decimal(cumulative_filled_quantity) >= Decimal(order_quantity):
         status = 'FILLED'
     elif 'ACTIVE' in res[13]:
         status = 'NEW'
-    elif 'CANCELED' in res[13]:
-        status = 'CANCELED'
     #
     msg_binance = {
         "e": "executionReport",
