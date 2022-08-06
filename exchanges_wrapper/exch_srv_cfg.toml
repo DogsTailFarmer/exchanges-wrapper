@@ -1,0 +1,76 @@
+# Parameters for exchanges-wrapper REST API Server exch_srv.py
+# Copyright © 2021 Jerry Fedorenko aka VM
+# __version__ = "3.0"
+
+[Path]
+log_path = './log/'
+
+[endpoint]
+    [endpoint.binance]
+        api_public = 'https://api.binance.com'
+        ws_public = 'wss://stream.binance.com:9443'
+        api_auth = 'https://api.binance.com'
+        ws_auth = 'wss://stream.binance.com:9443'
+        api_test = 'https://testnet.binance.vision'
+        ws_test = 'wss://testnet.binance.vision/ws'
+
+    [endpoint.ftx]
+        api_public = 'https://ftx.com/api'
+        ws_public = 'wss://ftx.com/ws/'
+        api_auth = 'https://ftx.com/api'
+        ws_auth = 'wss://ftx.com/ws/'
+
+    [endpoint.bitfinex]
+        api_public = 'https://api-pub.bitfinex.com'
+        ws_public = 'wss://api-pub.bitfinex.com/ws/2'
+        api_auth = 'https://api.bitfinex.com'
+        ws_auth = 'wss://api.bitfinex.com/ws/2'
+        api_test = 'https://api.bitfinex.com'
+        ws_test = 'wss://api.bitfinex.com/ws/2'
+
+# Binance accounts
+[[accounts]]
+    exchange = 'binance'
+    name = 'Demo - Binance'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    test_net = true
+
+[[accounts]]
+    exchange = 'binance'
+    name = 'BinanceSub1'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    test_net = false
+
+# FTX accounts. For FTX sub_account_name var must be real subaccount name on FTX exchange
+[[accounts]]
+    exchange = 'ftx'
+    name = 'FTX'
+    # sub_account_name = 'main'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    test_net = false
+
+[[accounts]]
+    exchange = 'ftx'
+    name = 'FTX_sub_01'
+    sub_account_name = 'ftx_01'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    test_net = false
+
+# Bitfinex accounts
+[[accounts]]
+    exchange = 'bitfinex'
+    name = 'Bitfinex - demo'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    test_net = true
+
+[[accounts]]
+    exchange = 'bitfinex'
+    name = 'Bitfinex'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    test_net = false

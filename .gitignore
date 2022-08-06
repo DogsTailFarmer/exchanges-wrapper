@@ -7,6 +7,6 @@ venv/
 
 /exchanges_wrapper/__pycache__/
 /exchanges_wrapper/log/**
-!/exchanges_wrapper/log/.gitkeep
-/exchanges_wrapper/exch_srv_cfg.toml
+/exchanges_wrapper/log/.gitkeep
+!/exchanges_wrapper/exch_srv_cfg.toml
 /exchanges_wrapper/exchanges_wrapper/
