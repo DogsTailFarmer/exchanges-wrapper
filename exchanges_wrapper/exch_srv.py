@@ -11,6 +11,7 @@ import functools
 import json
 import logging.handlers
 import os
+import traceback
 
 # noinspection PyPackageRequirements
 import grpc
@@ -212,11 +213,12 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
+            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}"
+                         f"{traceback.print_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            # logger.debug(f"FetchOpenOrders.res: {res}")
+            logger.debug(f"FetchOpenOrders.res: {res}")
             active_orders = []
             for order in res:
                 active_orders.append(order['orderId'])
@@ -519,7 +521,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 break
             _event = await _queue.get()
             if _event:
-                logger.debug(f"OnTickerUpdate.event: {_event.symbol}, _event.close_price: {_event.close_price}")
+                # logger.debug(f"OnTickerUpdate.event: {_event.symbol}, _event.close_price: {_event.close_price}")
                 ticker_24h = {'symbol': _event.symbol,
                               'open_price': _event.open_price,
                               'close_price': _event.close_price,

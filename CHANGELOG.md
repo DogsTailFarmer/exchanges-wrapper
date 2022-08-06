@@ -1,3 +1,7 @@
+## v1.2.2 - 2022-08-06
+### Fixed
+* Incorrect handling fetch_open_orders response after reinit connection
+
 ## v1.2.1 - 2022-08-04
 ### Added for new features
 * FTX: WSS 'orderbook' check status by provided checksum value

@@ -204,15 +204,14 @@ def order(res: [], response_type=None, wss_te=None) -> {}:
     cummulative_quote_qty = str(Decimal(executed_qty) * Decimal(avg_fill_price))
     orig_quote_order_qty = str(Decimal(orig_qty) * Decimal(price))
     #
-    status = str()
-    if res[13].split('@')[0].strip() == 'PARTIALLY FILLED':
-        status = 'PARTIALLY_FILLED'
-    elif not res[6]:
-        status = 'FILLED'
-    elif 'ACTIVE' in res[13]:
-        status = 'NEW'
-    elif 'CANCELED' in res[13]:
+    if 'CANCELED' in res[13]:
         status = 'CANCELED'
+    elif Decimal(orig_qty) > Decimal(executed_qty) > 0:
+        status = 'PARTIALLY_FILLED'
+    elif  Decimal(executed_qty) >= Decimal(orig_qty):
+        status = 'FILLED'
+    else:
+        status = 'NEW'
     #
     _type = "LIMIT"
     # https://docs.bitfinex.com/reference/ws-auth-trades
@@ -506,14 +505,13 @@ def on_order_update(res: [], last_event: tuple) -> {}:
         last_executed_quantity = last_event[1]
         last_executed_price = last_event[2]
     last_quote_asset_transacted = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
-    status = str()
     if 'CANCELED' in res[13]:
         status = 'CANCELED'
     elif Decimal(order_quantity) > Decimal(cumulative_filled_quantity) > 0:
         status = 'PARTIALLY_FILLED'
     elif  Decimal(cumulative_filled_quantity) >= Decimal(order_quantity):
         status = 'FILLED'
-    elif 'ACTIVE' in res[13]:
+    else:
         status = 'NEW'
     #
     msg_binance = {

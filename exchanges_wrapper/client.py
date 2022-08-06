@@ -869,7 +869,7 @@ class Client:
                 method="POST",
                 signed=True
             )
-            # print(f"fetch_open_orders.res: {res}")
+            logger.debug(f"fetch_open_orders.res: {res}")
             if res:
                 binance_res = bfx.orders(res)
         return binance_res
