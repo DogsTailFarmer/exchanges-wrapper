@@ -790,7 +790,7 @@ class Client:
                         binance_res.update({"status": 'CANCELED'})
                         break
                     await asyncio.sleep(0.1)
-                logger.debug(f"timeout: {timeout}")
+                logger.debug(f"cancel_order.bitfinex {order_id}: timeout: {timeout}")
         logger.debug(f"cancel_order.binance_res: {binance_res}")
         return binance_res
 
@@ -869,7 +869,7 @@ class Client:
                 method="POST",
                 signed=True
             )
-            logger.debug(f"fetch_open_orders.res: {res}")
+            # logger.debug(f"fetch_open_orders.res: {res}")
             if res:
                 binance_res = bfx.orders(res)
         return binance_res

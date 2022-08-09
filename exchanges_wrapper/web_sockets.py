@@ -140,16 +140,16 @@ class MarketEventsDataStream(EventsDataStream):
         Stop market data stream
         """
         if self.web_socket:
-            logger.debug('MarketEventsDataStream.stop()')
+            logger.info('MarketEventsDataStream.stop()')
             await self.web_socket.close()
         # print(f"stop.web_socket: {self.web_socket}, _state: {self.web_socket.closed}")
 
     async def start(self):
         await self.stop()
         registered_streams = self.client.events.registered_streams.get(self.exchange)
-        logger.debug(f"MarketEventsDataStream.start(): exchange: {self.exchange},"
-                     f" channel: {self.channel},"
-                     f" endpoint: {self.endpoint}")
+        logger.info(f"MarketEventsDataStream.start(): exchange: {self.exchange},"
+                    f" channel: {self.channel},"
+                    f" endpoint: {self.endpoint}")
         try:
             async with aiohttp.ClientSession() as session:
                 if self.exchange == 'binance':
@@ -272,7 +272,7 @@ class FtxPrivateEventsDataStream(EventsDataStream):
 
     async def start(self):
         await self.stop()
-        logger.debug(f"FtxPrivateEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
+        logger.info(f"FtxPrivateEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
         async with aiohttp.ClientSession() as session:
             if self.client.proxy:
                 self.web_socket = await session.ws_connect(

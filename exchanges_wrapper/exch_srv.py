@@ -213,18 +213,30 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}"
-                         f"{traceback.print_exc()}")
+            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
+            # logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}"
+            #              f"{traceback.print_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            logger.debug(f"FetchOpenOrders.res: {res}")
+            # logger.debug(f"FetchOpenOrders.res: {res}")
             active_orders = []
             for order in res:
                 active_orders.append(order['orderId'])
                 new_order = json_format.ParseDict(order, response_order)
                 # logger.debug(f"FetchOpenOrders.new_order: {new_order}")
                 response.items.append(new_order)
+                if client.exchange == 'bitfinex':
+                    client.active_orders.update(
+                        {order['orderId']:
+                             {'filledTime': int(),
+                              'origQty': order['origQty'],
+                              'executedQty': order['executedQty'],
+                              'lastEvent': (),
+                              'cancelled': False
+                              }
+                         }
+                    )
             if client.exchange == 'bitfinex':
                 client.active_orders_clear(active_orders)
         response.rate_limiter = Martin.rate_limiter
