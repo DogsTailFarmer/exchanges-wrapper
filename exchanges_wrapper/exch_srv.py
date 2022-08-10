@@ -785,10 +785,19 @@ async def on_order_book_update(_queue, event: events.PartialBookDepthWrapper):
     await _queue.put(_event())
 
 
+def is_port_in_use(port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
+
+
 async def serve() -> None:
+    port = 50051
+    listen_addr = f"[::]:{port}"
+    if is_port_in_use(port):
+        raise SystemExit(f"gRPC server port {port} already used")
     server = grpc.aio.server()
     api_pb2_grpc.add_MartinServicer_to_server(Martin(), server)
-    listen_addr = '[::]:50051'
     server.add_insecure_port(listen_addr)
     logger.info(f"Starting server on {listen_addr}")
     await server.start()
