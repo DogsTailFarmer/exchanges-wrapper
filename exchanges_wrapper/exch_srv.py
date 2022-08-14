@@ -11,7 +11,6 @@ import functools
 import json
 import logging.handlers
 import os
-import traceback
 
 # noinspection PyPackageRequirements
 import grpc
@@ -213,18 +212,30 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}"
-                         f"{traceback.print_exc()}")
+            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
+            # logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}"
+            #              f"{traceback.print_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            logger.debug(f"FetchOpenOrders.res: {res}")
+            # logger.debug(f"FetchOpenOrders.res: {res}")
             active_orders = []
             for order in res:
                 active_orders.append(order['orderId'])
                 new_order = json_format.ParseDict(order, response_order)
                 # logger.debug(f"FetchOpenOrders.new_order: {new_order}")
                 response.items.append(new_order)
+                if client.exchange == 'bitfinex':
+                    client.active_orders.update(
+                        {order['orderId']:
+                            {'filledTime': int(),
+                             'origQty': order['origQty'],
+                             'executedQty': order['executedQty'],
+                             'lastEvent': (),
+                             'cancelled': False
+                             }
+                         }
+                    )
             if client.exchange == 'bitfinex':
                 client.active_orders_clear(active_orders)
         response.rate_limiter = Martin.rate_limiter
@@ -773,10 +784,19 @@ async def on_order_book_update(_queue, event: events.PartialBookDepthWrapper):
     await _queue.put(_event())
 
 
+def is_port_in_use(port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
+
+
 async def serve() -> None:
+    port = 50051
+    listen_addr = f"[::]:{port}"
+    if is_port_in_use(port):
+        raise SystemExit(f"gRPC server port {port} already used")
     server = grpc.aio.server()
     api_pb2_grpc.add_MartinServicer_to_server(Martin(), server)
-    listen_addr = '[::]:50051'
     server.add_insecure_port(listen_addr)
     logger.info(f"Starting server on {listen_addr}")
     await server.start()

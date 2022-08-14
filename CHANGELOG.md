@@ -1,3 +1,8 @@
+## v1.2.3 - 2022-mm-dd
+### Fixed
+* Bitfinex: restore active orders list after restart
+* [ exch_server not exiting if can't obtaint port #12 ](https://github.com/DogsTailFarmer/martin-binance/issues/12#issue-1328603498)
+
 ## v1.2.2 - 2022-08-06
 ### Fixed
 * Incorrect handling fetch_open_orders response after reinit connection
