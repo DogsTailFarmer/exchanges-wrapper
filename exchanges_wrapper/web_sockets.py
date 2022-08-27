@@ -1,4 +1,4 @@
-#!/usr/bin/python3.8
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 from exchanges_wrapper import __version__
@@ -10,6 +10,7 @@ import random
 import logging
 import time
 from decimal import Decimal
+import traceback
 
 import exchanges_wrapper.ftx_parser as ftx
 import exchanges_wrapper.bitfinex_parser as bfx
@@ -21,6 +22,7 @@ logger = logging.getLogger('exch_srv_logger')
 class EventsDataStream:
     def __init__(self, client, endpoint, user_agent, exchange):
         self.client = client
+        self.session = client.session
         self.endpoint = endpoint
         if user_agent:
             self.user_agent = user_agent
@@ -31,6 +33,22 @@ class EventsDataStream:
         self.try_count = 0
 
     async def start(self):
+        logger.info(f"WSS start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
+        try:
+            await self.start_wss()
+        except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError) as ex:
+            logger.error(f"WSS start(): {ex}, restart try count: {self.try_count}")
+            if self.try_count > 100:
+                logger.critical(f"WSS start(): failed start after {self.try_count} attempts")
+                return
+            self.try_count += 1
+            await asyncio.sleep(random.uniform(0.2, 0.5) * self.try_count)
+            asyncio.ensure_future(self.start())
+        except Exception as ex:
+            logger.error(f"WSS start(): {ex}")
+            logger.debug(traceback.print_exc())
+
+    async def start_wss(self):
         pass  # meant to be overridden in a subclass
 
     async def stop(self):
@@ -43,36 +61,31 @@ class EventsDataStream:
             if msg.get('version') != 2:
                 logger.warning('Change WSS version detected')
             if msg.get('platform') and msg.get('platform').get('status'):
-                logger.info(f"BfxPrivateEventsDataStream.msg: {msg}")
+                logger.debug(f"BfxPrivateEventsDataStream.msg: {msg}")
                 await self._handle_messages(self.web_socket, symbol, ch_type)
             else:
                 logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
-                await asyncio.sleep(10)
+                await asyncio.sleep(60)
                 raise aiohttp.ClientOSError
 
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
 
     async def _handle_messages(self, web_socket, symbol=None, ch_type=str()):
-        logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}")
-        self.try_count = 0
         order_book = None
         price = None
         while True:
             msg = await web_socket.receive()
             # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
             if msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSE):
-                logger.error(
-                    "Trying to receive something while the websocket is closed! Trying to reconnect."
-                )
-                asyncio.ensure_future(self.start())
-                break
+                raise aiohttp.ClientOSError("Trying to receive while the websocket is closed, reconnecting...")
             elif msg.type is aiohttp.WSMsgType.ERROR:
-                logger.error("Something went wrong with the websocket, reconnecting...")
-                asyncio.ensure_future(self.start())
-                break
+                raise aiohttp.ClientOSError("Something went wrong with the websocket, reconnecting...")
             elif msg.type == aiohttp.WSMsgType.CLOSING:
-                logger.info(f"_handle_messages loop is stopped for {symbol} {ch_type}")
+                if symbol:
+                    logger.info(f"Handle messages loop for {symbol}: {ch_type} stopped ")
+                else:
+                    logger.info("Combined events stream stopped")
                 break
             if msg.data:
                 msg_data = json.loads(msg.data)
@@ -94,15 +107,14 @@ class EventsDataStream:
                     if isinstance(msg_data, dict):
                         if msg_data.get('event') == 'subscribed':
                             chan_id = msg_data.get('chanId')
-                            print(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
+                            logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
                         elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
                             chan_id = msg_data.get('chanId')
-                            print(f"bitfinex, user stream chan_id: {chan_id}")
+                            logger.info(f"bitfinex, user stream chan_id: {chan_id}")
                         elif 'code' in msg_data:
                             code = msg_data.get('code')
                             if code == 10300:
-                                logger.error('WSS Subscription failed (generic)')
-                                raise aiohttp.ClientOSError
+                                raise aiohttp.ClientOSError('WSS Subscription failed (generic)')
                             elif code == 10301:
                                 logger.error('WSS Already subscribed')
                                 break
@@ -113,14 +125,11 @@ class EventsDataStream:
                                 logger.error('WSS Reached limit of open channels')
                                 break
                             elif code == 20051:
-                                logger.info('WSS reconnection request received from exchange')
-                                asyncio.ensure_future(self.start())
-                                break
+                                raise aiohttp.ClientOSError('WSS reconnection request received from exchange')
                             elif code == 20060:
                                 logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
                                 await asyncio.sleep(120)
-                                asyncio.ensure_future(self.start())
-                                break
+                                raise aiohttp.ClientOSError
                     # data handling
                     elif 'hb' not in msg_data and isinstance(msg_data, list):
                         if ch_type == 'book' and isinstance(msg_data[1][-1], list):
@@ -140,80 +149,63 @@ class MarketEventsDataStream(EventsDataStream):
         Stop market data stream
         """
         if self.web_socket:
-            logger.info('MarketEventsDataStream.stop()')
             await self.web_socket.close()
         # print(f"stop.web_socket: {self.web_socket}, _state: {self.web_socket.closed}")
-
-    async def start(self):
-        await self.stop()
-        registered_streams = self.client.events.registered_streams.get(self.exchange)
-        logger.info(f"MarketEventsDataStream.start(): exchange: {self.exchange},"
-                    f" channel: {self.channel},"
-                    f" endpoint: {self.endpoint}")
-        try:
-            async with aiohttp.ClientSession() as session:
-                if self.exchange == 'binance':
-                    combined_streams = "/".join(registered_streams)
-                    # print(f"start.combined_streams: {self.endpoint}/stream?streams={combined_streams}")
-                    if self.client.proxy:
-                        self.web_socket = await session.ws_connect(
-                            f"{self.endpoint}/stream?streams={combined_streams}",
-                            proxy=self.client.proxy,
-                        )
-                    else:
-                        self.web_socket = await session.ws_connect(
-                            f"{self.endpoint}/stream?streams={combined_streams}"
-                        )
-                    await self._handle_messages(self.web_socket)
-                else:
-                    symbol = self.channel.split('@')[0]
-                    ch_type = self.channel.split('@')[1]
-                if self.exchange == 'ftx':
-                    if ch_type == 'miniTicker':
-                        ch_type = 'ticker'
-                    elif ch_type == 'depth5':
-                        ch_type = 'orderbook'
-                    if self.client.proxy:
-                        self.web_socket = await session.ws_connect(
-                            self.endpoint, heartbeat=15, proxy=self.client.proxy)
-                    else:
-                        self.web_socket = await session.ws_connect(self.endpoint, heartbeat=15)
-                    request = {'op': 'subscribe', 'channel': ch_type, 'market': symbol}
-                    await self.web_socket.send_json(request)
-                    await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
-                elif self.exchange == 'bitfinex':
-                    if ch_type == 'miniTicker':
-                        ch_type = 'ticker'
-                    elif 'kline_' in ch_type:
-                        ch_type = ch_type.replace('kline_', 'candles_')
-                    elif ch_type == 'depth5':
-                        ch_type = 'book'
-                    #
-                    if self.client.proxy:
-                        self.web_socket = await session.ws_connect(
-                            self.endpoint, heartbeat=15, proxy=self.client.proxy)
-                    else:
-                        self.web_socket = await session.ws_connect(self.endpoint, heartbeat=15)
-                    #
-                    if 'candles' in ch_type:
-                        tf = ch_type.split('_')[1]
-                        request = {'event': 'subscribe', 'channel': 'candles', 'key': f"trade:{tf}:{symbol}"}
-                    elif ch_type == 'ticker':
-                        request = {'event': 'subscribe', 'channel': ch_type, 'pair': symbol}
-                    elif ch_type == 'book':
-                        request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', }
-                    #
-                    await self.upstream_bitfinex(request, symbol, ch_type)
-        except aiohttp.ClientOSError as ex:
-            logger.error(f"MarketEventsDataStream.start(): try_count: {self.try_count}: {ex}")
-            if self.try_count > 100:
-                return
-            self.try_count += 1
-            await asyncio.sleep(random.uniform(0.2, 0.5) * self.try_count)
+        # Restart stream for other pair(s) on this client
+        if (self.client.binance_ws_restart and
+                self.exchange == 'binance' and
+                self.client.events.registered_streams.get(self.exchange)):
+            self.client.binance_ws_restart = False
+            logger.info(f"Market WSS.stop(): for channel: {self.channel}\n"
+                        f" restart: {self.client.events.registered_streams.get(self.exchange)}")
             asyncio.ensure_future(self.start())
+
+    async def start_wss(self):
+        registered_streams = self.client.events.registered_streams.get(self.exchange)
+        if self.exchange == 'binance':
+            await self.client.stop_market_events_listener()
+            combined_streams = "/".join(registered_streams)
+            self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
+                                                            proxy=self.client.proxy)
+            logger.info("Combined events stream started")
+            await self._handle_messages(self.web_socket)
+        else:
+            symbol = self.channel.split('@')[0]
+            ch_type = self.channel.split('@')[1]
+            if self.exchange == 'ftx':
+                if ch_type == 'miniTicker':
+                    ch_type = 'ticker'
+                elif ch_type == 'depth5':
+                    ch_type = 'orderbook'
+                self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
+                request = {'op': 'subscribe', 'channel': ch_type, 'market': symbol}
+                await self.web_socket.send_json(request)
+                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
+            elif self.exchange == 'bitfinex':
+                if ch_type == 'miniTicker':
+                    ch_type = 'ticker'
+                elif 'kline_' in ch_type:
+                    ch_type = ch_type.replace('kline_', 'candles_')
+                elif ch_type == 'depth5':
+                    ch_type = 'book'
+                #
+                self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
+                #
+                if 'candles' in ch_type:
+                    tf = ch_type.split('_')[1]
+                    request = {'event': 'subscribe', 'channel': 'candles', 'key': f"trade:{tf}:{symbol}"}
+                elif ch_type == 'ticker':
+                    request = {'event': 'subscribe', 'channel': ch_type, 'pair': symbol}
+                elif ch_type == 'book':
+                    request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', }
+                else:
+                    request = {}
+                #
+                await self.upstream_bitfinex(request, symbol, ch_type)
 
     async def _handle_event(self, content, symbol=None, ch_type=str(), order_book=None):
         # logger.debug(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
+        self.try_count = 0
         if self.exchange == 'bitfinex':
             if 'candles' in ch_type:
                 if isinstance(content[1][-1], list):
@@ -244,17 +236,15 @@ class MarketEventsDataStream(EventsDataStream):
                 return
         #
         stream_name = None
-        if "stream" in content:
+        if isinstance(content, dict) and "stream" in content:
             stream_name = content["stream"]
             content = content["data"]
-        if isinstance(content, list):
-            print('list')
+            content["stream"] = stream_name
+            await self.client.events.wrap_event(content).fire()
+        elif isinstance(content, list):
             for event_content in content:
                 event_content["stream"] = stream_name
                 await self.client.events.wrap_event(event_content).fire()
-        else:
-            content["stream"] = stream_name
-            await self.client.events.wrap_event(content).fire()
 
 
 class FtxPrivateEventsDataStream(EventsDataStream):
@@ -267,38 +257,31 @@ class FtxPrivateEventsDataStream(EventsDataStream):
         Stop data stream
         """
         if self.web_socket:
-            logger.info('FtxPrivateEventsDataStream.stop()')
             await self.web_socket.close()
 
-    async def start(self):
-        await self.stop()
-        logger.info(f"FtxPrivateEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
-        async with aiohttp.ClientSession() as session:
-            if self.client.proxy:
-                self.web_socket = await session.ws_connect(
-                    self.endpoint, heartbeat=15, proxy=self.client.proxy)
-            else:
-                self.web_socket = await session.ws_connect(self.endpoint, heartbeat=15)
-            ts = int(time.time() * 1000)
-            data = f"{ts}websocket_login"
-            request = {
-                "op": "login",
-                "args": {
-                     "key": self.client.api_key,
-                     "sign": generate_signature(self.exchange, self.client.api_secret, data),
-                     "time": ts
-                 }
-            }
-            if self.sub_account:
-                request['args']['subaccount'] = self.sub_account
-            await self.web_socket.send_json(request)
-            request = {'op': 'subscribe', 'channel': 'fills'}
-            await self.web_socket.send_json(request)
-            request = {'op': 'subscribe', 'channel': 'orders'}
-            await self.web_socket.send_json(request)
-            await self._handle_messages(self.web_socket)
+    async def start_wss(self):
+        self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
+        ts = int(time.time() * 1000)
+        data = f"{ts}websocket_login"
+        request = {
+            "op": "login",
+            "args": {
+                 "key": self.client.api_key,
+                 "sign": generate_signature(self.exchange, self.client.api_secret, data),
+                 "time": ts
+             }
+        }
+        if self.sub_account:
+            request['args']['subaccount'] = self.sub_account
+        await self.web_socket.send_json(request)
+        request = {'op': 'subscribe', 'channel': 'fills'}
+        await self.web_socket.send_json(request)
+        request = {'op': 'subscribe', 'channel': 'orders'}
+        await self.web_socket.send_json(request)
+        await self._handle_messages(self.web_socket)
 
     async def _handle_event(self, msg_data, *args):
+        self.try_count = 0
         content = None
         if msg_data.get('channel') in ('fills', 'orders'):
             content = ftx.stream_convert(msg_data)
@@ -314,31 +297,24 @@ class BfxPrivateEventsDataStream(EventsDataStream):
         Stop data stream
         """
         if self.web_socket:
-            logger.info('BfxPrivateEventsDataStream.stop()')
             await self.web_socket.close()
 
-    async def start(self):
-        await self.stop()
-        logger.info(f"BfxPrivateEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
-        async with aiohttp.ClientSession() as session:
-            if self.client.proxy:
-                self.web_socket = await session.ws_connect(
-                    self.endpoint, heartbeat=15, proxy=self.client.proxy)
-            else:
-                self.web_socket = await session.ws_connect(self.endpoint, heartbeat=15)
-            ts = int(time.time() * 1000)
-            data = f"AUTH{ts}"
-            request = {
-                'event': "auth",
-                'apiKey': self.client.api_key,
-                'authSig': generate_signature(self.exchange, self.client.api_secret, data),
-                'authPayload': data,
-                'authNonce': ts,
-                'filter': ['trading', 'wallet']
-            }
-            await self.upstream_bitfinex(request)
+    async def start_wss(self):
+        self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
+        ts = int(time.time() * 1000)
+        data = f"AUTH{ts}"
+        request = {
+            'event': "auth",
+            'apiKey': self.client.api_key,
+            'authSig': generate_signature(self.exchange, self.client.api_secret, data),
+            'authPayload': data,
+            'authNonce': ts,
+            'filter': ['trading', 'wallet']
+        }
+        await self.upstream_bitfinex(request)
 
     async def _handle_event(self, msg_data, *args):
+        self.try_count = 0
         logger.debug(f"USER_handle_event.msg_data: {msg_data}")
         content = None
         if msg_data[1] in ('wu', 'ws'):
@@ -371,9 +347,8 @@ class BfxPrivateEventsDataStream(EventsDataStream):
 
 class UserEventsDataStream(EventsDataStream):
 
-    async def _heartbeat(
-        self, listen_key, interval=60 * 30
-    ):  # 30 minutes is recommended according to
+    async def _heartbeat(self, listen_key, interval=60 * 30):
+        # 30 minutes is recommended according to
         # https://github.com/binance-exchange/binance-official-api-docs/blob/master/user-data-stream.md#pingkeep-alive-a-listenkey
         while True:
             await asyncio.sleep(interval)
@@ -384,26 +359,21 @@ class UserEventsDataStream(EventsDataStream):
         Stop user data stream
         """
         if self.web_socket:
-            logger.info(f"UserEventsDataStream.stop: {self.client}")
             await self.web_socket.close()
 
-    async def start(self):
-        await self.stop()
-        logger.debug(f"UserEventsDataStream.start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
-        async with aiohttp.ClientSession() as session:
-            listen_key = (await self.client.create_listen_key())["listenKey"]
-            if self.client.proxy:
-                self.web_socket = await session.ws_connect(
-                    f"{self.endpoint}/ws/{listen_key}"
-                )
-            else:
-                self.web_socket = await session.ws_connect(
-                    f"{self.endpoint}/ws/{listen_key}", proxy=self.client.proxy
-                )
-            asyncio.ensure_future(self._heartbeat(listen_key))
+    async def start_wss(self):
+        listen_key = (await self.client.create_listen_key())["listenKey"]
+        self.web_socket = await self.session.ws_connect(f"{self.endpoint}/ws/{listen_key}",
+                                                        heartbeat=15,
+                                                        proxy=self.client.proxy)
+        _task = asyncio.ensure_future(self._heartbeat(listen_key))
+        try:
             await self._handle_messages(self.web_socket)
+        finally:
+            _task.cancel()
 
     async def _handle_event(self, content):
+        self.try_count = 0
         logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
         event = self.client.events.wrap_event(content)
         await event.fire()

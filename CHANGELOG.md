@@ -1,3 +1,15 @@
+## v1.2.4 2022-08-27
+### Fixed
+* [Incomplete account setup](DogsTailFarmer/martin-binance#17)
+* 1.2.3-2 Fix wss market handler, was stopped after get int type message instead of dict
+* 1.2.3-5 clear console output
+* 1.2.3-6 Bitfinex WSServerHandshakeError handling
+* refactoring web_socket.py for correct handling and restart wss
+
+### Update
+* up to Python 3.10.6 compatible
+* reuse aiohttp.ClientSession().ws_connect() for client session
+
 ## v1.2.3 - 2022-08-14
 ### Fixed
 * Bitfinex: restore active orders list after restart

@@ -1,4 +1,4 @@
-#!/usr/bin/python3.8
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 class ExchangePyError(Exception):
@@ -19,7 +19,7 @@ class QueryCanceled(ExchangePyError):
 
 class HTTPError(ExchangePyError):
     code = 400
-    message = "Malformed request."
+    message = "Malformed request"
 
 
 class WAFLimitViolated(HTTPError):

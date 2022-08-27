@@ -1,11 +1,10 @@
-#!/usr/bin/python3.8
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 import json
 from urllib.parse import urlencode
 from exchanges_wrapper import __version__
 import logging
-import aiohttp
 import time
 from exchanges_wrapper.c_structures import generate_signature
 from exchanges_wrapper.errors import (
@@ -39,7 +38,7 @@ class HttpClient:
         else:
             self.user_agent = f"exchange-wrapper, {__version__}"
         self.proxy = proxy
-        self.session = session if session else aiohttp.ClientSession()
+        self.session = session
         self.exchange = exchange
         self.sub_account = sub_account
 
@@ -57,7 +56,7 @@ class HttpClient:
             # master/errors.md#error-codes-for-binance-2019-09-25
             raise ExchangeError(payload["msg"])
         if response.status >= 400:
-            logger.error(f"handle_errors.response.status >= 400: {payload}")
+            logger.debug(f"handle_errors.response.status >= 400: {payload}")
             if response.status == 400 and payload and payload.get("error", str()) == "ERR_RATE_LIMIT":
                 raise RateLimitReached(RateLimitReached.message)
             elif response.status == 403:
@@ -141,6 +140,3 @@ class HttpClient:
         async with self.session.request(method, url, **query_kwargs) as response:
             # logger.debug(f"send_api_call.response: url: {response.url}, status: {response.status}")
             return await self.handle_errors(response)
-
-    async def close_session(self):
-        await self.session.close()

@@ -1,6 +1,7 @@
-#!/usr/bin/python3.8
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+import aiohttp
 from enum import Enum
 from typing import Union
 import decimal
@@ -44,8 +45,7 @@ class Client:
         endpoint_api_auth,
         endpoint_ws_auth,
         user_agent=None,
-        proxy=None,
-        session=None
+        proxy=str()
     ):
         self.exchange = exchange
         self.sub_account = sub_account
@@ -56,18 +56,19 @@ class Client:
         self.endpoint_api_auth = endpoint_api_auth
         self.endpoint_ws_auth = endpoint_ws_auth
         #
+        self.session = aiohttp.ClientSession()
         self.http = HttpClient(
             api_key,
             api_secret,
             endpoint_api_auth,
             user_agent,
             proxy,
-            session,
+            session=self.session,
             exchange=self.exchange,
             sub_account=self.sub_account,
         )
         self.user_agent = user_agent
-        self.proxy = None
+        self.proxy = proxy
         self.loaded = False
         self.symbols = {}
         self.highest_precision = None
@@ -76,6 +77,7 @@ class Client:
         self.user_data_stream = None
         self.active_orders = {}
         self.wss_buffer = {}
+        self.binance_ws_restart = False
 
     async def load(self):
         infos = await self.fetch_exchange_info()
@@ -103,7 +105,7 @@ class Client:
             raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
 
     async def close(self):
-        await self.http.close_session()
+        await self.session.close()
 
     @property
     def events(self):
@@ -113,6 +115,7 @@ class Client:
         return self._events
 
     async def start_user_events_listener(self):
+        logger.info(f"Start '{self.exchange}' user events listener")
         self.user_data_stream = None
         if self.exchange == 'binance':
             self.user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.user_agent, self.exchange)
@@ -138,7 +141,7 @@ class Client:
         _events = self.events.registered_streams
         start_list = []
         for _exchange in _events.keys():
-            logger.info(f"start_market_events_listener._exchange: {_exchange}")
+            logger.info(f"Start '{_exchange}' market events listener: {', '.join(_events.get(_exchange))}")
             if _exchange == 'binance':
                 _endpoint = BINANCE_ENDPOINT_WS
                 market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange)
@@ -147,7 +150,6 @@ class Client:
             else:
                 _endpoint = self.endpoint_ws_public
                 for channel in self.events.registered_streams.get(_exchange):
-                    logger.info(f"start_market_events_listener.channel: {channel}")
                     market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange, channel)
                     self.market_data_streams.append(market_data_stream)
                     start_list.append(market_data_stream.start())
@@ -374,7 +376,7 @@ class Client:
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#klinecandlestick-data
     async def fetch_klines(self, symbol, interval, start_time=None, end_time=None, limit=500):
         self.assert_symbol(symbol)
-        interval = self.enum_to_value(interval)
+        interval = str(self.enum_to_value(interval))
         if not interval:
             raise ValueError("This query requires interval value")
         if self.exchange == 'ftx':
@@ -611,7 +613,7 @@ class Client:
                     break
                 except RateLimitReached:
                     count += 1
-                    logger.info(f"RateLimitReached for {self.symbol_to_ftx(symbol)}, count {count}, try one else")
+                    logger.debug(f"RateLimitReached for {self.symbol_to_ftx(symbol)}, count {count}, try one else")
                     await asyncio.sleep(random.uniform(0.1, 0.3) * count)
             # logger.debug(f"create_order.res: {res}")
             if res and res.get('success'):

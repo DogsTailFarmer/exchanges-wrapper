@@ -1,4 +1,4 @@
-#!/usr/bin/python3.8
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 from exchanges_wrapper import __version__
 
@@ -22,6 +22,9 @@ from exchanges_wrapper import events, errors, ftx_parser as ftx, api_pb2, api_pb
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 import exchanges_wrapper.bitfinex_parser as bfx
+#
+import platform
+print(f"Python {platform.python_version()}")
 #
 FILE_CONFIG = 'exch_srv_cfg.toml'
 CONFIG = None
@@ -71,22 +74,25 @@ class OpenClient:
 
     def __init__(self, _account_name: str):
         account = get_account(_account_name)
-        self.name = _account_name
-        self.real_market = not account[2]
-        self.client = Client(
-            account[0],     # exchange
-            account[1],     # sub_account
-            account[3],     # api_key
-            account[4],     # api_secret
-            account[5],     # api_public
-            account[6],     # ws_public
-            account[7],     # api_auth
-            account[8]      # ws_auth
-        )
-        self.stop_streams_for_symbol = None
-        self.stream_queue = []
-        self.on_order_update_queue = asyncio.Queue()
-        OpenClient.open_clients.append(self)
+        if account:
+            self.name = _account_name
+            self.real_market = not account[2]
+            self.client = Client(
+                account[0],     # exchange
+                account[1],     # sub_account
+                account[3],     # api_key
+                account[4],     # api_secret
+                account[5],     # api_public
+                account[6],     # ws_public
+                account[7],     # api_auth
+                account[8]      # ws_auth
+            )
+            self.stop_streams_for_symbol = None
+            self.stream_queue = []
+            self.on_order_update_queue = asyncio.Queue()
+            OpenClient.open_clients.append(self)
+        else:
+            raise UserWarning
 
     @classmethod
     def get_id(cls, _account_name):
@@ -150,21 +156,30 @@ class Martin(api_pb2_grpc.MartinServicer):
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
         client_id = OpenClient.get_id(request.account_name)
         if not client_id:
-            open_client = OpenClient(request.account_name)
             try:
-                await open_client.client.load()
-                client_id = id(open_client)
-            except asyncio.CancelledError:
-                pass  # Task cancellation should not be logged as an error
-            except Exception as ex:
-                logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
-                _context.set_details(f"{ex}")
-                _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+                open_client = OpenClient(request.account_name)
+            except UserWarning:
+                _context.set_details(f"Account {request.account_name} not registered into"
+                                     f" exchanges_wrapper/exch_srv_cfg.toml")
+                _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            else:
+                try:
+                    await open_client.client.load()
+                    client_id = id(open_client)
+                except asyncio.CancelledError:
+                    pass  # Task cancellation should not be logged as an error
+                except Exception as ex:
+                    logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
+                    _context.set_details(f"{ex}")
+                    _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
         else:
             OpenClient.get_client(client_id).client.http.rate_limit_reached = False
-        # Set rate_limiter
-        Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
-        exchange = OpenClient.get_client(client_id).client.exchange
+        exchange = None
+        if client_id:
+            exchange = OpenClient.get_client(client_id).client.exchange
+            # Set rate_limiter
+            Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
+
         return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
@@ -357,7 +372,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.FetchAccountBalanceResponse()
         response_balance = api_pb2.FetchAccountBalanceResponse.Balances()
         account_information = await client.fetch_account_information(receive_window=None)
-        # logger.debug(f"account_information: {account_information}")
         # Send only balances
         res = account_information.get('balances', [])
         # Create consolidated list of asset balances from SPOT and Funding wallets
@@ -532,7 +546,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 break
             _event = await _queue.get()
             if _event:
-                # logger.debug(f"OnTickerUpdate.event: {_event.symbol}, _event.close_price: {_event.close_price}")
+                # logger.info(f"OnTickerUpdate.event: {_event.symbol}, _event.close_price: {_event.close_price}")
                 ticker_24h = {'symbol': _event.symbol,
                               'open_price': _event.open_price,
                               'close_price': _event.close_price,
@@ -597,8 +611,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                 try:
                     account_information = await client.fetch_account_information(receive_window=None)
                 except (asyncio.exceptions.TimeoutError, errors.HTTPError, Exception) as _ex:
-                    logger.info(f"OnFundsUpdate: for {open_client.name}"
-                                f" {request.base_asset}/{request.quote_asset}: {_ex}")
+                    logger.warning(f"OnFundsUpdate: for {open_client.name}"
+                                   f" {request.base_asset}/{request.quote_asset}: {_ex}")
                 else:
                     balances = account_information.get('balances', {})
                     assets_balances = list(filter(lambda item: item['asset'] in assets, balances))
@@ -683,8 +697,9 @@ class Martin(api_pb2_grpc.MartinServicer):
                 receive_window=None,
                 test=False)
         except errors.HTTPError as ex:
-            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            _context.set_details(f"{ex.message}")
+            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol}:{request.new_client_order_id}"
+                         f" exception: {ex}")
+            _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
@@ -725,7 +740,7 @@ class Martin(api_pb2_grpc.MartinServicer):
     async def StartStream(self, request: api_pb2.StartStreamRequest,
                           _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         open_client = OpenClient.get_client(request.client_id)
-        logger.info(f"Start ws streams for {open_client.name}")
+        logger.info(f"Start WS streams for {open_client.name}")
         response = api_pb2.SimpleResponse()
         _market_stream = None
         _market_stream_count = 0
@@ -733,7 +748,6 @@ class Martin(api_pb2_grpc.MartinServicer):
             await asyncio.sleep(HEARTBEAT)
             _market_stream = open_client.client.events.registered_streams
             _market_stream_count = sum([len(_market_stream.get(k)) for k in _market_stream.keys()])
-        logger.info(f"StartStream.events.registered_streams: {_market_stream}")
         asyncio.create_task(open_client.client.start_market_events_listener())
         asyncio.create_task(open_client.client.start_user_events_listener())
         response.success = True
@@ -746,6 +760,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.SimpleResponse()
         open_client.stop_streams_for_symbol = request.symbol
         [await _queue.put(None) for _queue in open_client.stream_queue]
+        open_client.client.binance_ws_restart = True
         await open_client.client.stop_market_events_listener()
         await open_client.client.stop_user_events_listener()
         open_client.stream_queue = []
@@ -820,7 +835,12 @@ if __name__ == '__main__':
     # stream_handler.setLevel(logging.DEBUG)
     logger.addHandler(stream_handler)
     #
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
     loop.create_task(serve())
-    loop.run_forever()
-    loop.close()
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.run_until_complete(asyncio.sleep(0.250))
+        loop.close()

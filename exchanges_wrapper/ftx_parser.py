@@ -1,4 +1,4 @@
-#!/usr/bin/python3.8
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
 Parser for convert FTX REST API/WSS response to Binance like result
