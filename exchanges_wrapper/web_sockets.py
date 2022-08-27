@@ -46,7 +46,7 @@ class EventsDataStream:
             asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start(): {ex}")
-            logger.debug(traceback.print_exc())
+            logger.debug(traceback.format_exc())
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass
