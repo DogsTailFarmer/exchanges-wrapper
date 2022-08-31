@@ -1135,6 +1135,7 @@ class Client:
     async def fetch_account_trade_list(
         self,
         symbol,
+        order_id=None,
         start_time=None,
         end_time=None,
         from_id=None,
@@ -1152,6 +1153,8 @@ class Client:
                 raise ValueError(
                     f"{limit} is not a valid limit. A valid limit should be > 0 and <= to 1000."
                 )
+            if order_id:
+                params["orderId"] = order_id
             if start_time:
                 params["startTime"] = start_time
             if end_time:
@@ -1169,8 +1172,8 @@ class Client:
             params = {'market': self.symbol_to_ftx(symbol)}
             if start_time:
                 params["startTime"] = int(start_time / 1000)
-            if from_id:
-                params["orderId"] = from_id
+            if order_id:
+                params["orderId"] = order_id
             res = await self.http.send_api_call(
                 "fills",
                 signed=True,
@@ -1202,15 +1205,18 @@ class Client:
         order_id,
     ):
         self.assert_symbol(symbol)
-        res = []
-        if self.exchange == 'bitfinex':
+        binance_res = []
+        if self.exchange in ('binance', 'ftx'):
+            binance_res = await self.fetch_account_trade_list(symbol=symbol, order_id=order_id)
+        elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/auth/r/order/{self.symbol_to_bfx(symbol)}:{order_id}/trades",
                 method='POST',
                 signed=True,
             )
-            print(f"fetch_order_trade_list.res: {res}")
-        return res
+            binance_res = bfx.account_trade_list(res)
+        # print(f"fetch_order_trade_list.binance_res: {binance_res}")
+        return binance_res
 
     # USER DATA STREAM ENDPOINTS
 

@@ -21,12 +21,12 @@ from google.protobuf import json_format
 from exchanges_wrapper import events, errors, ftx_parser as ftx, api_pb2, api_pb2_grpc
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
-import exchanges_wrapper.bitfinex_parser as bfx
+from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent
 #
 import platform
 print(f"Python {platform.python_version()}")
 #
-FILE_CONFIG = 'exch_srv_cfg.toml'
+FILE_CONFIG = os.path.expanduser("~/.MartinBinance/exch_srv_cfg.toml")
 CONFIG = None
 if os.path.exists(FILE_CONFIG):
     CONFIG = toml.load(FILE_CONFIG)
@@ -113,40 +113,6 @@ class OpenClient:
         return _client
 
 
-class Event:
-    def __init__(self, event_data: {}):
-        self.symbol = event_data["symbol"]
-        self.client_order_id = event_data["clientOrderId"]
-        self.side = event_data["side"]
-        self.order_type = event_data["type"]
-        self.time_in_force = event_data["timeInForce"]
-        self.order_quantity = event_data["origQty"]
-        self.order_price = event_data["price"]
-        self.stop_price = event_data["stopPrice"]
-        self.iceberg_quantity = event_data["icebergQty"]
-        self.order_list_id = event_data["orderListId"]
-        self.original_client_id = event_data["clientOrderId"]
-        self.execution_type = "TRADE"
-        self.order_status = event_data["status"]
-        self.order_reject_reason = "NONE"
-        self.order_id = event_data["orderId"]
-        self.last_executed_quantity = "0.0"
-        self.cumulative_filled_quantity = event_data["executedQty"]
-        self.last_executed_price = "0.0"
-        self.commission_amount = "0.0"
-        self.commission_asset = ""
-        self.transaction_time = event_data["updateTime"]
-        self.trade_id = -1
-        self.ignore_a = int()
-        self.in_order_book = True
-        self.is_maker_side = False
-        self.ignore_b = False
-        self.order_creation_time = event_data["time"]
-        self.quote_asset_transacted = event_data["cummulativeQuoteQty"]
-        self.last_quote_asset_transacted = "0.0"
-        self.quote_order_quantity = event_data["origQuoteOrderQty"]
-
-
 # noinspection PyPep8Naming,PyMethodMayBeStatic
 class Martin(api_pb2_grpc.MartinServicer):
     rate_limit_reached_time = None
@@ -160,7 +126,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 open_client = OpenClient(request.account_name)
             except UserWarning:
                 _context.set_details(f"Account {request.account_name} not registered into"
-                                     f" exchanges_wrapper/exch_srv_cfg.toml")
+                                     f" ~/.MartinBinance/exch_srv_cfg.toml")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
             else:
                 try:
@@ -274,7 +240,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         else:
             if request.filled_update_call:
                 if res.get('status') == 'FILLED':
-                    event = Event(res)
+                    event = OrderUpdateEvent(res)
                     logger.debug(f"FetchOrder.event: {open_client.name}:{event.symbol}:{int(event.order_id)}:"
                                  f"{event.order_status}")
                     _event = weakref.ref(event)
@@ -289,8 +255,9 @@ class Martin(api_pb2_grpc.MartinServicer):
                     else:
                         logger.debug(f"FetchOrder.trades: {trades}")
                         for trade in trades:
-                            content = bfx.on_order_trade(trade, "0")
-                            await client.events.wrap_event(content).fire()
+                            event = OrderTradesEvent(trade)
+                            _event = weakref.ref(event)
+                            await _queue.put(_event())
             json_format.ParseDict(res, response)
         return response
 

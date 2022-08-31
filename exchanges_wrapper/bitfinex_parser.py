@@ -560,7 +560,6 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
     last_executed_quantity = str(abs(res[4]))
     last_executed_price = str(res[5])
     last_quote_asset = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
-
     msg_binance = {
         "e": "executionReport",
         "E": res[2],
