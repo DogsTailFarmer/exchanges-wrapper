@@ -4,7 +4,6 @@ REST API and WebSocket asyncio wrapper with grpc powered multiplexer server for 
 Utilizes one connection for many accounts and trading pairs.
 For SPOT market only
 """
-
 __authors__ = ["Th0rgal", "Jerry Fedorenko"]
 __license__ = "MIT"
 __maintainer__ = "Jerry Fedorenko"
