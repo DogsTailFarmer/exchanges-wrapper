@@ -1,6 +1,9 @@
-## v1.2.5 2022-mm-dd
+## v1.2.5 2022-09-01
 ### Update
 * FetchOrder for 'PARTIALLY_FILLED' event on 'binance' and 'ftx'
+
+### Added for new features
+* Published as Docker image
 
 ## v1.2.4 2022-08-27
 ### Fixed

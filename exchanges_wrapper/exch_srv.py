@@ -10,30 +10,21 @@ import asyncio
 import functools
 import json
 import logging.handlers
-import os
-
-# noinspection PyPackageRequirements
-import grpc
 import toml
 # noinspection PyPackageRequirements
+import grpc
+# noinspection PyPackageRequirements
 from google.protobuf import json_format
-
+#
 from exchanges_wrapper import events, errors, ftx_parser as ftx, api_pb2, api_pb2_grpc
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent
+from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
 #
-import platform
-print(f"Python {platform.python_version()}")
-#
-FILE_CONFIG = os.path.expanduser("~/.MartinBinance/exch_srv_cfg.toml")
 CONFIG = None
-if os.path.exists(FILE_CONFIG):
-    CONFIG = toml.load(FILE_CONFIG)
-else:
-    print("Can't find config file!")
-    # noinspection PyProtectedMember,PyUnresolvedReferences
-    os._exit(1)
+if CONFIG_FILE.exists():
+    CONFIG = toml.load(str(CONFIG_FILE))
 HEARTBEAT = 1  # Sec
 
 
@@ -126,7 +117,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 open_client = OpenClient(request.account_name)
             except UserWarning:
                 _context.set_details(f"Account {request.account_name} not registered into"
-                                     f" ~/.MartinBinance/exch_srv_cfg.toml")
+                                     f" {WORK_PATH}/config/exch_srv_cfg.toml")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
             else:
                 try:
@@ -768,13 +759,14 @@ async def on_order_book_update(_queue, event: events.PartialBookDepthWrapper):
 
 def is_port_in_use(port: int) -> bool:
     import socket
-    with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+    # with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
 
 
 async def serve() -> None:
     port = 50051
-    listen_addr = f"[::]:{port}"
+    listen_addr = f"localhost:{port}"
     if is_port_in_use(port):
         raise SystemExit(f"gRPC server port {port} already used")
     server = grpc.aio.server()
@@ -786,12 +778,11 @@ async def serve() -> None:
 
 
 if __name__ == '__main__':
-    FILE_LOG = f"{CONFIG.get('Path').get('log_path')}exch_srv.log"
     logger = logging.getLogger('exch_srv_logger')
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
     #
-    file_handler = logging.handlers.RotatingFileHandler(FILE_LOG, maxBytes=1000000, backupCount=10)
+    file_handler = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1000000, backupCount=10)
     file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.DEBUG)
     logger.addHandler(file_handler)

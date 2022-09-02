@@ -1,9 +1,6 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "3.0"
-
-[Path]
-log_path = './log/'
+# __version__ = "3.1"
 
 [endpoint]
     [endpoint.binance]

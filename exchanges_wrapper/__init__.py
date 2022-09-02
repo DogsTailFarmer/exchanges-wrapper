@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
 """
 REST API and WebSocket asyncio wrapper with grpc powered multiplexer server for crypto exchanges
  (Binance, FTX, Bitfinex,)
@@ -10,4 +12,26 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "1.2.4-5"
+__version__ = "1.2.4-12"
+
+from pathlib import Path
+import shutil
+#
+import platform
+print(f"Python {platform.python_version()}")
+#
+WORK_PATH = Path(Path.home(), ".MartinBinance")
+CONFIG_PATH = Path(WORK_PATH, "config")
+CONFIG_FILE = Path(CONFIG_PATH, "exch_srv_cfg.toml")
+LOG_PATH = Path(WORK_PATH, "exch_srv_log")
+LOG_FILE = Path(LOG_PATH, "exch_srv.log")
+
+if not CONFIG_FILE.exists():
+    print("Can't find config file! Creating it...")
+    CONFIG_PATH.mkdir(parents=True, exist_ok=True)
+    LOG_PATH.mkdir(parents=True, exist_ok=True)
+    shutil.copy('exch_srv_cfg.toml.template', CONFIG_FILE)
+    print(f"Before first run place account(s) API key into {CONFIG_FILE}")
+    raise SystemExit(1)
+else:
+    print(f"Config found at {CONFIG_FILE}")
