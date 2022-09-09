@@ -1,6 +1,6 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "3.1"
+# __version__ = "1.2.5"
 
 [endpoint]
     [endpoint.binance]

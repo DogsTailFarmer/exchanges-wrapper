@@ -142,9 +142,15 @@ class Martin(api_pb2_grpc.MartinServicer):
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
                               _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
         client = OpenClient.get_client(request.client_id).client
-        res = await client.fetch_server_time()
-        server_time = res.get('serverTime')
-        return api_pb2.FetchServerTimeResponse(server_time=server_time)
+        try:
+            res = await client.fetch_server_time()
+        except Exception as ex:
+            logger.error(f"FetchServerTime for {client.open_client.name} exception: {ex}")
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.UNKNOWN)
+        else:
+            server_time = res.get('serverTime')
+            return api_pb2.FetchServerTimeResponse(server_time=server_time)
 
     async def ResetRateLimit(self, request: api_pb2.OpenClientConnectionId,
                              _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
@@ -500,7 +506,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         while True:
             if open_client.stop_streams_for_symbol == request.symbol:
                 open_client.client.events.unregister(_event_type, client.exchange)
-                # logger.info(f"OnTickerUpdate: Stop market stream for {open_client.name}: {request.symbol}")
+                logger.info(f"OnTickerUpdate: Stop market stream for {open_client.name}: {request.symbol}")
                 break
             _event = await _queue.get()
             if _event:

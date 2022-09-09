@@ -37,12 +37,10 @@ class EventsDataStream:
         try:
             await self.start_wss()
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError) as ex:
-            logger.error(f"WSS start(): {ex}, restart try count: {self.try_count}")
-            if self.try_count > 100:
-                logger.critical(f"WSS start(): failed start after {self.try_count} attempts")
-                return
             self.try_count += 1
-            await asyncio.sleep(random.uniform(0.2, 0.5) * self.try_count)
+            delay = random.randint(1, 5) * self.try_count
+            logger.error(f"WSS start(): {ex}, restart try count: {self.try_count}, delay: {delay}s")
+            await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start(): {ex}")
@@ -85,7 +83,7 @@ class EventsDataStream:
                 if symbol:
                     logger.info(f"Handle messages loop for {symbol}: {ch_type} stopped ")
                 else:
-                    logger.info("Combined events stream stopped")
+                    logger.info("Events stream stopped")
                 break
             if msg.data:
                 msg_data = json.loads(msg.data)
@@ -163,11 +161,12 @@ class MarketEventsDataStream(EventsDataStream):
     async def start_wss(self):
         registered_streams = self.client.events.registered_streams.get(self.exchange)
         if self.exchange == 'binance':
+            self.client.binance_ws_restart = False
             await self.client.stop_market_events_listener()
             combined_streams = "/".join(registered_streams)
             self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
                                                             proxy=self.client.proxy)
-            logger.info("Combined events stream started")
+            logger.info(f"Combined events stream started: {combined_streams}")
             await self._handle_messages(self.web_socket)
         else:
             symbol = self.channel.split('@')[0]
