@@ -4,8 +4,11 @@
 import asyncio
 import functools
 from collections import defaultdict
+import logging
 
 from exchanges_wrapper.errors import UnknownEventType
+
+logger = logging.getLogger('exch_srv_logger')
 
 
 # based on: https://stackoverflow.com/a/2022629/10144963
@@ -55,6 +58,7 @@ class Events:
         self.handlers[event_type].append(listener)
 
     def unregister(self, event_type, exchange):
+        logger.info(f"unregister: event_type: {event_type}, exchange: {exchange}")
         self.registered_streams[exchange].discard(event_type)
         event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         self.handlers.pop(event_type, None)

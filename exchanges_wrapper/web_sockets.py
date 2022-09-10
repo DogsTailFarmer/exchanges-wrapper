@@ -137,6 +137,8 @@ class EventsDataStream:
 
 
 class MarketEventsDataStream(EventsDataStream):
+    web_socket_combi = None
+
     def __init__(self, client, endpoint, user_agent, exchange, channel=None):
         super().__init__(client, endpoint, user_agent, exchange)
         self.channel = channel
@@ -146,7 +148,9 @@ class MarketEventsDataStream(EventsDataStream):
         """
         Stop market data stream
         """
-        if self.web_socket:
+        if self.exchange == 'binance' and MarketEventsDataStream.web_socket_combi:
+            await MarketEventsDataStream.web_socket_combi.close()
+        elif self.web_socket:
             await self.web_socket.close()
         # print(f"stop.web_socket: {self.web_socket}, _state: {self.web_socket.closed}")
         # Restart stream for other pair(s) on this client
@@ -164,10 +168,11 @@ class MarketEventsDataStream(EventsDataStream):
             self.client.binance_ws_restart = False
             await self.client.stop_market_events_listener()
             combined_streams = "/".join(registered_streams)
-            self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
-                                                            proxy=self.client.proxy)
+            MarketEventsDataStream.web_socket_combi = await self.session.ws_connect(
+                f"{self.endpoint}/stream?streams={combined_streams}",
+                proxy=self.client.proxy)
             logger.info(f"Combined events stream started: {combined_streams}")
-            await self._handle_messages(self.web_socket)
+            await self._handle_messages(MarketEventsDataStream.web_socket_combi)
         else:
             symbol = self.channel.split('@')[0]
             ch_type = self.channel.split('@')[1]
