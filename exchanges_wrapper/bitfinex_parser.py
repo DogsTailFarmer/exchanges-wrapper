@@ -103,7 +103,7 @@ def exchange_info(symbols_details: [], tickers: []) -> {}:
             _tick_size = tick_size(market.get('price_precision'), _price)
             _min_qty = float(market.get('minimum_order_size'))
             _max_qty = float(market.get('maximum_order_size'))
-            _step_size = _min_qty
+            _step_size = 0.00001
             _min_notional = _min_qty * _price
 
             _price_filter = {
