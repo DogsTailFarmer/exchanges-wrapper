@@ -26,16 +26,6 @@ class Handlers(list):
     def __repr__(self):
         return f"Handlers({list.__repr__(self)})"
 
-# HANDLERS
-# Example usage:
-
-# from exchange-wrapper import events
-#
-# def my_order_update_listener(wrapped_event):
-#    print(f"order for symbol {wrapped_event.symbol} updated!")
-#
-# events.order_update_handlers.append(my_order_update_listener)
-
 
 class Events:
     def __init__(self):
@@ -48,14 +38,24 @@ class Events:
 
     def unregister_user_event(self, event_type):
         self.handlers.pop(event_type)
+        # print(f"unregister_user_event.handlers: {self.handlers}")
 
     def register_event(self, listener, event_type, exchange):
+        logger.info(f"register: event_type: {event_type}, exchange: {exchange}")
+        logger.info(f"register 1: registered_streams: {self.registered_streams}")
+
         self.registered_streams[exchange] |= {event_type}
+
+        logger.info(f"register 2: registered_streams: {self.registered_streams}")
+
         if exchange == 'ftx':
             event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         elif exchange == 'bitfinex':
             event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
+
+        logger.info(f"register 3: handlers: {self.handlers}")
         self.handlers[event_type].append(listener)
+        logger.info(f"register 4: handlers: {self.handlers}")
 
     def unregister(self, event_type, exchange):
         logger.info(f"unregister: event_type: {event_type}, exchange: {exchange}")

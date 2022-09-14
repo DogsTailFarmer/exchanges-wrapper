@@ -27,13 +27,13 @@ class EventsDataStream:
         if user_agent:
             self.user_agent = user_agent
         else:
-            self.user_agent = f"exchange-wrapper, {__version__}"
+            self.user_agent = f"exchanges-wrapper, {__version__}"
         self.exchange = exchange
         self.web_socket = None
         self.try_count = 0
 
     async def start(self):
-        logger.info(f"WSS start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
+        logger.info(f"EventsDataStream start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
         try:
             await self.start_wss()
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError) as ex:
@@ -44,7 +44,7 @@ class EventsDataStream:
             asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start(): {ex}")
-            logger.debug(traceback.format_exc())
+            logger.info(traceback.format_exc())
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass
@@ -139,18 +139,23 @@ class EventsDataStream:
 class MarketEventsDataStream(EventsDataStream):
     web_socket_combi = None
 
-    def __init__(self, client, endpoint, user_agent, exchange, channel=None):
+    def __init__(self, client, endpoint, user_agent, exchange, trade_id, channel=None):
         super().__init__(client, endpoint, user_agent, exchange)
         self.channel = channel
         self.candles_max_time = None
+        self.trade_id = trade_id
 
     async def stop(self):
         """
         Stop market data stream
         """
+        logger.info(f"Market WSS stop for {self.trade_id}")
+
         if self.exchange == 'binance' and MarketEventsDataStream.web_socket_combi:
+            logger.info(f" 2 Market WSS stop for {self.trade_id}")
             await MarketEventsDataStream.web_socket_combi.close()
         elif self.web_socket:
+            logger.info(f" 3 Market WSS stop for {self.trade_id}")
             await self.web_socket.close()
         # print(f"stop.web_socket: {self.web_socket}, _state: {self.web_socket.closed}")
         # Restart stream for other pair(s) on this client
@@ -166,12 +171,13 @@ class MarketEventsDataStream(EventsDataStream):
         registered_streams = self.client.events.registered_streams.get(self.exchange)
         if self.exchange == 'binance':
             self.client.binance_ws_restart = False
-            await self.client.stop_market_events_listener()
+            await self.client.stop_market_events_listener(self.trade_id)
             combined_streams = "/".join(registered_streams)
             MarketEventsDataStream.web_socket_combi = await self.session.ws_connect(
                 f"{self.endpoint}/stream?streams={combined_streams}",
                 proxy=self.client.proxy)
             logger.info(f"Combined events stream started: {combined_streams}")
+            logger.info(f"start_wss.handlers: {self.client.events.handlers}")
             await self._handle_messages(MarketEventsDataStream.web_socket_combi)
         else:
             symbol = self.channel.split('@')[0]
@@ -208,7 +214,7 @@ class MarketEventsDataStream(EventsDataStream):
                 await self.upstream_bitfinex(request, symbol, ch_type)
 
     async def _handle_event(self, content, symbol=None, ch_type=str(), order_book=None):
-        # logger.debug(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
+        # logger.info(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
         self.try_count = 0
         if self.exchange == 'bitfinex':
             if 'candles' in ch_type:
@@ -362,6 +368,7 @@ class UserEventsDataStream(EventsDataStream):
         """
         Stop user data stream
         """
+        logger.info(f"UserEventsDataStream.stop: handlers: {self.client.events.handlers}")
         if self.web_socket:
             await self.web_socket.close()
 

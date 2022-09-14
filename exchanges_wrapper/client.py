@@ -10,6 +10,7 @@ import asyncio
 import random
 import logging
 import time
+from collections import defaultdict
 
 
 from exchanges_wrapper.http_client import HttpClient
@@ -73,7 +74,7 @@ class Client:
         self.symbols = {}
         self.highest_precision = None
         self.rate_limits = None
-        self.market_data_streams = []
+        self.market_data_streams = defaultdict(set)
         self.user_data_stream = None
         self.active_orders = {}
         self.wss_buffer = {}
@@ -137,27 +138,37 @@ class Client:
         if self.user_data_stream:
             await self.user_data_stream.stop()
 
-    async def start_market_events_listener(self):
+    async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams
+        logger.info(f"start_market_events_listener._events {_events}")
         start_list = []
+
         for _exchange in _events.keys():
-            logger.info(f"Start '{_exchange}' market events listener: {', '.join(_events.get(_exchange))}")
+            logger.info(f"Start '{_exchange}' market events listener: {', '.join(_events.get(_exchange))}"
+                        f" for {_trade_id}")
             if _exchange == 'binance':
                 _endpoint = BINANCE_ENDPOINT_WS
-                market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange)
-                self.market_data_streams.append(market_data_stream)
+                market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange, _trade_id)
+                self.market_data_streams[_trade_id] |= {market_data_stream}
                 start_list.append(market_data_stream.start())
             else:
                 _endpoint = self.endpoint_ws_public
                 for channel in self.events.registered_streams.get(_exchange):
-                    market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange, channel)
-                    self.market_data_streams.append(market_data_stream)
+                    market_data_stream = MarketEventsDataStream(self,
+                                                                _endpoint,
+                                                                self.user_agent,
+                                                                _exchange,
+                                                                _trade_id,
+                                                                channel)
+                    self.market_data_streams[_trade_id] |= {market_data_stream}
                     start_list.append(market_data_stream.start())
+        logger.info(f"start_market_events_listener.market_data_streams: {self.market_data_streams}")
         await asyncio.gather(*start_list, return_exceptions=True)
 
-    async def stop_market_events_listener(self):
+    async def stop_market_events_listener(self, _trade_id):
+        logger.info(f"stop_market_events_listener.market_data_streams: {self.market_data_streams} for {_trade_id}")
         stop_list = []
-        for market_data_stream in self.market_data_streams:
+        for market_data_stream in self.market_data_streams.get(_trade_id, []):
             stop = market_data_stream.stop()
             stop_list.append(stop)
         await asyncio.gather(*stop_list, return_exceptions=False)
