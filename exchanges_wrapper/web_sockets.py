@@ -159,7 +159,6 @@ class MarketEventsDataStream(EventsDataStream):
             self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
                                                             proxy=self.client.proxy)
             logger.info(f"Combined events stream started: {combined_streams}")
-            logger.info(f"start_wss.handlers: {self.client.events.handlers}")
             await self._handle_messages(self.web_socket)
         else:
             symbol = self.channel.split('@')[0]

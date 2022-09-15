@@ -140,7 +140,6 @@ class Client:
 
     async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams
-        logger.info(f"start_market_events_listener._events {_events}")
         start_list = []
 
         for _exchange in _events.keys():

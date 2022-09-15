@@ -446,17 +446,22 @@ class Martin(api_pb2_grpc.MartinServicer):
         for i in _intervals:
             _event_type = f"{_symbol}@kline_{i}"
             event_types.append(_event_type)
-            client.events.register_event(functools.partial(on_klines_update, _queue), _event_type, exchange)
+            client.events.register_event(functools.partial(
+                on_klines_update, _queue, client, request.trade_id, _event_type),
+                _event_type, exchange)
         while True:
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.symbol:
-                [open_client.client.events.unregister(_event_type, exchange) for _event_type in event_types]
+                [open_client.client.events.unregister(
+                    _event_type, exchange, request.trade_id)
+                    for _event_type in event_types
+                ]
                 client.stream_queue.remove(_queue)
                 logger.info(f"OnKlinesUpdate: Stop market stream for {open_client.name}:{request.symbol}:"
                             f"{_intervals}")
                 return
             elif isinstance(_event, events.KlineWrapper):
-                # logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
+                logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
                 response.symbol = _event.symbol
                 response.interval = _event.kline_interval
                 candle = [_event.kline_start_time,
@@ -539,11 +544,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         else:
             _symbol = request.symbol.lower()
         _event_type = f"{_symbol}@depth5"
-        client.events.register_event(functools.partial(on_order_book_update, _queue), _event_type, client.exchange)
+        client.events.register_event(functools.partial(
+            on_order_book_update, _queue, client, request.trade_id, _event_type),
+            _event_type, client.exchange)
         while True:
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.symbol:
-                open_client.client.events.unregister(_event_type, client.exchange)
+                client.events.unregister(_event_type, client.exchange, request.trade_id)
                 client.stream_queue.remove(_queue)
                 logger.info(f"OnOrderBookUpdate: Stop market stream for {open_client.name}: {request.symbol}")
                 return
@@ -721,7 +728,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _market_stream = open_client.client.events.registered_streams
             _market_stream_count = sum([len(_market_stream.get(k)) for k in _market_stream.keys()])
 
-        if client.exchange == 'binance':
+        if client.exchange in ('binance', 'ftx'):
             for trade in client.market_data_streams.keys():
                 await client.stop_market_events_listener(_trade_id=trade)
 
@@ -745,10 +752,9 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
 
-async def on_klines_update(_queue, event: events.KlineWrapper):
+async def on_klines_update(_queue, client, trade_id, _event_type, event: events.KlineWrapper):
     # logger.info(f"on_klines_update.event: {event}")
-    _event = weakref.ref(event)
-    await _queue.put(_event())
+    await event_handler(_queue, client, trade_id, _event_type, event)
 
 
 async def on_order_update(_queue, event: events.OrderUpdateWrapper):
@@ -763,23 +769,25 @@ async def on_funds_update(_queue, event: events.OutboundAccountPositionWrapper):
     await _queue.put(_event())
 
 
-async def on_ticker_update(_queue, client, trade_id, _event_type, event: events.SymbolMiniTickerWrapper = None):
-    logger.info(f"on_ticker_update.event: {event.event_type}, {event.symbol}, {event.event_time}, {event.close_price}")
+async def on_ticker_update(_queue, client, trade_id, _event_type, event: events.SymbolMiniTickerWrapper):
+    # logger.info(f"on_ticker_update.event: {event.event_type},{event.symbol},{event.event_time},{event.close_price}")
+    await event_handler(_queue, client, trade_id, _event_type, event)
+
+
+async def on_order_book_update(_queue, client, trade_id, _event_type, event: events.PartialBookDepthWrapper):
+    # logger.info(f"on_order_book_update.event: {event.last_update_id}")
+    await event_handler(_queue, client, trade_id, _event_type, event)
+
+
+async def event_handler(_queue, client, trade_id, _event_type, event):
     _event = weakref.ref(event)
     try:
         _queue.put_nowait(_event())
-        # await _queue.put(_event())
     except asyncio.QueueFull:
-        logger.info("asyncio.QueueFull")
+        logger.warning(f"For {_event_type} asyncio.QueueFull and wold be closed")
         client.events.unregister(_event_type, client.exchange, trade_id)
         await client.stop_market_events_listener(trade_id)
         client.stream_queue.remove(_queue)
-
-
-async def on_order_book_update(_queue, event: events.PartialBookDepthWrapper):
-    # logger.info(f"on_order_book_update.event: {event.last_update_id}")
-    _event = weakref.ref(event)
-    await _queue.put(_event())
 
 
 def is_port_in_use(port: int) -> bool:
