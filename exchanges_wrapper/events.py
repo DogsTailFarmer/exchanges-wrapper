@@ -42,26 +42,38 @@ class Events:
 
     def register_event(self, listener, event_type, exchange):
         logger.info(f"register: event_type: {event_type}, exchange: {exchange}")
-        logger.info(f"register 1: registered_streams: {self.registered_streams}")
-
         self.registered_streams[exchange] |= {event_type}
-
-        logger.info(f"register 2: registered_streams: {self.registered_streams}")
-
         if exchange == 'ftx':
             event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         elif exchange == 'bitfinex':
             event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
-
-        logger.info(f"register 3: handlers: {self.handlers}")
         self.handlers[event_type].append(listener)
-        logger.info(f"register 4: handlers: {self.handlers}")
+        '''
+        a = self.handlers.get(event_type)
+        print(dir(a))
+        print(type(a[0]))
+        print(dir(a[0]))
+        print(a[0])
+        print(a[0].args)
+        print(a[0].args[2])
+        '''
 
-    def unregister(self, event_type, exchange):
+    def unregister(self, event_type, exchange, trade_id):
         logger.info(f"unregister: event_type: {event_type}, exchange: {exchange}")
-        self.registered_streams[exchange].discard(event_type)
-        event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
-        self.handlers.pop(event_type, None)
+
+        logger.info(f"unregister: registered_streams: {self.registered_streams}")
+        logger.info(f"unregister: handlers: {self.handlers}")
+
+        _event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
+        _handlers = self.handlers.pop(_event_type, [])
+        _handlers[:] = [i for i in _handlers if i.args[2] != trade_id]
+        if _handlers:
+            self.handlers.update({_event_type: _handlers})
+        else:
+            self.registered_streams[exchange].discard(event_type)
+
+        logger.info(f"unregister: registered_streams: {self.registered_streams}")
+        logger.info(f"unregister: handlers: {self.handlers}")
 
     def wrap_event(self, event_data):
         # print(f"wrap_event.event_data: {event_data}")

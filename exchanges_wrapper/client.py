@@ -78,7 +78,7 @@ class Client:
         self.user_data_stream = None
         self.active_orders = {}
         self.wss_buffer = {}
-        self.binance_ws_restart = False
+        self.stream_queue = []
 
     async def load(self):
         infos = await self.fetch_exchange_info()
@@ -144,7 +144,7 @@ class Client:
         start_list = []
 
         for _exchange in _events.keys():
-            logger.info(f"Start '{_exchange}' market events listener: {', '.join(_events.get(_exchange))}"
+            logger.info(f"Start '{_exchange}' market events listener: ({', '.join(_events.get(_exchange))})"
                         f" for {_trade_id}")
             if _exchange == 'binance':
                 _endpoint = BINANCE_ENDPOINT_WS

@@ -61,7 +61,7 @@ def get_account(_account_name: str) -> ():
 class OpenClient:
     open_clients = []
 
-    def __init__(self, _account_name: str, _trade_id: str):
+    def __init__(self, _account_name: str):
         account = get_account(_account_name)
         if account:
             self.name = _account_name
@@ -76,7 +76,6 @@ class OpenClient:
                 account[7],     # api_auth
                 account[8]      # ws_auth
             )
-            self.stream_queue = []
             self.on_order_update_queue = asyncio.Queue()
             OpenClient.open_clients.append(self)
         else:
@@ -112,7 +111,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client_id = OpenClient.get_id(request.account_name)
         if not client_id:
             try:
-                open_client = OpenClient(request.account_name, request.trade_id)
+                open_client = OpenClient(request.account_name)
             except UserWarning:
                 _context.set_details(f"Account {request.account_name} not registered into"
                                      f" {WORK_PATH}/config/exch_srv_cfg.toml")
@@ -434,7 +433,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue()
-        open_client.stream_queue.append(_queue)
+        client.stream_queue.append(_queue)
         _intervals = json.loads(request.interval)
         event_types = []
         # Register streams for intervals
@@ -452,7 +451,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.symbol:
                 [open_client.client.events.unregister(_event_type, exchange) for _event_type in event_types]
-                open_client.stream_queue.remove(_queue)
+                client.stream_queue.remove(_queue)
                 logger.info(f"OnKlinesUpdate: Stop market stream for {open_client.name}:{request.symbol}:"
                             f"{_intervals}")
                 return
@@ -500,7 +499,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(maxsize=5)
-        open_client.stream_queue.append(_queue)
+        client.stream_queue.append(_queue)
         if client.exchange == 'ftx':
             _symbol = client.symbol_to_ftx(request.symbol)
         elif client.exchange == 'bitfinex':
@@ -508,21 +507,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         else:
             _symbol = request.symbol.lower()
         _event_type = f"{_symbol}@miniTicker"
-
         client.events.register_event(functools.partial(on_ticker_update, _queue, client, request.trade_id, _event_type),
                                      _event_type, client.exchange)
-
         while True:
-
-            try:
-                _event = await asyncio.wait_for(_queue.get(), 2)
-            except asyncio.TimeoutError:
-                _event = None
-                print("Oops!!!!!!!!")
-
+            _event = await _queue.get()
             if isinstance(_event, str) and _event == request.symbol:
-                client.events.unregister(_event_type, client.exchange)
-                open_client.stream_queue.remove(_queue)
+                client.events.unregister(_event_type, client.exchange, request.trade_id)
+                client.stream_queue.remove(_queue)
                 logger.info(f"OnTickerUpdate: Stop market stream for {open_client.name}: {request.symbol}")
                 return
             elif isinstance(_event, events.SymbolMiniTickerWrapper):
@@ -540,7 +531,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue()
-        open_client.stream_queue.append(_queue)
+        client.stream_queue.append(_queue)
         if client.exchange == 'ftx':
             _symbol = client.symbol_to_ftx(request.symbol)
         elif client.exchange == 'bitfinex':
@@ -553,7 +544,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.symbol:
                 open_client.client.events.unregister(_event_type, client.exchange)
-                open_client.stream_queue.remove(_queue)
+                client.stream_queue.remove(_queue)
                 logger.info(f"OnOrderBookUpdate: Stop market stream for {open_client.name}: {request.symbol}")
                 return
             elif isinstance(_event, events.PartialBookDepthWrapper):
@@ -571,7 +562,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue()
-        open_client.stream_queue.append(_queue)
+        client.stream_queue.append(_queue)
         if client.exchange in ('binance', 'bitfinex'):
             client.events.register_user_event(functools.partial(on_funds_update, _queue), 'outboundAccountPosition')
         balances_prev = []
@@ -584,7 +575,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             if isinstance(_event, str) and _event == request.symbol:
                 if client.exchange in ('binance', 'bitfinex'):
                     client.events.unregister_user_event('outboundAccountPosition')
-                open_client.stream_queue.remove(_queue)
+                client.stream_queue.remove(_queue)
                 logger.info(f"OnFundsUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             if client.exchange == 'ftx':
@@ -612,13 +603,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = open_client.on_order_update_queue
-        open_client.stream_queue.append(_queue)
+        client.stream_queue.append(_queue)
         client.events.register_user_event(functools.partial(on_order_update, _queue), 'executionReport')
         while True:
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.symbol:
                 client.events.unregister_user_event('executionReport')
-                open_client.stream_queue.remove(_queue)
+                client.stream_queue.remove(_queue)
                 logger.debug(f"OnOrderUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             elif isinstance(_event, events.OrderUpdateWrapper):
@@ -720,6 +711,7 @@ class Martin(api_pb2_grpc.MartinServicer):
     async def StartStream(self, request: api_pb2.StartStreamRequest,
                           _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
         logger.info(f"Start WS streams for {open_client.name}")
         response = api_pb2.SimpleResponse()
         _market_stream = None
@@ -728,6 +720,11 @@ class Martin(api_pb2_grpc.MartinServicer):
             await asyncio.sleep(HEARTBEAT)
             _market_stream = open_client.client.events.registered_streams
             _market_stream_count = sum([len(_market_stream.get(k)) for k in _market_stream.keys()])
+
+        if client.exchange == 'binance':
+            for trade in client.market_data_streams.keys():
+                await client.stop_market_events_listener(_trade_id=trade)
+
         asyncio.create_task(open_client.client.start_market_events_listener(request.trade_id))
         # asyncio.create_task(open_client.client.start_user_events_listener())
         response.success = True
@@ -739,9 +736,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
         response = api_pb2.SimpleResponse()
-        [await _queue.put(request.symbol) for _queue in open_client.stream_queue]
+        [await _queue.put(request.symbol) for _queue in client.stream_queue]
         await asyncio.sleep(HEARTBEAT)
-        client.binance_ws_restart = True
         await client.stop_market_events_listener(request.trade_id)
         await client.stop_user_events_listener()
         gc.collect(generation=2)
@@ -767,16 +763,17 @@ async def on_funds_update(_queue, event: events.OutboundAccountPositionWrapper):
     await _queue.put(_event())
 
 
-async def on_ticker_update(_queue, client, trade_id, _event_type, event: events.SymbolMiniTickerWrapper):
-    logger.info(f"on_ticker_update.event: {event.event_type}, {event.event_time}")
+async def on_ticker_update(_queue, client, trade_id, _event_type, event: events.SymbolMiniTickerWrapper = None):
+    logger.info(f"on_ticker_update.event: {event.event_type}, {event.symbol}, {event.event_time}, {event.close_price}")
     _event = weakref.ref(event)
     try:
         _queue.put_nowait(_event())
         # await _queue.put(_event())
     except asyncio.QueueFull:
         logger.info("asyncio.QueueFull")
-        client.events.unregister(_event_type, client.exchange)
+        client.events.unregister(_event_type, client.exchange, trade_id)
         await client.stop_market_events_listener(trade_id)
+        client.stream_queue.remove(_queue)
 
 
 async def on_order_book_update(_queue, event: events.PartialBookDepthWrapper):
