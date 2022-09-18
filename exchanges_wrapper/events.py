@@ -4,8 +4,11 @@
 import asyncio
 import functools
 from collections import defaultdict
+import logging
 
 from exchanges_wrapper.errors import UnknownEventType
+
+logger = logging.getLogger('exch_srv_logger')
 
 
 # based on: https://stackoverflow.com/a/2022629/10144963
@@ -23,41 +26,38 @@ class Handlers(list):
     def __repr__(self):
         return f"Handlers({list.__repr__(self)})"
 
-# HANDLERS
-# Example usage:
-
-# from exchange-wrapper import events
-#
-# def my_order_update_listener(wrapped_event):
-#    print(f"order for symbol {wrapped_event.symbol} updated!")
-#
-# events.order_update_handlers.append(my_order_update_listener)
-
 
 class Events:
     def __init__(self):
         self.handlers = defaultdict(Handlers)
-        self.registered_streams = defaultdict(set)
+        self.registered_streams = defaultdict(lambda: defaultdict(set))
 
     def register_user_event(self, listener, event_type):
         self.handlers[event_type].append(listener)
-        # print(f"register_user_event.handlers: {self.handlers}")
 
-    def unregister_user_event(self, event_type):
-        self.handlers.pop(event_type)
-
-    def register_event(self, listener, event_type, exchange):
-        self.registered_streams[exchange] |= {event_type}
+    def register_event(self, listener, event_type, exchange, trade_id):
+        logger.info(f"register: event_type: {event_type}, exchange: {exchange}")
+        self.registered_streams[exchange][trade_id] |= {event_type}
         if exchange == 'ftx':
             event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         elif exchange == 'bitfinex':
             event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
         self.handlers[event_type].append(listener)
 
-    def unregister(self, event_type, exchange):
-        self.registered_streams[exchange].discard(event_type)
-        event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
-        self.handlers.pop(event_type, None)
+    def unregister(self, exchange, trade_id):
+        logger.info(f"Unregister events for {trade_id}")
+        _event_types = self.handlers.keys()
+        unregistered_event_types = []
+        for _event_type in _event_types:
+            _handlers = self.handlers.get(_event_type, [])
+            _handlers[:] = [i for i in _handlers if i.args[2] != trade_id]
+            if _handlers:
+                self.handlers.update({_event_type: _handlers})
+            else:
+                unregistered_event_types.append(_event_type)
+        for _event_type in unregistered_event_types:
+            self.handlers.pop(_event_type, None)
+        self.registered_streams.get(exchange, dict()).pop(trade_id, None)
 
     def wrap_event(self, event_data):
         # print(f"wrap_event.event_data: {event_data}")

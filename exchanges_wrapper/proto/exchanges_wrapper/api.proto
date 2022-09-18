@@ -37,9 +37,10 @@ service Martin {
 
 message FetchFundingWalletRequest{
   int64 client_id = 1;
-  string asset = 2;
-  bool need_btc_valuation = 3;
-  int64 receive_window = 4;
+  string trade_id = 2;
+  string asset = 3;
+  bool need_btc_valuation = 4;
+  int64 receive_window = 5;
 }
 
 message FetchFundingWalletResponse {
@@ -73,8 +74,9 @@ message CancelOrderResponse{
 
 message CancelOrderRequest{
   int64 client_id = 1;
-  string symbol = 2;
-  int64 order_id = 3;
+  string trade_id = 2;
+  string symbol = 3;
+  int64 order_id = 4;
 }
 
 message CreateLimitOrderResponse{
@@ -95,11 +97,12 @@ message CreateLimitOrderResponse{
 
 message CreateLimitOrderRequest{
   int64 client_id = 1;
-  string symbol = 2;
-  bool buy_side = 3;
-  string quantity = 4;
-  string price = 5;
-  int64 new_client_order_id = 6;
+  string trade_id = 2;
+  string symbol = 3;
+  bool buy_side = 4;
+  string quantity = 5;
+  string price = 6;
+  int64 new_client_order_id = 7;
 }
 
 message OnOrderUpdateResponse{
@@ -141,9 +144,10 @@ message OnFundsUpdateResponse {
 
 message OnFundsUpdateRequest {
   int64 client_id = 1;
-  string symbol = 2;
-  string base_asset = 3;
-  string quote_asset = 4;
+  string trade_id = 2;
+  string symbol = 3;
+  string base_asset = 4;
+  string quote_asset = 5;
 }
 
 message SimpleResponse {
@@ -178,9 +182,10 @@ message AccountTradeListResponse {
 
 message AccountTradeListRequest {
   int64 client_id = 1;
-  string symbol = 2;
-  uint32 limit = 3;
-  int64 start_time = 4;
+  string trade_id = 2;
+  string symbol = 3;
+  uint32 limit = 4;
+  int64 start_time = 5;
 }
 
 message FetchKlinesResponse {
@@ -195,9 +200,10 @@ message OnKlinesUpdateResponse {
 
 message FetchKlinesRequest {
   int64 client_id = 1;
-  string symbol = 2;
-  string interval = 3;
-  uint32 limit = 4;
+  string trade_id = 2;
+  string symbol = 3;
+  string interval = 4;
+  uint32 limit = 5;
 }
 
 message FetchTickerPriceChangeStatisticsResponse {
@@ -360,9 +366,10 @@ message CancelAllOrdersResponse {
 
 message FetchOrderRequest{
   int64 client_id = 1;
-  string symbol = 2;
-  int64 order_id = 3;
-  bool filled_update_call = 4;
+  string trade_id = 2;
+  string symbol = 3;
+  int64 order_id = 4;
+  bool filled_update_call = 5;
 }
 
 message FetchOrderResponse {
@@ -413,31 +420,36 @@ message FetchOpenOrdersResponse {
 
 message MarketRequest {
   int64 client_id = 1;
-  string symbol = 2;
+  string trade_id = 2;
+  string symbol = 3;
 }
 
 message StartStreamRequest {
   int64 client_id = 1;
-  string symbol = 2;
-  int32 market_stream_count = 3;
-  int32 user_stream_count = 4;
+  string trade_id = 2;
+  string symbol = 3;
+  int32 market_stream_count = 4;
+  int32 user_stream_count = 5;
 }
 
 message OpenClientConnectionRequest {
-  string account_name = 1;
-  int32 rate_limiter = 2;
+  string trade_id = 1;
+  string account_name = 2;
+  int32 rate_limiter = 3;
 }
 
 message OpenClientConnectionId {
-  // if connection successfully open return it id for next use
+  // if connection successfully open, return it id for next use
   int64 client_id = 1;
-  string srv_version = 2;
-  int32 rate_limiter = 3;
-  string exchange = 4;
+  string trade_id = 2;
+  string srv_version = 3;
+  int32 rate_limiter = 4;
+  string exchange = 5;
 }
 
 message FetchServerTimeRequest {
   int64 client_id = 1;
+  string trade_id = 2;
 }
 
 message FetchServerTimeResponse {

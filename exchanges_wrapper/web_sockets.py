@@ -27,22 +27,20 @@ class EventsDataStream:
         if user_agent:
             self.user_agent = user_agent
         else:
-            self.user_agent = f"exchange-wrapper, {__version__}"
+            self.user_agent = f"exchanges-wrapper, {__version__}"
         self.exchange = exchange
         self.web_socket = None
         self.try_count = 0
 
     async def start(self):
-        logger.info(f"WSS start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
+        logger.info(f"EventsDataStream start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
         try:
             await self.start_wss()
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError) as ex:
-            logger.error(f"WSS start(): {ex}, restart try count: {self.try_count}")
-            if self.try_count > 100:
-                logger.critical(f"WSS start(): failed start after {self.try_count} attempts")
-                return
             self.try_count += 1
-            await asyncio.sleep(random.uniform(0.2, 0.5) * self.try_count)
+            delay = random.randint(1, 5) * self.try_count
+            logger.error(f"WSS start(): {ex}, restart try count: {self.try_count}, delay: {delay}s")
+            await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start(): {ex}")
@@ -76,16 +74,16 @@ class EventsDataStream:
         price = None
         while True:
             msg = await web_socket.receive()
-            # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
-            if msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSE):
+            # logger.info(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
+            if msg.type == aiohttp.WSMsgType.CLOSE:
                 raise aiohttp.ClientOSError("The websocket is closed, reconnecting")
             elif msg.type is aiohttp.WSMsgType.ERROR:
                 raise aiohttp.ClientOSError("Something went wrong with the websocket, reconnecting")
-            elif msg.type == aiohttp.WSMsgType.CLOSING:
+            elif msg.type in (aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED):
                 if symbol:
-                    logger.info(f"Handle messages loop for {symbol}: {ch_type} stopped ")
+                    logger.info(f"Handle messages loop for {symbol}: {ch_type} stopped")
                 else:
-                    logger.info("Combined events stream stopped")
+                    logger.info("Events stream stopped")
                 break
             if msg.data:
                 msg_data = json.loads(msg.data)
@@ -139,8 +137,10 @@ class EventsDataStream:
 
 
 class MarketEventsDataStream(EventsDataStream):
-    def __init__(self, client, endpoint, user_agent, exchange, channel=None):
+
+    def __init__(self, client, endpoint, user_agent, exchange, trade_id, channel=None):
         super().__init__(client, endpoint, user_agent, exchange)
+        self.trade_id = trade_id
         self.channel = channel
         self.candles_max_time = None
 
@@ -148,26 +148,17 @@ class MarketEventsDataStream(EventsDataStream):
         """
         Stop market data stream
         """
+        logger.info(f"Market WSS stop for {self.exchange}:{self.trade_id}:{self.channel}")
         if self.web_socket:
             await self.web_socket.close()
-        # print(f"stop.web_socket: {self.web_socket}, _state: {self.web_socket.closed}")
-        # Restart stream for other pair(s) on this client
-        if (self.client.binance_ws_restart and
-                self.exchange == 'binance' and
-                self.client.events.registered_streams.get(self.exchange)):
-            self.client.binance_ws_restart = False
-            logger.info(f"Market WSS.stop(): for channel: {self.channel}\n"
-                        f" restart: {self.client.events.registered_streams.get(self.exchange)}")
-            asyncio.ensure_future(self.start())
 
     async def start_wss(self):
-        registered_streams = self.client.events.registered_streams.get(self.exchange)
+        registered_streams = self.client.events.registered_streams.get(self.exchange, dict()).get(self.trade_id, set())
         if self.exchange == 'binance':
-            await self.client.stop_market_events_listener()
             combined_streams = "/".join(registered_streams)
             self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
                                                             proxy=self.client.proxy)
-            logger.info("Combined events stream started")
+            logger.info(f"Combined events stream started: {combined_streams}")
             await self._handle_messages(self.web_socket)
         else:
             symbol = self.channel.split('@')[0]
@@ -204,7 +195,7 @@ class MarketEventsDataStream(EventsDataStream):
                 await self.upstream_bitfinex(request, symbol, ch_type)
 
     async def _handle_event(self, content, symbol=None, ch_type=str(), order_book=None):
-        # logger.debug(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
+        # logger.info(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
         self.try_count = 0
         if self.exchange == 'bitfinex':
             if 'candles' in ch_type:
@@ -358,6 +349,7 @@ class UserEventsDataStream(EventsDataStream):
         """
         Stop user data stream
         """
+        # logger.info(f"UserEventsDataStream.stop: handlers: {self.client.events.handlers}")
         if self.web_socket:
             await self.web_socket.close()
 
