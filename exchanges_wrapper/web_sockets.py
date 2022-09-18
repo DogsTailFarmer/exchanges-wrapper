@@ -153,7 +153,7 @@ class MarketEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
-        registered_streams = self.client.events.registered_streams.get(self.exchange, dict()).get(self.trade_id, set())
+        registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
         if self.exchange == 'binance':
             combined_streams = "/".join(registered_streams)
             self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",

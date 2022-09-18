@@ -57,7 +57,7 @@ class Events:
                 unregistered_event_types.append(_event_type)
         for _event_type in unregistered_event_types:
             self.handlers.pop(_event_type, None)
-        self.registered_streams.get(exchange, dict()).pop(trade_id, None)
+        self.registered_streams.get(exchange, {}).pop(trade_id, None)
 
     def wrap_event(self, event_data):
         # print(f"wrap_event.event_data: {event_data}")

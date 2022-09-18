@@ -723,7 +723,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         _market_stream_count = 0
         while _market_stream_count < request.market_stream_count:
             await asyncio.sleep(HEARTBEAT)
-            _market_stream = client.events.registered_streams.get(client.exchange, dict()).get(request.trade_id, set())
+            _market_stream = client.events.registered_streams.get(client.exchange, {}).get(request.trade_id, set())
             _market_stream_count = len(_market_stream)
         logger.info(f"Start WS streams for {open_client.name}")
         asyncio.create_task(open_client.client.start_market_events_listener(request.trade_id))
