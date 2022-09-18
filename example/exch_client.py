@@ -6,6 +6,7 @@ Client example for exchanges-wrapper, examples of use of server methods are give
 
 import asyncio
 import toml
+import uuid
 # noinspection PyPackageRequirements
 import grpc
 # noinspection PyPackageRequirements
@@ -28,11 +29,13 @@ async def main(_exchange, _symbol):
     # Create connection to the grpc powered server
     channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
     stub = api_pb2_grpc.MartinStub(channel)
+    trade_id = str(uuid.uuid4().hex)
     client_id = None
     # Register client and get client_id for reuse connection
     # Example of exception handling by grpc connection
     try:
         client_id_msg = await stub.OpenClientConnection(api_pb2.OpenClientConnectionRequest(
+            trade_id=trade_id,
             account_name=_exchange,
             rate_limiter=RATE_LIMITER))
     except asyncio.CancelledError:
@@ -52,6 +55,7 @@ async def main(_exchange, _symbol):
 
     # Sample async call server method
     _exchange_info_symbol = await stub.FetchExchangeInfoSymbol(api_pb2.MarketRequest(
+        trade_id=trade_id,
         client_id=client_id,
         symbol=_symbol))
     # Unpack result
@@ -65,46 +69,55 @@ async def main(_exchange, _symbol):
     # Subscribe to WSS
     # First you want to create all WSS task
     # Market stream
-    loop.create_task(on_ticker_update(stub, client_id, _symbol))
+    asyncio.create_task(on_ticker_update(stub, client_id, _symbol, trade_id))
     # User Stream
-    loop.create_task(on_order_update(stub, client_id, _symbol))
+    asyncio.create_task(on_order_update(stub, client_id, _symbol, trade_id))
     # Other market and user methods are used similarly: OnKlinesUpdate, OnFundsUpdate, OnOrderBookUpdate
     # Start WSS
-    # The values of market_stream_count and user_stream_count directly depend on the number of market and user
+    # The values of market_stream_count directly depend on the number of market
     # ws streams used in the strategy and declared above
-    await stub.StartStream(api_pb2.StartStreamRequest(client_id=client_id,
-                                                      symbol=_symbol,
-                                                      market_stream_count=1,
-                                                      user_stream_count=1))
+    await stub.StartStream(api_pb2.StartStreamRequest(
+        trade_id=trade_id,
+        client_id=client_id,
+        symbol=_symbol,
+        market_stream_count=1))
     await asyncio.sleep(RATE_LIMITER)
     # Before stop program call StopStream() method
-    await stub.StopStream(api_pb2.MarketRequest(client_id=client_id, symbol=_symbol))
+    await stub.StopStream(api_pb2.MarketRequest(trade_id=trade_id, client_id=client_id, symbol=_symbol))
 
 
-async def on_ticker_update(_stub, _client_id, _symbol):
+async def on_ticker_update(_stub, _client_id, _symbol, trade_id):
     """
     24hr rolling window mini-ticker statistics. Truncated sample.
+    :param trade_id:
     :param _stub:
     :param _client_id:
     :param _symbol:
     :return: {}
     """
-    async for ticker in _stub.OnTickerUpdate(api_pb2.MarketRequest(client_id=_client_id, symbol=_symbol)):
+    async for ticker in _stub.OnTickerUpdate(api_pb2.MarketRequest(
+            trade_id=trade_id,
+            client_id=_client_id,
+            symbol=_symbol)):
         ticker_24h = {'openPrice': ticker.open_price,
                       'lastPrice': ticker.close_price,
                       'closeTime': ticker.event_time}
         print(f"on_ticker_update: {ticker.symbol} {ticker_24h}")
 
 
-async def on_order_update(_stub, _client_id, _symbol):
+async def on_order_update(_stub, _client_id, _symbol, trade_id):
     """
     Orders are updated with the executionReport event.
+    :param trade_id:
     :param _stub:
     :param _client_id:
     :param _symbol:
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/user-data-stream.md#order-update
     """
-    async for event in _stub.OnOrderUpdate(api_pb2.MarketRequest(client_id=_client_id, symbol=_symbol)):
+    async for event in _stub.OnOrderUpdate(api_pb2.MarketRequest(
+            trade_id=trade_id,
+            client_id=_client_id,
+            symbol=_symbol)):
         print(f"on_order_update: {event.symbol}\n"
               f"order_id: {event.order_id}\n"
               f"order_status: {event.order_status}\n"
@@ -359,7 +372,4 @@ async def cancel_order(_stub, _client_id, _symbol, _id: int):
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main(EXCHANGE, SYMBOL))
-    loop.stop()
-    loop.close()
+    asyncio.run(main(EXCHANGE, SYMBOL))

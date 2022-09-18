@@ -108,7 +108,10 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def OpenClientConnection(self, request: api_pb2.OpenClientConnectionRequest,
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
-        print(f"OpenClientConnection start trade: {request.trade_id}")
+        if request.trade_id:
+            logger.info(f"OpenClientConnection start trade: {request.trade_id}")
+        else:
+            logger.error("Unique identifier not specified")
         client_id = OpenClient.get_id(request.account_name)
         if not client_id:
             try:

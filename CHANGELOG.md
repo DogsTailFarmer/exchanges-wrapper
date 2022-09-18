@@ -1,4 +1,4 @@
-## v1.2.5 2022-mm-dd
+## v1.2.5b0 2022-09-18
 ### Fixed
 * [Doesn't work on bitfinex: trading rules, step_size restriction not applicable, check](https://github.com/DogsTailFarmer/martin-binance/issues/28#issue-1366945816)
 * [FTX WS market stream lies down quietly](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/2#issue-1362214342) Refactoring WSS control
@@ -6,7 +6,7 @@
 
 ### Update
 * FetchOrder for 'PARTIALLY_FILLED' event on 'binance' and 'ftx'
-* User data and settings are moved outside the package to simplify the upgrade
+* User data and settings config are moved outside the package to simplify the upgrade
 * Version accounting of the configuration file is given to the package
 
 ### Added for new features
