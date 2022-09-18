@@ -132,7 +132,7 @@ class Client:
             await user_data_stream.start()
 
     async def start_market_events_listener(self, _trade_id):
-        _events = self.events.registered_streams.get(self.exchange, dict()).get(_trade_id, set())
+        _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
         start_list = []
 
         logger.info(f"Start '{self.exchange}' market events listener: ({', '.join(_events)}) for {_trade_id}")
