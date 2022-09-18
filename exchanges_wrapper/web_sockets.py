@@ -44,7 +44,7 @@ class EventsDataStream:
             asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start(): {ex}")
-            logger.info(traceback.format_exc())
+            logger.debug(traceback.format_exc())
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass
@@ -140,20 +140,20 @@ class MarketEventsDataStream(EventsDataStream):
 
     def __init__(self, client, endpoint, user_agent, exchange, trade_id, channel=None):
         super().__init__(client, endpoint, user_agent, exchange)
+        self.trade_id = trade_id
         self.channel = channel
         self.candles_max_time = None
-        self.trade_id = trade_id
 
     async def stop(self):
         """
         Stop market data stream
         """
-        logger.info(f"Market WSS stop for {self.trade_id}")
+        logger.info(f"Market WSS stop for {self.exchange}:{self.trade_id}:{self.channel}")
         if self.web_socket:
             await self.web_socket.close()
 
     async def start_wss(self):
-        registered_streams = self.client.events.registered_streams.get(self.exchange)
+        registered_streams = self.client.events.registered_streams.get(self.exchange, dict()).get(self.trade_id, set())
         if self.exchange == 'binance':
             combined_streams = "/".join(registered_streams)
             self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
@@ -349,7 +349,7 @@ class UserEventsDataStream(EventsDataStream):
         """
         Stop user data stream
         """
-        logger.info(f"UserEventsDataStream.stop: handlers: {self.client.events.handlers}")
+        # logger.info(f"UserEventsDataStream.stop: handlers: {self.client.events.handlers}")
         if self.web_socket:
             await self.web_socket.close()
 

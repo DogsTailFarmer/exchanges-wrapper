@@ -74,11 +74,10 @@ class Client:
         self.symbols = {}
         self.highest_precision = None
         self.rate_limits = None
-        self.market_data_streams = defaultdict(set)
-        self.user_data_stream = None
+        self.data_streams = defaultdict(set)
         self.active_orders = {}
         self.wss_buffer = {}
-        self.stream_queue = []
+        self.stream_queue = defaultdict(set)
 
     async def load(self):
         infos = await self.fetch_exchange_info()
@@ -115,62 +114,56 @@ class Client:
             self._events = Events()  # skipcq: PYL-W0201
         return self._events
 
-    async def start_user_events_listener(self):
-        logger.info(f"Start '{self.exchange}' user events listener")
-        self.user_data_stream = None
+    async def start_user_events_listener(self, _trade_id):
+        logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
+        user_data_stream = None
         if self.exchange == 'binance':
-            self.user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.user_agent, self.exchange)
+            user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.user_agent, self.exchange)
         elif self.exchange == 'ftx':
-            self.user_data_stream = FtxPrivateEventsDataStream(self,
-                                                               self.endpoint_ws_auth,
-                                                               self.user_agent,
-                                                               self.exchange,
-                                                               self.sub_account)
+            user_data_stream = FtxPrivateEventsDataStream(self,
+                                                          self.endpoint_ws_auth,
+                                                          self.user_agent,
+                                                          self.exchange,
+                                                          self.sub_account)
         elif self.exchange == 'bitfinex':
-            self.user_data_stream = BfxPrivateEventsDataStream(self,
-                                                               self.endpoint_ws_auth,
-                                                               self.user_agent,
-                                                               self.exchange)
-        if self.user_data_stream:
-            await self.user_data_stream.start()
-
-    async def stop_user_events_listener(self):
-        if self.user_data_stream:
-            await self.user_data_stream.stop()
+            user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.user_agent, self.exchange)
+        if user_data_stream:
+            self.data_streams[_trade_id] |= {user_data_stream}
+            await user_data_stream.start()
 
     async def start_market_events_listener(self, _trade_id):
-        _events = self.events.registered_streams
+        _events = self.events.registered_streams.get(self.exchange, dict()).get(_trade_id, set())
         start_list = []
 
-        for _exchange in _events.keys():
-            logger.info(f"Start '{_exchange}' market events listener: ({', '.join(_events.get(_exchange))})"
-                        f" for {_trade_id}")
-            if _exchange == 'binance':
-                _endpoint = BINANCE_ENDPOINT_WS
-                market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, _exchange, _trade_id)
-                self.market_data_streams[_trade_id] |= {market_data_stream}
+        logger.info(f"Start '{self.exchange}' market events listener: ({', '.join(_events)}) for {_trade_id}")
+
+        if self.exchange == 'binance':
+            _endpoint = BINANCE_ENDPOINT_WS
+            market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, self.exchange, _trade_id)
+            self.data_streams[_trade_id] |= {market_data_stream}
+            start_list.append(market_data_stream.start())
+        else:
+            _endpoint = self.endpoint_ws_public
+            for channel in _events:
+                market_data_stream = MarketEventsDataStream(self,
+                                                            _endpoint,
+                                                            self.user_agent,
+                                                            self.exchange,
+                                                            _trade_id,
+                                                            channel)
+                self.data_streams[_trade_id] |= {market_data_stream}
                 start_list.append(market_data_stream.start())
-            else:
-                _endpoint = self.endpoint_ws_public
-                for channel in self.events.registered_streams.get(_exchange):
-                    market_data_stream = MarketEventsDataStream(self,
-                                                                _endpoint,
-                                                                self.user_agent,
-                                                                _exchange,
-                                                                _trade_id,
-                                                                channel)
-                    self.market_data_streams[_trade_id] |= {market_data_stream}
-                    start_list.append(market_data_stream.start())
-        logger.info(f"start_market_events_listener.market_data_streams: {self.market_data_streams}")
         await asyncio.gather(*start_list, return_exceptions=True)
 
-    async def stop_market_events_listener(self, _trade_id):
-        logger.info(f"stop_market_events_listener.market_data_streams: {self.market_data_streams} for {_trade_id}")
-        stop_list = []
-        for market_data_stream in self.market_data_streams.get(_trade_id, []):
-            stop = market_data_stream.stop()
-            stop_list.append(stop)
-        await asyncio.gather(*stop_list, return_exceptions=False)
+    async def stop_events_listener(self, _trade_id):
+        logger.info(f"stop_events_listener.data_streams: {self.data_streams} for {_trade_id}")
+        stopped_data_stream = self.data_streams.get(_trade_id, set()).copy()
+        for data_stream in stopped_data_stream:
+            await data_stream.stop()
+            self.data_streams.get(_trade_id, set()).discard(data_stream)
+        if not self.data_streams.get(_trade_id, 1):
+            self.data_streams.pop(_trade_id, None)
+        logger.info(f"2 stop_events_listener.data_streams: {self.data_streams} for {_trade_id}")
 
     def assert_symbol_exists(self, symbol):
         if self.loaded and symbol not in self.symbols:
