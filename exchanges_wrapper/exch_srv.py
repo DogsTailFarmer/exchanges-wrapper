@@ -5,6 +5,7 @@ from exchanges_wrapper import __version__
 import time
 import weakref
 import gc
+# import traceback
 
 import asyncio
 import functools
@@ -719,12 +720,11 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         response = api_pb2.SimpleResponse()
-        _market_stream = None
         _market_stream_count = 0
         while _market_stream_count < request.market_stream_count:
             await asyncio.sleep(HEARTBEAT)
-            _market_stream = client.events.registered_streams.get(client.exchange, {}).get(request.trade_id, set())
-            _market_stream_count = len(_market_stream)
+            _market_stream_count = sum(len(k) for k in ([list(i.get(request.trade_id, []))
+                                                         for i in list(client.events.registered_streams.values())]))
         logger.info(f"Start WS streams for {open_client.name}")
         asyncio.create_task(open_client.client.start_market_events_listener(request.trade_id))
         asyncio.create_task(open_client.client.start_user_events_listener(request.trade_id))

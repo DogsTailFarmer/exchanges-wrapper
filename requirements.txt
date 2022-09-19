@@ -1,5 +1,5 @@
 aiohttp>=3.8.1
-grpcio==1.47.0
-grpcio-tools==1.47.0
+grpcio==1.49.0
+grpcio-tools==1.49.0
 toml>=0.10.2
 idna>=3.3

@@ -38,7 +38,7 @@ class EventsDataStream:
             await self.start_wss()
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError) as ex:
             self.try_count += 1
-            delay = random.randint(1, 5) * self.try_count
+            delay = random.randint(1, 10) * self.try_count
             logger.error(f"WSS start(): {ex}, restart try count: {self.try_count}, delay: {delay}s")
             await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())

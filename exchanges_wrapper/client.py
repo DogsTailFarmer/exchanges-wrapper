@@ -156,14 +156,13 @@ class Client:
         await asyncio.gather(*start_list, return_exceptions=True)
 
     async def stop_events_listener(self, _trade_id):
-        logger.info(f"stop_events_listener.data_streams: {self.data_streams} for {_trade_id}")
+        logger.info(f"Stop events listener data streams for {_trade_id}")
         stopped_data_stream = self.data_streams.get(_trade_id, set()).copy()
         for data_stream in stopped_data_stream:
             await data_stream.stop()
             self.data_streams.get(_trade_id, set()).discard(data_stream)
         if not self.data_streams.get(_trade_id, 1):
             self.data_streams.pop(_trade_id, None)
-        logger.info(f"2 stop_events_listener.data_streams: {self.data_streams} for {_trade_id}")
 
     def assert_symbol_exists(self, symbol):
         if self.loaded and symbol not in self.symbols:
