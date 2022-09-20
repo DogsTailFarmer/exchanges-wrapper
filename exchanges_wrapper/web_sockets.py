@@ -74,14 +74,14 @@ class EventsDataStream:
         price = None
         while True:
             msg = await web_socket.receive()
-            # logger.info(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
+            # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
             if msg.type == aiohttp.WSMsgType.CLOSE:
-                raise aiohttp.ClientOSError("The websocket is closed, reconnecting")
+                raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} the websocket is CLOSE, reconnecting")
             elif msg.type is aiohttp.WSMsgType.ERROR:
-                raise aiohttp.ClientOSError("Something went wrong with the websocket, reconnecting")
+                raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
             elif msg.type in (aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED):
                 if symbol:
-                    logger.info(f"Handle messages loop for {symbol}: {ch_type} stopped")
+                    logger.info(f"Handle messages loop for {symbol}:{ch_type} stopped")
                 else:
                     logger.info("Events stream stopped")
                 break

@@ -535,7 +535,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.FetchOrderBookResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        _queue = asyncio.Queue(MAX_QUEUE_SIZE)
+        _queue = asyncio.Queue(MAX_QUEUE_SIZE * 10)
         client.stream_queue[request.trade_id] |= {_queue}
         if client.exchange == 'ftx':
             _symbol = client.symbol_to_ftx(request.symbol)

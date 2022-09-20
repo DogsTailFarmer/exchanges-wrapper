@@ -1,3 +1,7 @@
+## v1.2.5 2022-09-20
+### Update
+* Correct max size on queue() for book WSS
+
 ## v1.2.5b0 2022-09-18
 ### Fixed
 * [Doesn't work on bitfinex: trading rules, step_size restriction not applicable, check](https://github.com/DogsTailFarmer/martin-binance/issues/28#issue-1366945816)
