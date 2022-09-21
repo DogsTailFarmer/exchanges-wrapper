@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+# __version__ = "1.2.5-1"
 
 from exchanges_wrapper import __version__
 
@@ -20,7 +21,7 @@ logger = logging.getLogger('exch_srv_logger')
 
 
 class EventsDataStream:
-    def __init__(self, client, endpoint, user_agent, exchange):
+    def __init__(self, client, endpoint, user_agent, exchange, trade_id):
         self.client = client
         self.session = client.session
         self.endpoint = endpoint
@@ -29,6 +30,7 @@ class EventsDataStream:
         else:
             self.user_agent = f"exchanges-wrapper, {__version__}"
         self.exchange = exchange
+        self.trade_id = trade_id
         self.web_socket = None
         self.try_count = 0
 
@@ -75,16 +77,14 @@ class EventsDataStream:
         while True:
             msg = await web_socket.receive()
             # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
-            if msg.type == aiohttp.WSMsgType.CLOSE:
-                raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} the websocket is CLOSE, reconnecting")
+            if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED):
+                if self.client.data_streams.get(self.trade_id, None):
+                    raise aiohttp.ClientOSError(f"Reconnecting WSS for {symbol}:{ch_type}:{self.trade_id}")
+                else:
+                    logger.info(f"Event stream stopped for {symbol}:{ch_type}:{self.trade_id}")
+                    break
             elif msg.type is aiohttp.WSMsgType.ERROR:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
-            elif msg.type in (aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED):
-                if symbol:
-                    logger.info(f"Handle messages loop for {symbol}:{ch_type} stopped")
-                else:
-                    logger.info("Events stream stopped")
-                break
             if msg.data:
                 msg_data = json.loads(msg.data)
                 if self.exchange == 'binance':
@@ -139,8 +139,7 @@ class EventsDataStream:
 class MarketEventsDataStream(EventsDataStream):
 
     def __init__(self, client, endpoint, user_agent, exchange, trade_id, channel=None):
-        super().__init__(client, endpoint, user_agent, exchange)
-        self.trade_id = trade_id
+        super().__init__(client, endpoint, user_agent, exchange, trade_id)
         self.channel = channel
         self.candles_max_time = None
 
@@ -239,8 +238,8 @@ class MarketEventsDataStream(EventsDataStream):
 
 
 class FtxPrivateEventsDataStream(EventsDataStream):
-    def __init__(self, client, endpoint, user_agent, exchange, sub_account=None):
-        super().__init__(client, endpoint, user_agent, exchange)
+    def __init__(self, client, endpoint, user_agent, exchange, trade_id, sub_account=None):
+        super().__init__(client, endpoint, user_agent, exchange, trade_id)
         self.sub_account = sub_account
 
     async def stop(self):

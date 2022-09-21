@@ -118,15 +118,24 @@ class Client:
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
         user_data_stream = None
         if self.exchange == 'binance':
-            user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.user_agent, self.exchange)
+            user_data_stream = UserEventsDataStream(self,
+                                                    self.endpoint_ws_auth,
+                                                    self.user_agent,
+                                                    self.exchange,
+                                                    _trade_id)
         elif self.exchange == 'ftx':
             user_data_stream = FtxPrivateEventsDataStream(self,
                                                           self.endpoint_ws_auth,
                                                           self.user_agent,
                                                           self.exchange,
+                                                          _trade_id,
                                                           self.sub_account)
         elif self.exchange == 'bitfinex':
-            user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.user_agent, self.exchange)
+            user_data_stream = BfxPrivateEventsDataStream(self,
+                                                          self.endpoint_ws_auth,
+                                                          self.user_agent,
+                                                          self.exchange,
+                                                          _trade_id)
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
             await user_data_stream.start()
@@ -157,12 +166,9 @@ class Client:
 
     async def stop_events_listener(self, _trade_id):
         logger.info(f"Stop events listener data streams for {_trade_id}")
-        stopped_data_stream = self.data_streams.get(_trade_id, set()).copy()
+        stopped_data_stream = self.data_streams.pop(_trade_id, set())
         for data_stream in stopped_data_stream:
             await data_stream.stop()
-            self.data_streams.get(_trade_id, set()).discard(data_stream)
-        if not self.data_streams.get(_trade_id, 1):
-            self.data_streams.pop(_trade_id, None)
 
     def assert_symbol_exists(self, symbol):
         if self.loaded and symbol not in self.symbols:

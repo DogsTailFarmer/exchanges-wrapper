@@ -1,3 +1,7 @@
+## v1.2.5-1 2022-09-21
+### Update
+* Restoring the closed WSS for any reason other than forced explicit shutdown
+
 ## v1.2.5 2022-09-20
 ### Update
 * Correct max size on queue() for book WSS
