@@ -58,6 +58,17 @@ To install the library, you can just run the following command:
 ```console
 pip install exchanges-wrapper
 ```
+After first install run ```exchanges_wrapper/exch_srv.py```
+You can find this where pip installs packages, often it's ```/home/ubuntu/.local/lib/python3.10/site-packages```
+
+The structure of the working directory will be created and the necessary files will be copied:
+For Ubuntu it will be here: ```home/user/.MartinBinance/```
+
+For upgrade to latest versions use:
+```console
+pip install -U martin-binance
+```
+
 ### Prepare exchange account
 * Create account on [Binance](https://accounts.binance.com/en/register?ref=QCS4OGWR) and get 10% discount on all trading
 fee
@@ -67,7 +78,7 @@ fee
 * Create API Key
 
 ### Startup
-* Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
+* Specify api_key and api_secret in ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```
 * Run ```exchanges_wrapper/exch_srv.py``` in terminal window
 * In ```example/ms_cfg.toml``` select desired exchange. Don't change exchange name.
 * Run ```example/exch_client.py``` in other terminal window
