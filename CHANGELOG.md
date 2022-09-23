@@ -1,3 +1,10 @@
+## v1.2.5-2 2022-09-23
+### Added for new features
+* Published as Docker image
+
+### Update
+* README.md add info about Docker image use
+
 ## v1.2.5-1 2022-09-21
 ### Update
 * Restoring the closed WSS for any reason other than forced explicit shutdown

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-# __version__ = "1.2.5-1"
+# __version__ = "1.2.5-2"
 
 from exchanges_wrapper import __version__
 
@@ -45,7 +45,7 @@ class EventsDataStream:
             await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
         except Exception as ex:
-            logger.error(f"WSS start(): {ex}")
+            logger.error(f"WSS start() other exception: {ex}")
             logger.debug(traceback.format_exc())
 
     async def start_wss(self):

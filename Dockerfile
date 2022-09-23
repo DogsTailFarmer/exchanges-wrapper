@@ -8,10 +8,15 @@ ENV PATH="/home/appuser/.local/bin:${PATH}"
 ENV PATH="/home/appuser/.local/lib/python3.10/site-packages:${PATH}"
 ENV PYTHONUNBUFFERED = 1
 
-# RUN pip3 install --no-cache-dir exchanges-wrapper
-RUN pip3 install --no-cache-dir -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple exchanges-wrapper
+COPY requirements.txt requirements.txt
+
+RUN pip3 install -r requirements.txt
+
+COPY ./exchanges_wrapper/* /home/appuser/.local/lib/python3.10/site-packages/exchanges_wrapper/
 
 WORKDIR "/home/appuser/.local/lib/python3.10/site-packages"
+
+LABEL org.opencontainers.image.description = "See README.md 'Get started' for setup and run package"
 
 EXPOSE 50051
 

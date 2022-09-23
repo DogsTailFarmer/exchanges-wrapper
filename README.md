@@ -53,7 +53,38 @@ method
 at real bidding. First, run applications on the [Binance Spot Test Network](https://testnet.binance.vision/).
 
 ## Get started
-### Install
+### Prepare exchange account
+* Create account on [Binance](https://accounts.binance.com/en/register?ref=QCS4OGWR) and get 10% discount on all trading fee
+* Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
+* Create account on [FTX](https://ftx.com/profile#a=62025440)
+* For test purpose log in at [Binance Spot Test Network](https://testnet.binance.vision/)
+* Create API Key
+* After install and first run specify api_key and api_secret in ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```
+
+### Use Docker image
+* pull image with [last version](https://github.com/DogsTailFarmer/exchanges-wrapper/pkgs/container/exchanges-wrapper/versions)
+* get IMAGE_ID from pulled image and use it when run next command
+#### First run
+The structure of the working directory will be created and the necessary files will be copied:
+For Ubuntu it will be here: ```home/user/.MartinBinance/```
+```console
+sudo docker run --rm --entrypoint /bin/sh IMAGE_ID -c "cat /home/appuser/.local/lib/python3.10/site-packages/exchanges_wrapper/__init__.py" > init.py && \
+sudo docker run --rm --entrypoint /bin/sh IMAGE_ID -c "cat /home/appuser/.local/lib/python3.10/site-packages/exchanges_wrapper/exch_srv_cfg.toml.template" > exch_srv_cfg.toml.template &&\
+ python3 init.py &&\
+  rm init.py &&\
+   rm exch_srv_cfg.toml.template
+```
+#### Start server
+```console
+    sudo docker run -ditP \
+     --mount type=bind,source=/home/ubuntu/.MartinBinance,target=/home/appuser/.MartinBinance \
+     --network=host \
+     --restart=always \
+     --name=exchanges-wrapper \
+     IMAGE_ID
+```
+
+### Install use PIP
 To install the library, you can just run the following command:
 ```console
 pip install exchanges-wrapper
@@ -69,16 +100,7 @@ For upgrade to latest versions use:
 pip install -U martin-binance
 ```
 
-### Prepare exchange account
-* Create account on [Binance](https://accounts.binance.com/en/register?ref=QCS4OGWR) and get 10% discount on all trading
-fee
-* Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
-* Create account on [FTX](https://ftx.com/profile#a=62025440)
-* For test purpose log in at [Binance Spot Test Network](https://testnet.binance.vision/)
-* Create API Key
-
-### Startup
-* Specify api_key and api_secret in ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```
+### Start server
 * Run ```exchanges_wrapper/exch_srv.py``` in terminal window
 * In ```example/ms_cfg.toml``` select desired exchange. Don't change exchange name.
 * Run ```example/exch_client.py``` in other terminal window
