@@ -63,16 +63,13 @@ at real bidding. First, run applications on the [Binance Spot Test Network](http
 
 ### Use Docker image
 * pull image with [last version](https://github.com/DogsTailFarmer/exchanges-wrapper/pkgs/container/exchanges-wrapper/versions)
-* get IMAGE_ID from pulled image and use it for set environment variable
-```console
-IMAGE_ID=sha256:d52ecfb66fac32f1eaeec994cde18453120d49ff38245f1e84b8fa929e811c09
 ```
 #### First run
 The structure of the working directory will be created and the necessary files will be copied:
 For Ubuntu it will be here: ```home/user/.MartinBinance/```
 ```console
-docker run --rm --entrypoint /bin/sh $IMAGE_ID -c "cat ./exchanges_wrapper/__init__.py" > init.py && \
-docker run --rm --entrypoint /bin/sh $IMAGE_ID -c "cat ./exchanges_wrapper/exch_srv_cfg.toml.template" > exch_srv_cfg.toml.template &&\
+docker run --rm --entrypoint /bin/sh exchanges-wrapper -c "cat ./exchanges_wrapper/__init__.py" > init.py && \
+docker run --rm --entrypoint /bin/sh exchanges-wrapper -c "cat ./exchanges_wrapper/exch_srv_cfg.toml.template" > exch_srv_cfg.toml.template &&\
  python3 init.py && rm init.py && rm exch_srv_cfg.toml.template
 ```
 #### Start server
@@ -82,7 +79,7 @@ docker run -itP \
  --network=host \
  --restart=always \
  --name=exchanges-wrapper \
- $IMAGE_ID
+ exchanges-wrapper
 ```
 
 ### Install use PIP
