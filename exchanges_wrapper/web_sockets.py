@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-# __version__ = "1.2.5-2"
+# __version__ = "1.2.5-3"
 
 from exchanges_wrapper import __version__
 
@@ -38,7 +38,7 @@ class EventsDataStream:
         logger.info(f"EventsDataStream start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
         try:
             await self.start_wss()
-        except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError) as ex:
+        except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
             self.try_count += 1
             delay = random.randint(1, 10) * self.try_count
             logger.error(f"WSS start(): {ex}, restart try count: {self.try_count}, delay: {delay}s")
@@ -67,6 +67,12 @@ class EventsDataStream:
                 logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
                 await asyncio.sleep(60)
                 raise aiohttp.ClientOSError
+
+    async def _heartbeat_ftx(self, interval=15):
+        request = {'op': 'ping'}
+        while True:
+            await asyncio.sleep(interval)
+            await self.web_socket.send_json(request)
 
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
@@ -167,10 +173,16 @@ class MarketEventsDataStream(EventsDataStream):
                     ch_type = 'ticker'
                 elif ch_type == 'depth5':
                     ch_type = 'orderbook'
-                self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
+                self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                                receive_timeout=30,
+                                                                proxy=self.client.proxy)
                 request = {'op': 'subscribe', 'channel': ch_type, 'market': symbol}
                 await self.web_socket.send_json(request)
-                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
+                _task = asyncio.ensure_future(self._heartbeat_ftx())
+                try:
+                    await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
+                finally:
+                    _task.cancel()
             elif self.exchange == 'bitfinex':
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
@@ -250,7 +262,9 @@ class FtxPrivateEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
+        self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                        receive_timeout=30,
+                                                        proxy=self.client.proxy)
         ts = int(time.time() * 1000)
         data = f"{ts}websocket_login"
         request = {
@@ -268,7 +282,11 @@ class FtxPrivateEventsDataStream(EventsDataStream):
         await self.web_socket.send_json(request)
         request = {'op': 'subscribe', 'channel': 'orders'}
         await self.web_socket.send_json(request)
-        await self._handle_messages(self.web_socket)
+        _task = asyncio.ensure_future(self._heartbeat_ftx())
+        try:
+            await self._handle_messages(self.web_socket)
+        finally:
+            _task.cancel()
 
     async def _handle_event(self, msg_data, *args):
         self.try_count = 0

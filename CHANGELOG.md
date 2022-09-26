@@ -1,3 +1,10 @@
+## v1.2.5-3 2022-09-26
+### Fixed
+* #2 FTX WS market stream lies down quietly
+
+### Update
+* Slightly optimized process of docker container setup and start-up
+
 ## v1.2.5-2 2022-09-23
 ### Added for new features
 * Published as Docker image
