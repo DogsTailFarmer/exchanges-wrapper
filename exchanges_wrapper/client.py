@@ -23,6 +23,7 @@ from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
 import exchanges_wrapper.ftx_parser as ftx
 import exchanges_wrapper.bitfinex_parser as bfx
+import exchanges_wrapper.huobi_parser as hbp
 
 logger = logging.getLogger('exch_srv_logger')
 
@@ -45,6 +46,7 @@ class Client:
         endpoint_ws_public,
         endpoint_api_auth,
         endpoint_ws_auth,
+        ws_public_mbr=None,
         user_agent=None,
         proxy=str()
     ):
@@ -56,6 +58,7 @@ class Client:
         self.endpoint_ws_public = endpoint_ws_public
         self.endpoint_api_auth = endpoint_api_auth
         self.endpoint_ws_auth = endpoint_ws_auth
+        self.ws_public_mbr = ws_public_mbr
         #
         self.session = aiohttp.ClientSession()
         self.http = HttpClient(
@@ -100,7 +103,6 @@ class Client:
             # load rate limits
             self.rate_limits = infos["rateLimits"]
             self.loaded = True
-            # print(f"load.symbols: {self.symbols}")
         else:
             raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
 
@@ -248,7 +250,13 @@ class Client:
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#check-server-time
     async def fetch_server_time(self):
-        return await self.http.send_api_call("/api/v3/time", send_api_key=False)
+        binance_res = {}
+        if self.exchange == 'binance':
+            binance_res = await self.http.send_api_call("/api/v3/time", send_api_key=False)
+        elif self.exchange == 'huobi':
+            res = await self.http.send_api_call("v1/common/timestamp", send_api_key=False)
+            binance_res = hbp.fetch_server_time(res)
+        return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#exchange-information
     async def fetch_exchange_info(self):
@@ -263,9 +271,7 @@ class Client:
                 "markets",
                 send_api_key=False
             )
-            # Convert FTX to Binance Response
-            if res and res.get('success'):
-                binance_res = ftx.exchange_info(res.get('result'))
+            binance_res = ftx.exchange_info(res)
         elif self.exchange == 'bitfinex':
             symbols_details = await self.http.send_api_call(
                 "v1/symbols_details",
@@ -279,6 +285,10 @@ class Client:
             )
             if symbols_details and tickers:
                 binance_res = bfx.exchange_info(symbols_details, tickers)
+        elif self.exchange == 'huobi':
+            server_time = await self.fetch_server_time()
+            trading_symbols = await self.http.send_api_call("v1/common/symbols", send_api_key=False)
+            binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbols)
         return binance_res
 
     # MARKET DATA ENDPOINTS
@@ -826,15 +836,15 @@ class Client:
                 signed=True,
                 **params
             )
-            # Delete it
-            res = await self.http.send_api_call(
-                "orders",
-                method="DELETE",
-                signed=True,
-                **params
-            )
-            if res and res.get('success'):
-                binance_res = ftx.orders(res_orders.get('result'), response_type=True)
+            if res_orders:
+                # Delete it
+                await self.http.send_api_call(
+                    "orders",
+                    method="DELETE",
+                    signed=True,
+                    **params
+                )
+            binance_res = ftx.orders(res_orders, response_type=True)
         elif self.exchange == 'bitfinex':
             orders = await self.fetch_open_orders(symbol=symbol, receive_window=None)
             orders_id = []
@@ -849,10 +859,28 @@ class Client:
             )
             if res and res[6] == 'SUCCESS':
                 binance_res = bfx.orders(res[4], response_type=True)
+        elif self.exchange == 'huobi':
+            orders_canceled = []
+            orders = await self.fetch_open_orders(symbol=symbol, receive_window=None, response_type=True)
+            orders_id = []
+            for order in orders:
+                orders_id.append(str(order.get('orderId')))
+            params = {'order-ids': orders_id}
+            res = await self.http.send_api_call(
+                "v1/order/orders/batchcancel",
+                method="POST",
+                signed=True,
+                **params,
+            )
+            ids_canceled = res.get('success')
+            for order in orders:
+                if str(order.get('orderId')) in ids_canceled:
+                    orders_canceled.append(order)
+            binance_res = orders_canceled
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
-    async def fetch_open_orders(self, symbol, receive_window=None):
+    async def fetch_open_orders(self, symbol, receive_window=None, response_type=None):
         self.assert_symbol(symbol)
         binance_res = []
         if self.exchange == 'binance':
@@ -871,8 +899,7 @@ class Client:
                 signed=True,
                 **params,
             )
-            if res and res.get('success'):
-                binance_res = ftx.orders(res.get('result'))
+            binance_res = ftx.orders(res.get('result'))
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
@@ -882,6 +909,15 @@ class Client:
             # logger.debug(f"fetch_open_orders.res: {res}")
             if res:
                 binance_res = bfx.orders(res)
+        elif self.exchange == 'huobi':
+            params = {'symbol': symbol.lower()}
+            res = await self.http.send_api_call(
+                "v1/order/openOrders",
+                signed=True,
+                **params,
+            )
+            # print(f"fetch_open_orders.res: {res}")
+            binance_res = hbp.orders(res, response_type=response_type)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#all-orders-user_data

@@ -46,6 +46,7 @@ def get_account(_account_name: str) -> ():
             ws_public = endpoint['ws_public']
             api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
             ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
+            ws_public_mbr = endpoint.get('ws_public_mbr')
             #
             res = (exchange,        # 0
                    sub_account,     # 1
@@ -55,7 +56,8 @@ def get_account(_account_name: str) -> ():
                    api_public,      # 5
                    ws_public,       # 6
                    api_auth,        # 7
-                   ws_auth)         # 8
+                   ws_auth,         # 8
+                   ws_public_mbr)   # 9
             break
     return res
 
@@ -76,7 +78,8 @@ class OpenClient:
                 account[5],     # api_public
                 account[6],     # ws_public
                 account[7],     # api_auth
-                account[8]      # ws_auth
+                account[8],     # ws_auth
+                account[9],     # ws_public_mbr
             )
             self.on_order_update_queues = {}
             OpenClient.open_clients.append(self)
@@ -270,7 +273,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         response_order = api_pb2.CancelAllOrdersResponse.CancelOrder()
         try:
             res = await client.cancel_all_orders(symbol=request.symbol, receive_window=None)
-            # logger.info(f"CancelAllOrders: {res}")
+            logger.info(f"CancelAllOrders: {res}")
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:

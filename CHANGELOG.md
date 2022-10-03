@@ -1,3 +1,7 @@
+## v1.2.6 2022-mm-dd
+### Added for new features
+* Huobi exchange
+
 ## v1.2.5-3 2022-09-26
 ### Fixed
 * #2 FTX WS market stream lies down quietly

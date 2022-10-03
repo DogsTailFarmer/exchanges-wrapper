@@ -3,6 +3,7 @@
 
 import hmac
 import hashlib
+import base64
 
 
 class OrderUpdateEvent:
@@ -76,6 +77,9 @@ class OrderTradesEvent:
 def generate_signature(exchange, api_secret, data):
     if exchange == 'bitfinex':
         sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha384).hexdigest()
+    elif exchange == 'huobi':
+        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).digest()
+        sig = base64.b64encode(sig).decode()
     else:
         sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
     return sig

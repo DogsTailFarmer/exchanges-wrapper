@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import json
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from exchanges_wrapper import __version__
 import logging
 import time
+from datetime import datetime
 from exchanges_wrapper.c_structures import generate_signature
 from exchanges_wrapper.errors import (
     RateLimitReached,
@@ -65,24 +66,49 @@ class HttpClient:
                 raise IPAddressBanned(IPAddressBanned.message)
             else:
                 raise HTTPError(f"Malformed request: {payload}")
-        return payload
+        if self.exchange == 'binance' or self.exchange == 'bitfinex':
+            return payload
+        elif self.exchange == 'ftx' and payload and payload.get('success'):
+            return payload.get('result')
+        elif self.exchange == 'huobi' and payload and payload.get('status') == 'ok':
+            return payload.get('data')
+        else:
+            raise HTTPError(f"API request failed: {payload}")
 
-    async def send_api_call(
-        self, path, method="GET", signed=False, send_api_key=True, endpoint=None, **kwargs
-    ):
+    async def send_api_call(self, path, method="GET", signed=False, send_api_key=True, endpoint=None, **kwargs):
+        print(f"send_api_call.request: path: {path}, kwargs: {kwargs}")
         if self.rate_limit_reached:
             raise QueryCanceled(
                 "Rate limit reached, to avoid an IP ban, this query has been cancelled"
             )
-        # return the JSON body of a call to Binance REST API
         _endpoint = endpoint or self.endpoint
         query_kwargs = {}
         content = str()
         ftx_post = self.exchange == 'ftx' and method == 'POST'
         bfx_post = self.exchange == 'bitfinex' and ((method == 'POST' and kwargs) or "params" in kwargs)
-        _params = json.dumps(kwargs) if ftx_post or bfx_post else None
-        url = f'{_endpoint}{path}' if self.exchange == 'binance' else f'{_endpoint}/{path}'
-        ts = int(time.time() * 1000)
+
+        if self.exchange == 'huobi' and signed:
+            ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            url = f'{_endpoint}/{path}?'
+            _params = {
+                "AccessKeyId": self.api_key,
+                "SignatureMethod": 'HmacSHA256',
+                "SignatureVersion": '2',
+                "Timestamp": ts
+            }
+            if method == 'GET':
+                _params.update(**kwargs)
+            else:
+                query_kwargs.update({'json': kwargs})
+            signature_payload = f"{method}\n{urlparse(_endpoint).hostname}\n/{path}\n{urlencode(_params)}"
+            signature = generate_signature(self.exchange, self.api_secret, signature_payload)
+            _params.update({'Signature': signature})
+            url += urlencode(_params)
+        else:
+            _params = json.dumps(kwargs) if ftx_post or bfx_post else None
+            url = f'{_endpoint}{path}' if self.exchange == 'binance' else f'{_endpoint}/{path}'
+            ts = int(time.time() * 1000)
+
         if self.exchange == 'binance':
             query_kwargs = dict({"headers": {"User-Agent": self.user_agent}}, **kwargs,)
             if send_api_key:
@@ -99,7 +125,7 @@ class HttpClient:
                 url += f'?{content}'
             if bfx_post and "params" in kwargs:
                 query_kwargs.update({'data': _params})
-        if signed:
+        if signed and self.exchange != 'huobi':
             query_kwargs["headers"]["Content-Type"] = 'application/json'
             if self.exchange == 'binance':
                 location = "params" if "params" in kwargs else "data"
@@ -137,6 +163,12 @@ class HttpClient:
                                                                               self.api_secret,
                                                                               signature_payload)
                 query_kwargs["headers"]["bfx-nonce"] = str(ts)
+
+        print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
+
         async with self.session.request(method, url, **query_kwargs) as response:
             # logger.debug(f"send_api_call.response: url: {response.url}, status: {response.status}")
+
+            print(f"send_api_call.response: url: {response.url}, status: {response.status}")
+
             return await self.handle_errors(response)
