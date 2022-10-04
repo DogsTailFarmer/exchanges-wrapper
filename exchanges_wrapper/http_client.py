@@ -71,7 +71,7 @@ class HttpClient:
         elif self.exchange == 'ftx' and payload and payload.get('success'):
             return payload.get('result')
         elif self.exchange == 'huobi' and payload and payload.get('status') == 'ok':
-            return payload.get('data')
+            return payload.get('data', payload.get('tick'))
         else:
             raise HTTPError(f"API request failed: {payload}")
 
@@ -83,26 +83,31 @@ class HttpClient:
             )
         _endpoint = endpoint or self.endpoint
         query_kwargs = {}
+        _params = {}
         content = str()
         ftx_post = self.exchange == 'ftx' and method == 'POST'
         bfx_post = self.exchange == 'bitfinex' and ((method == 'POST' and kwargs) or "params" in kwargs)
 
-        if self.exchange == 'huobi' and signed:
-            ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+        if self.exchange == 'huobi':
             url = f'{_endpoint}/{path}?'
-            _params = {
-                "AccessKeyId": self.api_key,
-                "SignatureMethod": 'HmacSHA256',
-                "SignatureVersion": '2',
-                "Timestamp": ts
-            }
-            if method == 'GET':
-                _params.update(**kwargs)
+            if signed:
+                ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+                _params = {
+                    "AccessKeyId": self.api_key,
+                    "SignatureMethod": 'HmacSHA256',
+                    "SignatureVersion": '2',
+                    "Timestamp": ts
+                }
+                if method == 'GET':
+                    _params.update(**kwargs)
+                else:
+                    query_kwargs.update({'json': kwargs})
+                signature_payload = f"{method}\n{urlparse(_endpoint).hostname}\n/{path}\n{urlencode(_params)}"
+                signature = generate_signature(self.exchange, self.api_secret, signature_payload)
+                _params.update({'Signature': signature})
             else:
-                query_kwargs.update({'json': kwargs})
-            signature_payload = f"{method}\n{urlparse(_endpoint).hostname}\n/{path}\n{urlencode(_params)}"
-            signature = generate_signature(self.exchange, self.api_secret, signature_payload)
-            _params.update({'Signature': signature})
+                if method == 'GET':
+                    _params = kwargs
             url += urlencode(_params)
         else:
             _params = json.dumps(kwargs) if ftx_post or bfx_post else None

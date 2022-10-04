@@ -349,6 +349,14 @@ def ticker_price_change_statistics(res: [], symbol):
     return binance_price_ticker
 
 
+def fetch_symbol_price_ticker(res: [], symbol) -> {}:
+    symbol_ticker = {
+        "symbol": symbol,
+        "price": str(res[6]),
+    }
+    return symbol_ticker
+
+
 def interval(_interval: str) -> int:
     resolution = {
         '1m': 60,

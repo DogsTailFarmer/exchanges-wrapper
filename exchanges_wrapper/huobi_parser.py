@@ -216,6 +216,87 @@ def order(res: [], response_type=None) -> {}:
     # print(f"order.binance_order: {binance_order}")
     return binance_order
 
+
+def account_information(res: {}) -> {}:
+    balances = []
+    res[:] = [i for i in res if i.get('balance') != '0']
+    assets = {}
+    for balance in res:
+        asset = balance.get('currency')
+        asset_i = assets.get(asset, {})
+        if balance.get('available'):
+            asset_i.setdefault('available', balance.get('available'))
+        else:
+            asset_i.setdefault('frozen', balance.get('balance', '0'))
+        assets.update({asset: asset_i})
+    for asset in assets.keys():
+        free = assets.get(asset).get('available', '0')
+        locked = assets.get(asset).get('frozen', '0')
+        _binance_res = {
+            "asset": asset.upper(),
+            "free": free,
+            "locked": locked,
+        }
+        balances.append(_binance_res)
+
+    binance_account_info = {
+      "makerCommission": 0,
+      "takerCommission": 0,
+      "buyerCommission": 0,
+      "sellerCommission": 0,
+      "canTrade": True,
+      "canWithdraw": False,
+      "canDeposit": False,
+      "updateTime": int(time.time() * 1000),
+      "accountType": "SPOT",
+      "balances": balances,
+      "permissions": [
+        "SPOT"
+      ]
+    }
+    return binance_account_info
+
+
+def order_book(res: {}) -> {}:
+    binance_order_book = {"lastUpdateId": res.get('ts')}
+    binance_order_book.setdefault('bids', res.get('bids'))
+    binance_order_book.setdefault('asks', res.get('asks'))
+    return binance_order_book
+
+
+def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
+    return {
+        "symbol": symbol,
+        "price": str(res.get('data')[0].get('price'))
+    }
+
+
+def ticker_price_change_statistics(res: {}, symbol) -> {}:
+    binance_price_ticker = {
+        "symbol": symbol,
+        "priceChange": str(res.get('close') - res.get('open')),
+        "priceChangePercent": str(100 * (res.get('close') - res.get('open')) / res.get('open')),
+        "weightedAvgPrice": "0.0",
+        "prevClosePrice": str(res.get('open')),
+        "lastPrice": str(res.get('close')),
+        "lastQty": "0.0",
+        "bidPrice": "0",
+        "bidQty": "0.0",
+        "askPrice": "0",
+        "askQty": "0.00",
+        "openPrice": str(res.get('open')),
+        "highPrice": str(res.get('high')),
+        "lowPrice": str(res.get('low')),
+        "volume": str(res.get('vol')),
+        "quoteVolume": "0.0",
+        "openTime": int(time.time() * 1000) - 60 * 60 * 24,
+        "closeTime": int(time.time() * 1000),
+        "firstId": 0,
+        "lastId": res.get('id'),
+        "count": res.get('count'),
+    }
+    return binance_price_ticker
+
 ###############################################################################
 
 
@@ -254,80 +335,6 @@ def symbol_name(_pair: str) -> ():
         base_asset = _pair[0:3].upper()
         quote_asset = _pair[3:].upper()
     return pair, base_asset, quote_asset
-
-
-def account_information(res: []) -> {}:
-    balances = []
-    for balance in res:
-        if balance[0] == 'exchange':
-            total = str(balance[2] or 0.0)
-            free = str(balance[4] or 0.0)
-            locked = str(Decimal(total) - Decimal(free))
-            _binance_res = {
-                "asset": balance[1],
-                "free": free,
-                "locked": locked,
-            }
-            balances.append(_binance_res)
-
-    binance_account_info = {
-      "makerCommission": 0,
-      "takerCommission": 0,
-      "buyerCommission": 0,
-      "sellerCommission": 0,
-      "canTrade": True,
-      "canWithdraw": False,
-      "canDeposit": False,
-      "updateTime": int(time.time() * 1000),
-      "accountType": "SPOT",
-      "balances": balances,
-      "permissions": [
-        "SPOT"
-      ]
-    }
-
-    return binance_account_info
-
-
-def order_book(res: []) -> {}:
-    binance_order_book = {"lastUpdateId": int(time.time() * 1000)}
-    bids = []
-    asks = []
-    for i in res:
-        if i[2] > 0:
-            bids.append([str(i[0]), str(i[2])])
-        else:
-            asks.append([str(i[0]), str(abs(i[2]))])
-    binance_order_book['bids'] = bids
-    binance_order_book['asks'] = asks
-    return binance_order_book
-
-
-def ticker_price_change_statistics(res: [], symbol):
-    binance_price_ticker = {
-        "symbol": symbol,
-        "priceChange": str(res[4]),
-        "priceChangePercent": str(res[5]),
-        "weightedAvgPrice": "0.0",
-        "prevClosePrice": str(res[6] - res[4]),
-        "lastPrice": str(res[6]),
-        "lastQty": "0.0",
-        "bidPrice": str(res[0]),
-        "bidQty": "0.0",
-        "askPrice": str(res[2]),
-        "askQty": "0.00",
-        "openPrice": str(res[6] - res[4]),
-        "highPrice": str(res[8]),
-        "lowPrice": str(res[9]),
-        "volume": str(res[7]),
-        "quoteVolume": "0.0",
-        "openTime": int(time.time() * 1000) - 60 * 60 * 24,
-        "closeTime": int(time.time() * 1000),
-        "firstId": 0,
-        "lastId": 1,
-        "count": 1,
-    }
-    return binance_price_ticker
 
 
 def interval(_interval: str) -> int:

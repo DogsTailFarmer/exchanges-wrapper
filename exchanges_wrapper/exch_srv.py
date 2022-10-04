@@ -273,7 +273,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         response_order = api_pb2.CancelAllOrdersResponse.CancelOrder()
         try:
             res = await client.cancel_all_orders(symbol=request.symbol, receive_window=None)
-            logger.info(f"CancelAllOrders: {res}")
+            # logger.info(f"CancelAllOrders: {res}")
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:

@@ -81,6 +81,7 @@ class Client:
         self.active_orders = {}
         self.wss_buffer = {}
         self.stream_queue = defaultdict(set)
+        self.hbp_account_id = None
 
     async def load(self):
         infos = await self.fetch_exchange_info()
@@ -288,6 +289,12 @@ class Client:
         elif self.exchange == 'huobi':
             server_time = await self.fetch_server_time()
             trading_symbols = await self.http.send_api_call("v1/common/symbols", send_api_key=False)
+            if self.hbp_account_id is None:
+                accounts = await self.http.send_api_call("v1/account/accounts", signed=True)
+                for account in accounts:
+                    if account.get('type') == 'spot':
+                        self.hbp_account_id = account.get('id')
+                        break
             binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbols)
         return binance_res
 
@@ -303,6 +310,8 @@ class Client:
             valid_limits = [5, 10, 20, 50, 100]
         elif self.exchange == 'bitfinex':
             valid_limits = [1, 25, 100]
+        elif self.exchange == 'huobi':
+            valid_limits = [5, 10, 20]
         binance_res = {}
         if limit in valid_limits:
             if self.exchange == 'binance':
@@ -318,8 +327,7 @@ class Client:
                     send_api_key=False,
                     **params,
                 )
-                if res and res.get('success'):
-                    binance_res = ftx.order_book(res.get('result'))
+                binance_res = ftx.order_book(res)
             elif self.exchange == 'bitfinex':
                 params = {'len': limit}
                 res = await self.http.send_api_call(
@@ -330,6 +338,15 @@ class Client:
                 # print(f"fetch_order_book.res: {res}")
                 if res:
                     binance_res = bfx.order_book(res)
+            elif self.exchange == 'huobi':
+                params = {'symbol': symbol.lower(),
+                          'depth': 5,
+                          'type': 'step0'}
+                res = await self.http.send_api_call(
+                    "market/depth",
+                    **params
+                )
+                binance_res = hbp.order_book(res)
         else:
             raise ValueError(
                 f"{limit} is not a valid limit. Valid limits: {valid_limits}"
@@ -487,8 +504,7 @@ class Client:
                 send_api_key=False,
                 **params,
             )
-            if res and res.get('success'):
-                binance_res = ftx.ticker_price_change_statistics(res.get('result'), symbol, end_time)
+            binance_res = ftx.ticker_price_change_statistics(res, symbol, end_time)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/ticker/{self.symbol_to_bfx(symbol)}",
@@ -496,6 +512,13 @@ class Client:
             )
             if res:
                 binance_res = bfx.ticker_price_change_statistics(res, symbol)
+        elif self.exchange == 'huobi':
+            params = {'symbol': symbol.lower()}
+            res = await self.http.send_api_call(
+                "market/detail/",
+                **params
+            )
+            binance_res = hbp.ticker_price_change_statistics(res, symbol)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-price-ticker
@@ -504,6 +527,8 @@ class Client:
             self.assert_symbol_exists(symbol)
             binance_res = {}
         else:
+            if self.exchange in ('bitfinex', 'huobi'):
+                raise ValueError('For fetch_symbol_price_ticker() symbol parameter required')
             binance_res = []
         if self.exchange == 'binance':
             binance_res = await self.http.send_api_call(
@@ -517,8 +542,21 @@ class Client:
                 f"markets/{self.symbol_to_ftx(symbol)}" if symbol else "markets",
                 send_api_key=False,
             )
-            if res and res.get('success'):
-                binance_res = ftx.symbol_price_ticker(res.get('result'), symbol)
+            binance_res = ftx.symbol_price_ticker(res, symbol)
+        elif self.exchange == 'bitfinex':
+            res = await self.http.send_api_call(
+                f"v2/ticker/{self.symbol_to_bfx(symbol)}",
+                endpoint=self.endpoint_api_public
+            )
+            if res:
+                binance_res = bfx.fetch_symbol_price_ticker(res, symbol)
+        elif self.exchange == 'huobi':
+            params = {'symbol': symbol.lower()}
+            res = await self.http.send_api_call(
+                "market/trade",
+                **params
+            )
+            binance_res = hbp.fetch_symbol_price_ticker(res, symbol)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-order-book-ticker
@@ -831,11 +869,7 @@ class Client:
         elif self.exchange == 'ftx':
             params = {'market': self.symbol_to_ftx(symbol)}
             # Get list of open orders
-            res_orders = await self.http.send_api_call(
-                "orders",
-                signed=True,
-                **params
-            )
+            res_orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window, response_type=True)
             if res_orders:
                 # Delete it
                 await self.http.send_api_call(
@@ -844,9 +878,9 @@ class Client:
                     signed=True,
                     **params
                 )
-            binance_res = ftx.orders(res_orders, response_type=True)
+            binance_res = res_orders
         elif self.exchange == 'bitfinex':
-            orders = await self.fetch_open_orders(symbol=symbol, receive_window=None)
+            orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window)
             orders_id = []
             for order in orders:
                 orders_id.append(order.get('orderId'))
@@ -861,7 +895,7 @@ class Client:
                 binance_res = bfx.orders(res[4], response_type=True)
         elif self.exchange == 'huobi':
             orders_canceled = []
-            orders = await self.fetch_open_orders(symbol=symbol, receive_window=None, response_type=True)
+            orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window, response_type=True)
             orders_id = []
             for order in orders:
                 orders_id.append(str(order.get('orderId')))
@@ -1126,8 +1160,7 @@ class Client:
             res = await self.http.send_api_call(
                 "wallet/balances",
                 signed=True)
-            if res and res.get('success'):
-                binance_res = ftx.account_information(res.get('result'))
+            binance_res = ftx.account_information(res)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 "v2/auth/r/wallets",
@@ -1137,6 +1170,9 @@ class Client:
             # print(f"fetch_account_information.res: {res}")
             if res:
                 binance_res = bfx.account_information(res)
+        elif self.exchange == 'huobi':
+            res = await self.http.send_api_call(f"v1/account/accounts/{self.hbp_account_id}/balance", signed=True)
+            binance_res = hbp.account_information(res.get('list'))
         return binance_res
 
     # https://binance-docs.github.io/apidocs/spot/en/#funding-wallet-user_data
