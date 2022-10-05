@@ -297,6 +297,40 @@ def ticker_price_change_statistics(res: {}, symbol) -> {}:
     }
     return binance_price_ticker
 
+
+def ticker(res: {}, symbol: str = None) -> {}:
+    tick = res.get('tick')
+    msg_binance = {
+        'stream': f"{symbol}@miniTicker",
+        'data': {
+            "e": "24hrMiniTicker",
+            "E": int(res.get('ts') / 1000),
+            "s": symbol.upper(),
+            "c": str(tick.get('close')),
+            "o": str(tick.get('open')),
+            "h": str(tick.get('high')),
+            "l": str(tick.get('low')),
+            "v": str(tick.get('amount')),
+            "q": str(tick.get('vol'))
+        }
+    }
+    return msg_binance
+
+
+def interval(_interval: str) -> str:
+    resolution = {
+        '1m': '1min',
+        '5m': '5min',
+        '15m': '15min',
+        '30m': '30min',
+        '1h': '60min',
+        '4h': '4hour',
+        '1d': '1day',
+        '1w': '1week',
+        '1M': '1mon'
+    }
+    return resolution.get(_interval, 0)
+
 ###############################################################################
 
 
@@ -431,25 +465,6 @@ def account_trade_list(res: []) -> []:
         }
         binance_trade_list.append(binance_trade)
     return binance_trade_list
-
-
-def ticker(res: [], symbol: str = None) -> {}:
-    _symbol = symbol[1:].replace(':', '').lower()
-    msg_binance = {
-        'stream': f"{_symbol}@miniTicker",
-        'data': {
-            "e": "24hrMiniTicker",
-            "E": int(time.time()),
-            "s": _symbol.upper(),
-            "c": str(res[6]),
-            "o": str(res[6] - res[4]),
-            "h": str(res[8]),
-            "l": str(res[9]),
-            "v": str(res[7]),
-            "q": "0"
-        }
-    }
-    return msg_binance
 
 
 def on_funds_update(res: []) -> {}:

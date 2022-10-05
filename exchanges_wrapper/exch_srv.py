@@ -430,7 +430,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         except Exception as _ex:
             logger.error(f"FetchKlines for {request.symbol} interval: {request.interval}, exception: {_ex}")
         else:
-            # logger.debug(res)
+            logger.debug(res)
             for candle in res:
                 response.klines.append(json.dumps(candle))
         return response

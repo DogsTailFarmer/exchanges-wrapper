@@ -76,7 +76,7 @@ class HttpClient:
             raise HTTPError(f"API request failed: {payload}")
 
     async def send_api_call(self, path, method="GET", signed=False, send_api_key=True, endpoint=None, **kwargs):
-        print(f"send_api_call.request: path: {path}, kwargs: {kwargs}")
+        # print(f"send_api_call.request: path: {path}, kwargs: {kwargs}")
         if self.rate_limit_reached:
             raise QueryCanceled(
                 "Rate limit reached, to avoid an IP ban, this query has been cancelled"
@@ -169,11 +169,11 @@ class HttpClient:
                                                                               signature_payload)
                 query_kwargs["headers"]["bfx-nonce"] = str(ts)
 
-        print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
+        # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
 
         async with self.session.request(method, url, **query_kwargs) as response:
             # logger.debug(f"send_api_call.response: url: {response.url}, status: {response.status}")
 
-            print(f"send_api_call.response: url: {response.url}, status: {response.status}")
+            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
 
             return await self.handle_errors(response)

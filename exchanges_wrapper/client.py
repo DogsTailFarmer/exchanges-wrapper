@@ -412,13 +412,15 @@ class Client:
     async def fetch_klines(self, symbol, interval, start_time=None, end_time=None, limit=500):
         self.assert_symbol(symbol)
         interval = str(self.enum_to_value(interval))
-        if not interval:
-            raise ValueError("This query requires interval value")
         if self.exchange == 'ftx':
             interval = ftx.interval(interval)
-        if (self.exchange == 'bitfinex' and
-                interval not in ('1m', '5m', '15m', '30m', '1h', '3h', '6h', '12h', '1D', '1W', '14D', '1M')):
-            raise ValueError("Interval value not valid for Bitfinex")
+        elif self.exchange == 'huobi':
+            interval = hbp.interval(interval)
+        if (not interval or
+                (self.exchange == 'bitfinex' and
+                 interval not in ('1m', '5m', '15m', '30m', '1h', '3h', '6h', '12h', '1D', '1W', '14D', '1M'))):
+            raise ValueError("This query requires correct interval value")
+
         binance_res = []
         if self.exchange == 'binance':
             if limit == 500:

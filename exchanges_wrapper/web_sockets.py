@@ -12,9 +12,11 @@ import logging
 import time
 from decimal import Decimal
 import traceback
+import gzip
 
 import exchanges_wrapper.ftx_parser as ftx
 import exchanges_wrapper.bitfinex_parser as bfx
+import exchanges_wrapper.huobi_parser as hbp
 from exchanges_wrapper.c_structures import generate_signature
 
 logger = logging.getLogger('exch_srv_logger')
@@ -82,7 +84,7 @@ class EventsDataStream:
         price = None
         while True:
             msg = await web_socket.receive()
-            # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg: {msg}")
+            # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg.type: {msg.type}")
             if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED):
                 if self.client.data_streams.get(self.trade_id, None):
                     raise aiohttp.ClientOSError(f"Reconnecting WSS for {symbol}:{ch_type}:{self.trade_id}")
@@ -91,55 +93,64 @@ class EventsDataStream:
                     break
             elif msg.type is aiohttp.WSMsgType.ERROR:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
-            if msg.data:
-                msg_data = json.loads(msg.data)
-                if self.exchange == 'binance':
-                    await self._handle_event(msg_data)
-                elif self.exchange == 'ftx':
-                    if ch_type == 'orderbook' and msg_data.get('type') == 'partial':
-                        order_book = ftx.OrderBook(msg_data.get('data', {}), symbol)
-                    elif msg_data.get('type') == 'update':
-                        if ch_type == 'ticker':
-                            _price = msg_data.get('data', {}).get('last', None)
-                            if price != _price:
-                                price = _price
-                                await self._handle_event(msg_data, symbol, ch_type, order_book)
-                        else:
+
+            msg_data = json.loads(gzip.decompress(msg.data) if msg.type is aiohttp.WSMsgType.BINARY else msg.data)
+
+            # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+            print(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+
+            if self.exchange == 'binance':
+                await self._handle_event(msg_data)
+            elif self.exchange == 'ftx':
+                if ch_type == 'orderbook' and msg_data.get('type') == 'partial':
+                    order_book = ftx.OrderBook(msg_data.get('data', {}), symbol)
+                elif msg_data.get('type') == 'update':
+                    if ch_type == 'ticker':
+                        _price = msg_data.get('data', {}).get('last', None)
+                        if price != _price:
+                            price = _price
                             await self._handle_event(msg_data, symbol, ch_type, order_book)
-                elif self.exchange == 'bitfinex':
-                    # info and error handling
-                    if isinstance(msg_data, dict):
-                        if msg_data.get('event') == 'subscribed':
-                            chan_id = msg_data.get('chanId')
-                            logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
-                        elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
-                            chan_id = msg_data.get('chanId')
-                            logger.info(f"bitfinex, user stream chan_id: {chan_id}")
-                        elif 'code' in msg_data:
-                            code = msg_data.get('code')
-                            if code == 10300:
-                                raise aiohttp.ClientOSError('WSS Subscription failed (generic)')
-                            elif code == 10301:
-                                logger.error('WSS Already subscribed')
-                                break
-                            elif code == 10302:
-                                logger.error(f"WSS Unknown channel {ch_type}")
-                                break
-                            elif code == 10305:
-                                logger.error('WSS Reached limit of open channels')
-                                break
-                            elif code == 20051:
-                                raise aiohttp.ClientOSError('WSS reconnection request received from exchange')
-                            elif code == 20060:
-                                logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
-                                await asyncio.sleep(120)
-                                raise aiohttp.ClientOSError
-                    # data handling
-                    elif 'hb' not in msg_data and isinstance(msg_data, list):
-                        if ch_type == 'book' and isinstance(msg_data[1][-1], list):
-                            order_book = bfx.OrderBook(msg_data[1], symbol)
-                        else:
-                            await self._handle_event(msg_data, symbol, ch_type, order_book)
+                    else:
+                        await self._handle_event(msg_data, symbol, ch_type, order_book)
+            elif self.exchange == 'bitfinex':
+                # info and error handling
+                if isinstance(msg_data, dict):
+                    if msg_data.get('event') == 'subscribed':
+                        chan_id = msg_data.get('chanId')
+                        logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
+                    elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
+                        chan_id = msg_data.get('chanId')
+                        logger.info(f"bitfinex, user stream chan_id: {chan_id}")
+                    elif 'code' in msg_data:
+                        code = msg_data.get('code')
+                        if code == 10300:
+                            raise aiohttp.ClientOSError('WSS Subscription failed (generic)')
+                        elif code == 10301:
+                            logger.error('WSS Already subscribed')
+                            break
+                        elif code == 10302:
+                            logger.error(f"WSS Unknown channel {ch_type}")
+                            break
+                        elif code == 10305:
+                            logger.error('WSS Reached limit of open channels')
+                            break
+                        elif code == 20051:
+                            raise aiohttp.ClientOSError('WSS reconnection request received from exchange')
+                        elif code == 20060:
+                            logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
+                            await asyncio.sleep(120)
+                            raise aiohttp.ClientOSError
+                # data handling
+                elif 'hb' not in msg_data and isinstance(msg_data, list):
+                    if ch_type == 'book' and isinstance(msg_data[1][-1], list):
+                        order_book = bfx.OrderBook(msg_data[1], symbol)
+                    else:
+                        await self._handle_event(msg_data, symbol, ch_type, order_book)
+            elif self.exchange == 'huobi':
+                if msg_data.get('ping'):
+                    await self.web_socket.send_json({"pong": msg_data.get('ping')})
+                elif 'subbed' not in msg_data:
+                    await self._handle_event(msg_data, symbol, ch_type)
 
 
 class MarketEventsDataStream(EventsDataStream):
@@ -204,6 +215,20 @@ class MarketEventsDataStream(EventsDataStream):
                     request = {}
                 #
                 await self.upstream_bitfinex(request, symbol, ch_type)
+            elif self.exchange == 'huobi':
+                if ch_type == 'miniTicker':
+                    ch_type = 'ticker'
+
+                self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                                proxy=self.client.proxy,
+                                                                autoping=False)
+
+                request = {'sub': f"market.{symbol}.{ch_type}"}
+
+                print(f"start_wss: request: {request}")
+
+                await self.web_socket.send_json(request)
+                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
 
     async def _handle_event(self, content, symbol=None, ch_type=str(), order_book=None):
         # logger.info(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
@@ -236,6 +261,9 @@ class MarketEventsDataStream(EventsDataStream):
                 content = ftx.stream_convert(content, symbol, ch_type)
             else:
                 return
+        elif self.exchange == 'huobi':
+            if ch_type == 'ticker':
+                content = hbp.ticker(content, symbol)
         #
         stream_name = None
         if isinstance(content, dict) and "stream" in content:
