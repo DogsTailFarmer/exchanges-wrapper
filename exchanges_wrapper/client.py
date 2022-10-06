@@ -340,7 +340,7 @@ class Client:
                     binance_res = bfx.order_book(res)
             elif self.exchange == 'huobi':
                 params = {'symbol': symbol.lower(),
-                          'depth': 5,
+                          'depth': limit,
                           'type': 'step0'}
                 res = await self.http.send_api_call(
                     "market/depth",
@@ -450,8 +450,7 @@ class Client:
                 send_api_key=False,
                 **params,
             )
-            if res and res.get('success'):
-                binance_res = ftx.klines(res.get('result'), interval)
+            binance_res = ftx.klines(res, interval)
         elif self.exchange == 'bitfinex':
             params = {'limit': limit, 'sort': -1}
             if start_time:
@@ -467,6 +466,16 @@ class Client:
                 res.sort(reverse=False)
             if res:
                 binance_res = bfx.klines(res, interval)
+        elif self.exchange == 'huobi':
+            params = {'symbol': symbol.lower(),
+                      'period': interval,
+                      'size': limit}
+            res = await self.http.send_api_call(
+                "market/history/kline",
+                **params,
+            )
+            # print(f"fetch_klines.res: {res[::-1]}")
+            binance_res = hbp.klines(res[::-1], interval)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-average-price

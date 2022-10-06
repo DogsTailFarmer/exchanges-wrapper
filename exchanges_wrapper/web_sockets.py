@@ -95,10 +95,7 @@ class EventsDataStream:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
 
             msg_data = json.loads(gzip.decompress(msg.data) if msg.type is aiohttp.WSMsgType.BINARY else msg.data)
-
             # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-            print(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-
             if self.exchange == 'binance':
                 await self._handle_event(msg_data)
             elif self.exchange == 'ftx':
@@ -179,14 +176,15 @@ class MarketEventsDataStream(EventsDataStream):
         else:
             symbol = self.channel.split('@')[0]
             ch_type = self.channel.split('@')[1]
+            request = {}
             if self.exchange == 'ftx':
+                self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                                receive_timeout=30,
+                                                                proxy=self.client.proxy)
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
                 elif ch_type == 'depth5':
                     ch_type = 'orderbook'
-                self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                                receive_timeout=30,
-                                                                proxy=self.client.proxy)
                 request = {'op': 'subscribe', 'channel': ch_type, 'market': symbol}
                 await self.web_socket.send_json(request)
                 _task = asyncio.ensure_future(self._heartbeat_ftx())
@@ -195,35 +193,28 @@ class MarketEventsDataStream(EventsDataStream):
                 finally:
                     _task.cancel()
             elif self.exchange == 'bitfinex':
+                self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
+                    request = {'event': 'subscribe', 'channel': ch_type, 'pair': symbol}
                 elif 'kline_' in ch_type:
                     ch_type = ch_type.replace('kline_', 'candles_')
-                elif ch_type == 'depth5':
-                    ch_type = 'book'
-                #
-                self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
-                #
-                if 'candles' in ch_type:
                     tf = ch_type.split('_')[1]
                     request = {'event': 'subscribe', 'channel': 'candles', 'key': f"trade:{tf}:{symbol}"}
-                elif ch_type == 'ticker':
-                    request = {'event': 'subscribe', 'channel': ch_type, 'pair': symbol}
-                elif ch_type == 'book':
+                elif ch_type == 'depth5':
+                    ch_type = 'book'
                     request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', }
-                else:
-                    request = {}
-                #
                 await self.upstream_bitfinex(request, symbol, ch_type)
             elif self.exchange == 'huobi':
+                self.web_socket = await self.session.ws_connect(self.endpoint, proxy=self.client.proxy, autoping=False)
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
-
-                self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                                proxy=self.client.proxy,
-                                                                autoping=False)
-
-                request = {'sub': f"market.{symbol}.{ch_type}"}
+                    request = {'sub': f"market.{symbol}.{ch_type}"}
+                elif 'kline_' in ch_type:
+                    tf = ch_type.split('_')[1]
+                    request = {'sub': f"market.{symbol}.kline.{hbp.interval(tf)}"}
+                elif ch_type == 'depth5':
+                    request = {'sub': f"market.{symbol}.depth.step0"}
 
                 print(f"start_wss: request: {request}")
 
@@ -264,6 +255,12 @@ class MarketEventsDataStream(EventsDataStream):
         elif self.exchange == 'huobi':
             if ch_type == 'ticker':
                 content = hbp.ticker(content, symbol)
+            elif 'kline_' in ch_type:
+                content = hbp.candle(content, symbol, ch_type)
+            elif ch_type == 'depth5':
+                content = hbp.order_book_ws(content, symbol)
+            else:
+                return
         #
         stream_name = None
         if isinstance(content, dict) and "stream" in content:

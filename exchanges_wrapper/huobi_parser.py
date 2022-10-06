@@ -10,48 +10,6 @@ import logging
 logger = logging.getLogger('exch_srv_logger')
 
 
-class OrderBook:
-    def __init__(self, _order_book, symbol) -> None:
-        self.symbol = symbol[1:].replace(':', '').lower()
-        self.last_update_id = 1
-        self.asks = {}
-        self.bids = {}
-        for i in _order_book:
-            if i[2] > 0:
-                self.bids[str(i[0])] = str(i[2])
-            else:
-                self.asks[str(i[0])] = str(abs(i[2]))
-
-    def get_book(self) -> dict:
-        bids = list(map(list, self.bids.items()))
-        bids.sort(key=lambda x: float(x[0]), reverse=True)
-        asks = list(map(list, self.asks.items()))
-        asks.sort(key=lambda x: float(x[0]), reverse=False)
-        return {
-            'stream': f"{self.symbol}@depth5",
-            'data': {'lastUpdateId': self.last_update_id,
-                     'bids': bids[0:5],
-                     'asks': asks[0:5],
-                     }
-        }
-
-    def update_book(self, _update):
-        self.last_update_id += 1
-        if _update[1]:
-            if _update[2] > 0:
-                self.bids[str(_update[0])] = str(_update[2])
-            else:
-                self.asks[str(_update[0])] = str(abs(_update[2]))
-        else:
-            if _update[2] > 0:
-                self.bids.pop(str(_update[0]), None)
-            else:
-                self.asks.pop(str(_update[0]), None)
-
-    def __call__(self):
-        return self
-
-
 def fetch_server_time(res: {}) -> {}:
     return {'serverTime': res}
 
@@ -264,6 +222,18 @@ def order_book(res: {}) -> {}:
     return binance_order_book
 
 
+def order_book_ws(res: {}, symbol: str) -> {}:
+    bids = res.get('tick').get('bids')[0:5]
+    asks = res.get('tick').get('asks')[0:5]
+    return {
+        'stream': f"{symbol}@depth5",
+        'data': {'lastUpdateId': res.get('ts'),
+                 'bids': bids,
+                 'asks': asks,
+                 }
+    }
+
+
 def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
     return {
         "symbol": symbol,
@@ -331,6 +301,75 @@ def interval(_interval: str) -> str:
     }
     return resolution.get(_interval, 0)
 
+
+def interval2value(_interval: str) -> int:
+    resolution = {
+        '1min': 60,
+        '5min': 5 * 60,
+        '15min': 15 * 60,
+        '30min': 30 * 60,
+        '60min': 60 * 60,
+        '4hour': 4 * 60 * 60,
+        '1day': 24 * 60 * 60,
+        '1week': 7 * 24 * 60 * 60,
+        '1mon': 31 * 24 * 60 * 60
+    }
+    return resolution.get(_interval, 0)
+
+
+def klines(res: [], _interval: str) -> []:
+    binance_klines = []
+    for i in res:
+        start_time = i.get('id') * 1000
+        _candle = [
+            start_time,
+            str(i.get('open')),
+            str(i.get('high')),
+            str(i.get('low')),
+            str(i.get('close')),
+            str(i.get('amount')),
+            start_time + interval2value(_interval) * 1000 - 1,
+            str(i.get('vol')),
+            i.get('count'),
+            '0.0',
+            '0.0',
+            '0.0',
+        ]
+        binance_klines.append(_candle)
+    return binance_klines
+
+
+def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
+    tick = res.get('tick')
+    start_time = tick.get('id')
+    _interval = ch_type.split('_')[1]
+    end_time = start_time + interval2value(interval(_interval)) * 1000 - 1
+    binance_candle = {
+        'stream': f"{symbol}@{ch_type}",
+        'data': {'e': 'kline',
+                 'E': int(time.time()),
+                 's': symbol.upper(),
+                 'k': {
+                     't': start_time,
+                     'T': end_time,
+                     's': symbol.upper(),
+                     'i': _interval,
+                     'f': 100,
+                     'L': 200,
+                     'o': str(tick.get('open')),
+                     'c': str(tick.get('close')),
+                     'h': str(tick.get('high')),
+                     'l': str(tick.get('low')),
+                     'v': str(tick.get('amount')),
+                     'n': tick.get('count'),
+                     'x': False,
+                     'q': str(tick.get('vol')),
+                     'V': '0.0',
+                     'Q': '0.0',
+                     'B': '0'}}
+    }
+    return binance_candle
+
 ###############################################################################
 
 
@@ -369,77 +408,6 @@ def symbol_name(_pair: str) -> ():
         base_asset = _pair[0:3].upper()
         quote_asset = _pair[3:].upper()
     return pair, base_asset, quote_asset
-
-
-def interval(_interval: str) -> int:
-    resolution = {
-        '1m': 60,
-        '5m': 5 * 60,
-        '15m': 15 * 60,
-        '30m': 30 * 60,
-        '1h': 60 * 60,
-        '3h': 3 * 60 * 60,
-        '6h': 6 * 60 * 60,
-        '12h': 12 * 60 * 60,
-        '1D': 24 * 60 * 60,
-        '1W': 7 * 24 * 60 * 60,
-        '14D': 14 * 24 * 60 * 60,
-        '1M': 31 * 24 * 60 * 60
-    }
-    return resolution.get(_interval, 0)
-
-
-def klines(res: [], _interval: str) -> []:
-    binance_klines = []
-    for i in res:
-        start_time = i[0]
-        _candle = [
-            start_time,
-            str(i[1]),
-            str(i[3]),
-            str(i[4]),
-            str(i[2]),
-            str(i[5]),
-            start_time + interval(_interval) * 1000 - 1,
-            '0.0',
-            0,
-            '0.0',
-            '0.0',
-            '0.0',
-        ]
-        binance_klines.append(_candle)
-    return binance_klines
-
-
-def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
-    symbol = symbol[1:].replace(':', '')
-    start_time = res[0]
-    _interval = ch_type.split('_')[1]
-    binance_candle = {
-        'stream': f"{symbol.lower()}@{ch_type.replace('candles', 'kline')}",
-        'data': {'e': 'kline',
-                 'E': int(time.time()),
-                 's': symbol,
-                 'k': {
-                     't': start_time,
-                     'T': start_time + interval(_interval) * 1000 - 1,
-                     's': symbol,
-                     'i': _interval,
-                     'f': 100,
-                     'L': 200,
-                     'o': str(res[1]),
-                     'c': str(res[2]),
-                     'h': str(res[3]),
-                     'l': str(res[4]),
-                     'v': str(res[5]),
-                     'n': 100,
-                     'x': False,
-                     'q': '0.0',
-                     'V': '0.0',
-                     'Q': '0.0',
-                     'B': '0'}}
-    }
-    return binance_candle
 
 
 def account_trade_list(res: []) -> []:

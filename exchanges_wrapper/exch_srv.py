@@ -430,7 +430,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         except Exception as _ex:
             logger.error(f"FetchKlines for {request.symbol} interval: {request.interval}, exception: {_ex}")
         else:
-            logger.debug(res)
+            # logger.debug(res)
             for candle in res:
                 response.klines.append(json.dumps(candle))
         return response
@@ -449,7 +449,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             exchange = 'bitfinex'
             _symbol = client.symbol_to_bfx(request.symbol)
         else:
-            exchange = 'binance'
+            exchange = 'huobi' if client.exchange == 'huobi' else 'binance'
             _symbol = request.symbol.lower()
         for i in _intervals:
             _event_type = f"{_symbol}@kline_{i}"
