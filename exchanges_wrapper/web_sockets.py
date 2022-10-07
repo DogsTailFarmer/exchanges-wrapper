@@ -13,6 +13,8 @@ import time
 from decimal import Decimal
 import traceback
 import gzip
+from datetime import datetime
+from urllib.parse import urlencode, urlparse
 
 import exchanges_wrapper.ftx_parser as ftx
 import exchanges_wrapper.bitfinex_parser as bfx
@@ -93,7 +95,6 @@ class EventsDataStream:
                     break
             elif msg.type is aiohttp.WSMsgType.ERROR:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
-
             msg_data = json.loads(gzip.decompress(msg.data) if msg.type is aiohttp.WSMsgType.BINARY else msg.data)
             # logger.debug(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
             if self.exchange == 'binance':
@@ -144,8 +145,23 @@ class EventsDataStream:
                     else:
                         await self._handle_event(msg_data, symbol, ch_type, order_book)
             elif self.exchange == 'huobi':
+                # print(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
                 if msg_data.get('ping'):
                     await self.web_socket.send_json({"pong": msg_data.get('ping')})
+                elif msg_data.get('action') == 'ping':
+                    pong = {
+                        "action": "pong",
+                        "data": {
+                              "ts": msg_data.get('data').get('ts')
+                        }
+                    }
+                    await self.web_socket.send_json(pong)
+                elif msg_data.get('action') == 'req' and msg_data.get('code') == 200 and msg_data.get('ch') == 'auth':
+                    return
+                elif (msg_data.get('action') == 'sub' and
+                      msg_data.get('code') == 500 and
+                      msg_data.get('message') == '系统异常:'):
+                    raise aiohttp.ClientOSError(f"Reconnecting Huobi user WS for {self.trade_id}")
                 elif 'subbed' not in msg_data:
                     await self._handle_event(msg_data, symbol, ch_type)
 
@@ -274,6 +290,62 @@ class MarketEventsDataStream(EventsDataStream):
                 await self.client.events.wrap_event(event_content).fire()
 
 
+class HbpPrivateEventsDataStream(EventsDataStream):
+
+    async def stop(self):
+        """
+        Stop data stream
+        """
+        if self.web_socket:
+            await self.web_socket.close()
+
+    async def start_wss(self):
+        self.web_socket = await self.session.ws_connect(self.endpoint, proxy=self.client.proxy, autoping=False)
+        ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+        _params = {
+                "accessKey": self.client.api_key,
+                "signatureMethod": "HmacSHA256",
+                "signatureVersion": "2.1",
+                "timestamp": str(ts)
+        }
+        signature_payload = (f"GET\n{urlparse(self.endpoint).hostname}\n{urlparse(self.endpoint).path}\n"
+                             f"{urlencode(_params)}")
+        signature = generate_signature(self.exchange, self.client.api_secret, signature_payload)
+        _params["authType"] = "api"
+        _params["signature"] = signature
+        request = {
+            "action": "req",
+            "ch": "auth",
+            "params": _params
+        }
+        await self.web_socket.send_json(request)
+        await self._handle_messages(self.web_socket)
+
+        request = {
+            "action": "sub",
+            "ch": "accounts.update#1"
+        }
+        await self.web_socket.send_json(request)
+
+        '''
+        request = {'op': 'subscribe', 'channel': 'orders'}
+        await self.web_socket.send_json(request)
+        '''
+        await self._handle_messages(self.web_socket)
+
+    async def _handle_event(self, msg_data, *args):
+        self.try_count = 0
+        content = None
+        print(f"HbpPrivateEventsDataStream._handle_event.content: hbp_account_id: {self.client.hbp_account_id}, {msg_data}")
+        '''
+        if msg_data.get('channel') in ('fills', 'orders'):
+            content = ftx.stream_convert(msg_data)
+        if content:
+            logger.debug(f"HbpPrivateEventsDataStream._handle_event.content: {content}")
+            await self.client.events.wrap_event(content).fire()
+        '''
+
+
 class FtxPrivateEventsDataStream(EventsDataStream):
     def __init__(self, client, endpoint, user_agent, exchange, trade_id, sub_account=None):
         super().__init__(client, endpoint, user_agent, exchange, trade_id)
@@ -287,9 +359,7 @@ class FtxPrivateEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                        receive_timeout=30,
-                                                        proxy=self.client.proxy)
+        self.web_socket = await self.session.ws_connect(self.endpoint, proxy=self.client.proxy, receive_timeout=30)
         ts = int(time.time() * 1000)
         data = f"{ts}websocket_login"
         request = {

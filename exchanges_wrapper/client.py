@@ -18,7 +18,8 @@ from exchanges_wrapper.errors import ExchangePyError, RateLimitReached
 from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             MarketEventsDataStream,\
                                             FtxPrivateEventsDataStream,\
-                                            BfxPrivateEventsDataStream
+                                            BfxPrivateEventsDataStream,\
+                                            HbpPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
 import exchanges_wrapper.ftx_parser as ftx
@@ -139,6 +140,12 @@ class Client:
                                                           self.user_agent,
                                                           self.exchange,
                                                           _trade_id)
+        elif self.exchange == 'huobi':
+            user_data_stream = HbpPrivateEventsDataStream(self,
+                                                          self.endpoint_ws_auth,
+                                                          self.user_agent,
+                                                          self.exchange,
+                                                          _trade_id)
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
             await user_data_stream.start()
@@ -146,9 +153,7 @@ class Client:
     async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
         start_list = []
-
         logger.info(f"Start '{self.exchange}' market events listener: ({', '.join(_events)}) for {_trade_id}")
-
         if self.exchange == 'binance':
             _endpoint = BINANCE_ENDPOINT_WS
             market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, self.exchange, _trade_id)
