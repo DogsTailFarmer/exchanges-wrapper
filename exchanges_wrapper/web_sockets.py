@@ -162,7 +162,7 @@ class EventsDataStream:
                       msg_data.get('code') == 500 and
                       msg_data.get('message') == '系统异常:'):
                     raise aiohttp.ClientOSError(f"Reconnecting Huobi user WS for {self.trade_id}")
-                elif 'subbed' not in msg_data:
+                elif msg_data.get('tick') or msg_data.get('data'):
                     await self._handle_event(msg_data, symbol, ch_type)
 
 
@@ -291,6 +291,9 @@ class MarketEventsDataStream(EventsDataStream):
 
 
 class HbpPrivateEventsDataStream(EventsDataStream):
+    def __init__(self, client, endpoint, user_agent, exchange, trade_id, symbol):
+        super().__init__(client, endpoint, user_agent, exchange, trade_id)
+        self.symbol = symbol
 
     async def stop(self):
         """
@@ -323,27 +326,31 @@ class HbpPrivateEventsDataStream(EventsDataStream):
 
         request = {
             "action": "sub",
-            "ch": "accounts.update#1"
+            "ch": "accounts.update#2"
         }
         await self.web_socket.send_json(request)
 
-        '''
-        request = {'op': 'subscribe', 'channel': 'orders'}
+        request = {
+            "action": "sub",
+            "ch": f"trade.clearing#{self.symbol.lower()}#0"
+        }
         await self.web_socket.send_json(request)
-        '''
+
         await self._handle_messages(self.web_socket)
 
     async def _handle_event(self, msg_data, *args):
         self.try_count = 0
         content = None
-        print(f"HbpPrivateEventsDataStream._handle_event.content: hbp_account_id: {self.client.hbp_account_id}, {msg_data}")
-        '''
-        if msg_data.get('channel') in ('fills', 'orders'):
-            content = ftx.stream_convert(msg_data)
+        if msg_data.get('data').get('accountId') == self.client.hbp_account_id:
+            if msg_data.get('ch') == 'accounts.update#2':
+                content = hbp.on_funds_update(msg_data)
+            elif msg_data.get('ch') == f"trade.clearing#{self.symbol.lower()}#0":
+                data = msg_data.get('data')
+                content = hbp.on_order_update(data)
         if content:
             logger.debug(f"HbpPrivateEventsDataStream._handle_event.content: {content}")
+            print(f"HbpPrivateEventsDataStream._handle_event.content: {content}")
             await self.client.events.wrap_event(content).fire()
-        '''
 
 
 class FtxPrivateEventsDataStream(EventsDataStream):

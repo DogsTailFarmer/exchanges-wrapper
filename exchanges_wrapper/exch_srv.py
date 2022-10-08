@@ -571,7 +571,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
         client.stream_queue[request.trade_id] |= {_queue}
-        if client.exchange in ('binance', 'bitfinex'):
+        if client.exchange in ('binance', 'bitfinex', 'huobi'):
             client.events.register_user_event(functools.partial(
                 event_handler, _queue, client, request.trade_id, 'outboundAccountPosition'),
                 'outboundAccountPosition')
@@ -730,7 +730,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                                                          for i in list(client.events.registered_streams.values())]))
         logger.info(f"Start WS streams for {open_client.name}")
         asyncio.create_task(open_client.client.start_market_events_listener(request.trade_id))
-        asyncio.create_task(open_client.client.start_user_events_listener(request.trade_id))
+        asyncio.create_task(open_client.client.start_user_events_listener(request.trade_id, request.symbol))
         response.success = True
         return response
 

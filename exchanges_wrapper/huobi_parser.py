@@ -89,7 +89,7 @@ def orders(res: [], response_type=None) -> []:
     return binance_orders
 
 
-def order(res: [], response_type=None) -> {}:
+def order(res: {}, response_type=None) -> {}:
     symbol = res.get('symbol').upper()
     order_id = res.get('id')
     order_list_id = -1
@@ -370,6 +370,90 @@ def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
     }
     return binance_candle
 
+
+def on_funds_update(res: {}) -> {}:
+    event_time = int(time.time() * 1000)
+    data = res.get('data')
+    binance_funds = {
+        'e': 'outboundAccountPosition',
+        'E': event_time,
+        'u': data.get('changeTime') or event_time,
+    }
+    funds = []
+
+    total = data.get('balance')
+    free = data.get('available')
+    locked = str(Decimal(total) - Decimal(free))
+    balance = {
+        'a': data.get('currency').upper(),
+        'f': free,
+        'l': locked
+    }
+    funds.append(balance)
+
+    binance_funds['B'] = funds
+    return binance_funds
+
+
+def on_order_update(res: {}) -> {}:
+    # print(f"on_order_update.res: {res}")
+    order_quantity = res.get('orderSize', res.get('orderValue'))
+    order_price = res.get('orderPrice', res.get('tradePrice'))
+    quote_order_qty = str(Decimal(order_quantity) * Decimal(order_price))
+    cumulative_filled_quantity = "0"
+    cumulative_quote_asset = "0"
+    #
+    last_executed_quantity = res.get('tradeVolume')
+    last_executed_price = res.get('tradePrice')
+    last_quote_asset_transacted = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
+    #
+    if res.get('orderStatus') == 'canceled':
+        status = 'CANCELED'
+    elif res.get('orderStatus') in ('partial-filled', 'partial-canceled'):
+        status = 'PARTIALLY_FILLED'
+    elif res.get('orderStatus') == 'filled':
+        status = 'FILLED'
+        cumulative_filled_quantity = order_quantity
+        cumulative_quote_asset = quote_order_qty
+    else:
+        status = 'NEW'
+    #
+    msg_binance = {
+        "e": "executionReport",
+        "E": int(time.time() * 1000),
+        "s": res.get('symbol').upper(),
+        "c": res.get('clientOrderId'),
+        "S": res.get('orderSide').upper(),
+        "o": "LIMIT",
+        "f": "GTC",
+        "q": order_quantity,
+        "p": order_price,
+        "P": "0.00000000",
+        "F": "0.00000000",
+        "g": -1,
+        "C": "",
+        "x": "TRADE",
+        "X": status,
+        "r": "NONE",
+        "i": res.get('orderId'),
+        "l": last_executed_quantity,
+        "z": cumulative_filled_quantity,
+        "L": last_executed_price,
+        "n": res.get('transactFee'),
+        "N": res.get('feeCurrency').upper(),
+        "T": res.get('tradeTime'),
+        "t": res.get('tradeId'),
+        "I": 123456789,
+        "w": True,
+        "m": False,
+        "M": False,
+        "O": res.get('orderCreateTime'),
+        "Z": cumulative_quote_asset,
+        "Y": last_quote_asset_transacted,
+        "Q": quote_order_qty
+    }
+    return msg_binance
+
 ###############################################################################
 
 
@@ -433,93 +517,6 @@ def account_trade_list(res: []) -> []:
         }
         binance_trade_list.append(binance_trade)
     return binance_trade_list
-
-
-def on_funds_update(res: []) -> {}:
-    binance_funds = {
-        'e': 'outboundAccountPosition',
-        'E': int(time.time() * 1000),
-        'u': int(time.time() * 1000),
-    }
-    funds = []
-    if not isinstance(res[0], list):
-        res = [res]
-    for i in res:
-        if i[0] == 'exchange':
-            total = str(i[2])
-            free = str(i[4] or total)
-            locked = str(Decimal(total) - Decimal(free))
-            balance = {
-                'a': i[1],
-                'f': free,
-                'l': locked
-            }
-            funds.append(balance)
-    binance_funds['B'] = funds
-    return binance_funds
-
-
-def on_order_update(res: [], last_event: tuple) -> {}:
-    # print(f"on_order_update.res: {res}")
-    side = 'BUY' if res[7] > 0 else 'SELL'
-    #
-    order_quantity = str(abs(res[7]))
-    cumulative_filled_quantity = str(Decimal(order_quantity) - Decimal(str(abs(res[6]))))
-    cumulative_quote_asset = str(Decimal(cumulative_filled_quantity) * Decimal(str(res[17])))
-    quote_order_qty = str(Decimal(order_quantity) * Decimal(str(res[16])))
-    #
-    trade_id = -1
-    last_executed_quantity = "0"
-    last_executed_price = "0"
-    if last_event:
-        trade_id = last_event[0]
-        last_executed_quantity = last_event[1]
-        last_executed_price = last_event[2]
-    last_quote_asset_transacted = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
-    if 'CANCELED' in res[13]:
-        status = 'CANCELED'
-    elif Decimal(order_quantity) > Decimal(cumulative_filled_quantity) > 0:
-        status = 'PARTIALLY_FILLED'
-    elif  Decimal(cumulative_filled_quantity) >= Decimal(order_quantity):
-        status = 'FILLED'
-    else:
-        status = 'NEW'
-    #
-    msg_binance = {
-        "e": "executionReport",
-        "E": res[5],
-        "s": res[3][1:].replace(':', ''),
-        "c": str(res[2]),
-        "S": side,
-        "o": "LIMIT",
-        "f": "GTC",
-        "q": order_quantity,
-        "p": str(res[16]),
-        "P": "0.00000000",
-        "F": "0.00000000",
-        "g": -1,
-        "C": "",
-        "x": "TRADE",
-        "X": status,
-        "r": "NONE",
-        "i": res[0],
-        "l": last_executed_quantity,
-        "z": cumulative_filled_quantity,
-        "L": last_executed_price,
-        "n": '0.0',
-        "N": "NONE",
-        "T": res[5],
-        "t": trade_id,
-        "I": 123456789,
-        "w": True,
-        "m": False,
-        "M": False,
-        "O": res[4],
-        "Z": cumulative_quote_asset,
-        "Y": last_quote_asset_transacted,
-        "Q": quote_order_qty
-    }
-    return msg_binance
 
 
 def on_order_trade(res: [], executed_qty: str) -> {}:
