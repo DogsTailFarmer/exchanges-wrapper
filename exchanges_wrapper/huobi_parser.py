@@ -94,10 +94,10 @@ def order(res: {}, response_type=None) -> {}:
     order_id = res.get('id')
     order_list_id = -1
     client_order_id = res.get('client-order-id')
-    price = res.get('price', 0)
-    orig_qty = res.get('amount', 0)
-    executed_qty = res.get('filled-amount', 0)
-    cummulative_quote_qty = res.get('filled-cash-amount', 0)
+    price = res.get('price', "0")
+    orig_qty = res.get('amount', "0")
+    executed_qty = res.get('filled-amount', res.get('field-amount', "0"))
+    cummulative_quote_qty = res.get('filled-cash-amount', res.get('field-cash-amount', "0"))
     orig_quote_order_qty = str(Decimal(orig_qty) * Decimal(price))
     #
     if res.get('state') == 'canceled':
@@ -454,6 +454,30 @@ def on_order_update(res: {}) -> {}:
     }
     return msg_binance
 
+
+def account_trade_list(res: []) -> []:
+    binance_trade_list = []
+    for trade in res:
+        price = trade.get('price')
+        qty = trade.get('filled-amount')
+        quote_qty = str(Decimal(price) * Decimal(qty))
+        binance_trade = {
+            "symbol": trade.get('symbol').upper(),
+            "id": trade.get('trade-id'),
+            "orderId": trade.get('id'),
+            "orderListId": -1,
+            "price": price,
+            "qty": qty,
+            "quoteQty": quote_qty,
+            "commission": trade.get('filled-fees'),
+            "commissionAsset": trade.get('fee-currency'),
+            "time": trade.get('created-at'),
+            "isBuyer": bool('buy' in trade.get('type')),
+            "isMaker": bool('maker' == trade.get('role')),
+            "isBestMatch": True,
+        }
+        binance_trade_list.append(binance_trade)
+    return binance_trade_list
 ###############################################################################
 
 
@@ -492,31 +516,6 @@ def symbol_name(_pair: str) -> ():
         base_asset = _pair[0:3].upper()
         quote_asset = _pair[3:].upper()
     return pair, base_asset, quote_asset
-
-
-def account_trade_list(res: []) -> []:
-    binance_trade_list = []
-    for trade in res:
-        price = str(trade[5])
-        qty = str(abs(trade[4]))
-        quote_qty = str(Decimal(price) * Decimal(qty))
-        binance_trade = {
-            "symbol": trade[1][1:].replace(':', ''),
-            "id": trade[0],
-            "orderId": trade[3],
-            "orderListId": -1,
-            "price": price,
-            "qty": qty,
-            "quoteQty": quote_qty,
-            "commission": str(abs(trade[9])),
-            "commissionAsset": trade[10],
-            "time": trade[2],
-            "isBuyer": bool(trade[4] > 0),
-            "isMaker": bool(trade[8] == 1),
-            "isBestMatch": True,
-        }
-        binance_trade_list.append(binance_trade)
-    return binance_trade_list
 
 
 def on_order_trade(res: [], executed_qty: str) -> {}:

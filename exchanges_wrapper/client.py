@@ -154,7 +154,7 @@ class Client:
     async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
         start_list = []
-        logger.info(f"Start '{self.exchange}' market events listener: ({', '.join(_events)}) for {_trade_id}")
+        logger.debug(f"Start '{self.exchange}' market events listener: ({', '.join(_events)}) for {_trade_id}")
         if self.exchange == 'binance':
             _endpoint = BINANCE_ENDPOINT_WS
             market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, self.exchange, _trade_id)
@@ -668,9 +668,9 @@ class Client:
             params = {
                 "market": self.symbol_to_ftx(symbol),
                 "side": side.lower(),
-                "price": float(price),
+                "price": float(self.refine_price(symbol, price)),
                 "type": order_type.lower(),
-                "size": float(quantity),
+                "size": float(self.refine_amount(symbol, quantity)),
                 "clientId": None
             }
             count = 0
@@ -689,17 +689,16 @@ class Client:
                     logger.debug(f"RateLimitReached for {self.symbol_to_ftx(symbol)}, count {count}, try one else")
                     await asyncio.sleep(random.uniform(0.1, 0.3) * count)
             # logger.debug(f"create_order.res: {res}")
-            if res and res.get('success'):
-                binance_res = ftx.order(res.get('result'), response_type=False)
-                if binance_res.get('status') != 'NEW':
-                    order_id = binance_res.get('orderId')
-                    binance_res = await self.fetch_order(symbol, order_id, receive_window)
+            binance_res = ftx.order(res, response_type=False)
+            if binance_res.get('status') != 'NEW':
+                order_id = binance_res.get('orderId')
+                binance_res = await self.fetch_order(symbol, order_id, receive_window)
         elif self.exchange == 'bitfinex':
             params = {
                 "type": "EXCHANGE LIMIT",
                 "symbol": self.symbol_to_bfx(symbol),
-                "price": price,
-                "amount": str((float(quantity) * (1 if side == 'BUY' else -1))),
+                "price": self.refine_price(symbol, price),
+                "amount": str((float(self.refine_amount(symbol, quantity)) * (1 if side == 'BUY' else -1))),
                 "meta": {"aff_code": "v_4az2nCP"}
             }
             if new_client_order_id:
@@ -726,6 +725,24 @@ class Client:
                          }
                      }
                 )
+        elif self.exchange == 'huobi':
+            params = {
+                'account-id': str(self.hbp_account_id),
+                'symbol': symbol.lower(),
+                'type': f"{side.lower()}-{order_type.lower()}",
+                'amount': self.refine_amount(symbol, quantity),
+                'price': self.refine_price(symbol, price),
+                'source': "spot-api"
+            }
+            if new_client_order_id:
+                params["client-order-id"] = str(new_client_order_id)
+            res = await self.http.send_api_call(
+                "v1/order/orders/place",
+                method="POST",
+                signed=True,
+                **params,
+            )
+            binance_res = await self.fetch_order(symbol, order_id=res, response_type=False)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-order-user_data
@@ -767,8 +784,7 @@ class Client:
                 f"orders/{order_id}",
                 signed=True,
              )
-            if res and res.get('success'):
-                binance_res = ftx.order(res.get('result'), response_type=response_type)
+            binance_res = ftx.order(res, response_type=response_type)
         elif self.exchange == 'bitfinex':
             params = {'id': [order_id]}
             res = await self.http.send_api_call(
@@ -788,6 +804,9 @@ class Client:
             logger.debug(f"fetch_order.res: {res}")
             if res:
                 binance_res = bfx.order(res[0], response_type=response_type)
+        elif self.exchange == 'huobi':
+            res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
+            binance_res = hbp.order(res, response_type=response_type)
         logger.debug(f"fetch_order.binance_res: {binance_res}")
         return binance_res
 
@@ -1276,8 +1295,7 @@ class Client:
                 signed=True,
                 **params,
             )
-            if res and res.get('success'):
-                binance_res = ftx.account_trade_list(res.get('result')[-limit:])
+            binance_res = ftx.account_trade_list(res[-limit:])
         elif self.exchange == 'bitfinex':
             params = {'limit': limit, 'sort': -1}
             if start_time:
@@ -1294,6 +1312,22 @@ class Client:
             if res:
                 binance_res = bfx.account_trade_list(res)
             # print(f"fetch_account_trade_list.res: {binance_res}")
+        elif self.exchange == 'huobi':
+            if limit == 100:
+                params = {'symbol': symbol.lower()}
+            elif 0 < limit <= 500:
+                params = {'symbol': symbol.lower(), "limit": limit}
+            else:
+                raise ValueError(f"{limit} is not a valid limit. A valid limit should be > 0 and <= to 500")
+            if start_time:
+                params["start-time"] = start_time
+            if end_time:
+                params["end-time"] = end_time
+            if from_id:
+                params["from"] = from_id
+            res = await self.http.send_api_call("v1/order/matchresults", signed=True, **params)
+            binance_res = hbp.account_trade_list(res)
+        logger.debug(f"fetch_account_trade_list.binance_res: {binance_res}")
         return binance_res
 
     async def fetch_order_trade_list(
@@ -1312,7 +1346,10 @@ class Client:
                 signed=True,
             )
             binance_res = bfx.account_trade_list(res)
-        # print(f"fetch_order_trade_list.binance_res: {binance_res}")
+        elif self.exchange == 'huobi':
+            res = await self.http.send_api_call(f"v1/order/orders/{order_id}/matchresults", signed=True)
+            binance_res = hbp.account_trade_list(res)
+        logger.debug(f"fetch_order_trade_list.binance_res: {binance_res}")
         return binance_res
 
     # USER DATA STREAM ENDPOINTS

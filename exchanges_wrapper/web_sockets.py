@@ -39,7 +39,6 @@ class EventsDataStream:
         self.try_count = 0
 
     async def start(self):
-        logger.info(f"EventsDataStream start(): exchange: {self.exchange}, endpoint: {self.endpoint}")
         try:
             await self.start_wss()
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
@@ -182,6 +181,7 @@ class MarketEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
+        logger.info(f"Start market WSS {self.channel} for {self.exchange}")
         registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
         if self.exchange == 'binance':
             combined_streams = "/".join(registered_streams)
@@ -231,9 +231,6 @@ class MarketEventsDataStream(EventsDataStream):
                     request = {'sub': f"market.{symbol}.kline.{hbp.interval(tf)}"}
                 elif ch_type == 'depth5':
                     request = {'sub': f"market.{symbol}.depth.step0"}
-
-                print(f"start_wss: request: {request}")
-
                 await self.web_socket.send_json(request)
                 await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
 
@@ -349,7 +346,6 @@ class HbpPrivateEventsDataStream(EventsDataStream):
                 content = hbp.on_order_update(data)
         if content:
             logger.debug(f"HbpPrivateEventsDataStream._handle_event.content: {content}")
-            print(f"HbpPrivateEventsDataStream._handle_event.content: {content}")
             await self.client.events.wrap_event(content).fire()
 
 
