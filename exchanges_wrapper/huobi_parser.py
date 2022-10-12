@@ -187,9 +187,9 @@ def account_information(res: {}) -> {}:
         else:
             asset_i.setdefault('frozen', balance.get('balance', '0'))
         assets.update({asset: asset_i})
-    for asset in assets.keys():
-        free = assets.get(asset).get('available', '0')
-        locked = assets.get(asset).get('frozen', '0')
+    for asset in assets:
+        free = assets.get(asset, {}).get('available', '0')
+        locked = assets.get(asset, {}).get('frozen', '0')
         _binance_res = {
             "asset": asset.upper(),
             "free": free,

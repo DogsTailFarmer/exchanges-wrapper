@@ -65,7 +65,7 @@ class HttpClient:
                 raise IPAddressBanned(IPAddressBanned.message)
             else:
                 raise HTTPError(f"Malformed request: {payload}")
-        if self.exchange == 'binance' or self.exchange == 'bitfinex':
+        if self.exchange in ('binance', 'bitfinex'):
             return payload
         elif self.exchange == 'ftx' and payload and payload.get('success'):
             return payload.get('result')
