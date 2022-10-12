@@ -1,4 +1,4 @@
-## v1.2.6 2022-mm-dd
+## v1.2.6b1 2022-10-12
 ### Added for new features
 * Huobi exchange
 

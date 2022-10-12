@@ -666,9 +666,9 @@ class Client:
             params = {
                 "market": self.symbol_to_ftx(symbol),
                 "side": side.lower(),
-                "price": float(self.refine_price(symbol, price)),
+                "price": float(price),
                 "type": order_type.lower(),
-                "size": float(self.refine_amount(symbol, quantity)),
+                "size": float(quantity),
                 "clientId": None
             }
             count = 0
@@ -695,8 +695,8 @@ class Client:
             params = {
                 "type": "EXCHANGE LIMIT",
                 "symbol": self.symbol_to_bfx(symbol),
-                "price": self.refine_price(symbol, price),
-                "amount": str((float(self.refine_amount(symbol, quantity)) * (1 if side == 'BUY' else -1))),
+                "price": price,
+                "amount": str((float(quantity) * (1 if side == 'BUY' else -1))),
                 "meta": {"aff_code": "v_4az2nCP"}
             }
             if new_client_order_id:
@@ -728,8 +728,8 @@ class Client:
                 'account-id': str(self.hbp_account_id),
                 'symbol': symbol.lower(),
                 'type': f"{side.lower()}-{order_type.lower()}",
-                'amount': self.refine_amount(symbol, quantity),
-                'price': self.refine_price(symbol, price),
+                'amount': quantity,
+                'price': price,
                 'source': "spot-api"
             }
             if new_client_order_id:

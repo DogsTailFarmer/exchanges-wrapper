@@ -23,13 +23,13 @@ from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, Response
 from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent
 from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
 #
-CONFIG = toml.load(str(CONFIG_FILE))
 HEARTBEAT = 1  # Sec
 MAX_QUEUE_SIZE = 50
 
 
 def get_account(_account_name: str) -> ():
-    accounts = CONFIG.get('accounts')
+    config = toml.load(str(CONFIG_FILE))
+    accounts = config.get('accounts')
     res = ()
     for account in accounts:
         if account.get('name') == _account_name:
@@ -40,7 +40,7 @@ def get_account(_account_name: str) -> ():
             api_key = account['api_key']
             api_secret = account['api_secret']
             #
-            endpoint = CONFIG['endpoint'][exchange]
+            endpoint = config['endpoint'][exchange]
             #
             api_public = endpoint['api_public']
             ws_public = endpoint['ws_public']
