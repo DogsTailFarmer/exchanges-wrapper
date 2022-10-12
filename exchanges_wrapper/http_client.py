@@ -50,7 +50,6 @@ class HttpClient:
         if response.status == 429:
             self.rate_limit_reached = True if self.exchange == 'binance' else None
             raise RateLimitReached(RateLimitReached.message)
-        # print(f"handle_errors.response: {response}")
         payload = await response.json()
         if payload and "code" in payload:
             # as defined here: https://github.com/binance/binance-spot-api-docs/blob/
@@ -75,7 +74,14 @@ class HttpClient:
         else:
             raise HTTPError(f"API request failed: {payload}")
 
-    async def send_api_call(self, path, method="GET", signed=False, send_api_key=True, endpoint=None, **kwargs):
+    async def send_api_call(self,
+                            path,
+                            method="GET",
+                            signed=False,
+                            send_api_key=True,
+                            endpoint=None,
+                            timeout=None,
+                            **kwargs):
         # print(f"send_api_call.request: path: {path}, kwargs: {kwargs}")
         if self.rate_limit_reached:
             raise QueryCanceled(
@@ -87,9 +93,9 @@ class HttpClient:
         content = str()
         ftx_post = self.exchange == 'ftx' and method == 'POST'
         bfx_post = self.exchange == 'bitfinex' and ((method == 'POST' and kwargs) or "params" in kwargs)
-
+        ts = None
         if self.exchange == 'huobi':
-            url = f'{_endpoint}/{path}?'
+            url = f"{_endpoint}/{path}?"
             if signed:
                 ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
                 _params = {
@@ -168,12 +174,7 @@ class HttpClient:
                                                                               self.api_secret,
                                                                               signature_payload)
                 query_kwargs["headers"]["bfx-nonce"] = str(ts)
-
         # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
-
-        async with self.session.request(method, url, **query_kwargs) as response:
-            # logger.debug(f"send_api_call.response: url: {response.url}, status: {response.status}")
-
+        async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
             # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
-
             return await self.handle_errors(response)

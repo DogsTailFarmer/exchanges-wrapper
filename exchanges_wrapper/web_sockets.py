@@ -160,9 +160,15 @@ class EventsDataStream:
                 elif (msg_data.get('action') == 'sub' and
                       msg_data.get('code') == 500 and
                       msg_data.get('message') == '系统异常:'):
-                    raise aiohttp.ClientOSError(f"Reconnecting Huobi user WS for {self.trade_id}")
+                    raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} WSS")
                 elif msg_data.get('tick') or msg_data.get('data'):
-                    await self._handle_event(msg_data, symbol, ch_type)
+                    if ch_type == 'ticker':
+                        _price = msg_data.get('tick', {}).get('lastPrice', None)
+                        if price != _price:
+                            price = _price
+                            await self._handle_event(msg_data, symbol, ch_type)
+                    else:
+                        await self._handle_event(msg_data, symbol, ch_type)
 
 
 class MarketEventsDataStream(EventsDataStream):

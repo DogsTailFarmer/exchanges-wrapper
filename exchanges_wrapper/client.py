@@ -219,9 +219,7 @@ class Client:
             )
         return amount
 
-    def refine_price(
-        self, symbol, price: Union[str, decimal.Decimal]
-    ) -> decimal.Decimal:
+    def refine_price(self, symbol, price: Union[str, decimal.Decimal]) -> decimal.Decimal:
         if isinstance(price, str):  # to save time for developers
             price = decimal.Decimal(price)
 
@@ -736,13 +734,23 @@ class Client:
             }
             if new_client_order_id:
                 params["client-order-id"] = str(new_client_order_id)
-            res = await self.http.send_api_call(
-                "v1/order/orders/place",
-                method="POST",
-                signed=True,
-                **params,
-            )
-            binance_res = await self.fetch_order(symbol, order_id=res, response_type=False)
+            count = 0
+            res = None
+            while count < STATUS_TIMEOUT:
+                res = await self.http.send_api_call(
+                    "v1/order/orders/place",
+                    method="POST",
+                    signed=True,
+                    timeout=STATUS_TIMEOUT,
+                    **params,
+                )
+                if res:
+                    break
+                else:
+                    count += 1
+                    logger.debug(f"RateLimitReached for {symbol}, count {count}, try one else")
+            if res:
+                binance_res = await self.fetch_order(symbol, order_id=res, response_type=False)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-order-user_data
@@ -885,6 +893,19 @@ class Client:
                         break
                     await asyncio.sleep(0.1)
                 logger.debug(f"cancel_order.bitfinex {order_id}: timeout: {timeout}")
+        elif self.exchange == 'huobi':
+            res = await self.http.send_api_call(
+                f"v1/order/orders/{order_id}/submitcancel",
+                method="POST",
+                signed=True
+            )
+            order_cancelled = False
+            timeout = STATUS_TIMEOUT
+            while res and not order_cancelled and timeout:
+                timeout -= 1
+                binance_res = await self.fetch_order(symbol, order_id=res, response_type=True)
+                order_cancelled = bool(binance_res.get('status') == 'CANCELED')
+                await asyncio.sleep(1)
         logger.debug(f"cancel_order.binance_res: {binance_res}")
         return binance_res
 
@@ -969,7 +990,7 @@ class Client:
                 signed=True,
                 **params,
             )
-            binance_res = ftx.orders(res.get('result'))
+            binance_res = ftx.orders(res)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
@@ -980,7 +1001,10 @@ class Client:
             if res:
                 binance_res = bfx.orders(res)
         elif self.exchange == 'huobi':
-            params = {'symbol': symbol.lower()}
+            params = {
+                'account-id': str(self.hbp_account_id),
+                'symbol': symbol.lower()
+            }
             res = await self.http.send_api_call(
                 "v1/order/openOrders",
                 signed=True,
@@ -1316,15 +1340,12 @@ class Client:
             if limit == 100:
                 params = {'symbol': symbol.lower()}
             elif 0 < limit <= 500:
-                params = {'symbol': symbol.lower(), "limit": limit}
+                params = {
+                    'size': limit,
+                    'symbol': symbol.lower()
+                }
             else:
                 raise ValueError(f"{limit} is not a valid limit. A valid limit should be > 0 and <= to 500")
-            if start_time:
-                params["start-time"] = start_time
-            if end_time:
-                params["end-time"] = end_time
-            if from_id:
-                params["from"] = from_id
             res = await self.http.send_api_call("v1/order/matchresults", signed=True, **params)
             binance_res = hbp.account_trade_list(res)
         logger.debug(f"fetch_account_trade_list.binance_res: {binance_res}")

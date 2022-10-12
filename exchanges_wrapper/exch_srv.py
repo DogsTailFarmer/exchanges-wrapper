@@ -5,7 +5,7 @@ from exchanges_wrapper import __version__
 import time
 import weakref
 import gc
-# import traceback
+import traceback
 
 import asyncio
 import functools
@@ -195,9 +195,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            # logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}"
-            #              f"{traceback.print_exc()}")
+            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception:"
+                         f" {ex}\n{traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
@@ -683,7 +682,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
+            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception:"
+                         f" {ex}\n{traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:

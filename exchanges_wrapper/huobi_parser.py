@@ -100,9 +100,9 @@ def order(res: {}, response_type=None) -> {}:
     cummulative_quote_qty = res.get('filled-cash-amount', res.get('field-cash-amount', "0"))
     orig_quote_order_qty = str(Decimal(orig_qty) * Decimal(price))
     #
-    if res.get('state') == 'canceled':
+    if res.get('state') in ('canceled', 'partial-canceled'):
         status = 'CANCELED'
-    elif res.get('state') in ('partial-filled', 'partial-canceled'):
+    elif res.get('state') == 'partial-filled':
         status = 'PARTIALLY_FILLED'
     elif res.get('state') == 'filled':
         status = 'FILLED'
@@ -276,7 +276,7 @@ def ticker(res: {}, symbol: str = None) -> {}:
             "e": "24hrMiniTicker",
             "E": int(res.get('ts') / 1000),
             "s": symbol.upper(),
-            "c": str(tick.get('close')),
+            "c": str(tick.get('lastPrice')),
             "o": str(tick.get('open')),
             "h": str(tick.get('high')),
             "l": str(tick.get('low')),
@@ -407,9 +407,9 @@ def on_order_update(res: {}) -> {}:
     last_executed_price = res.get('tradePrice')
     last_quote_asset_transacted = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
     #
-    if res.get('orderStatus') == 'canceled':
+    if res.get('orderStatus') in ('canceled', 'partial-canceled'):
         status = 'CANCELED'
-    elif res.get('orderStatus') in ('partial-filled', 'partial-canceled'):
+    elif res.get('orderStatus') == 'partial-filled':
         status = 'PARTIALLY_FILLED'
     elif res.get('orderStatus') == 'filled':
         status = 'FILLED'
