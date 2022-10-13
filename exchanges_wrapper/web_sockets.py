@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-# __version__ = "1.2.5-3"
+# __version__ = "1.2.6b4"
 
 from exchanges_wrapper import __version__
 
@@ -44,7 +44,7 @@ class EventsDataStream:
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
             self.try_count += 1
             delay = random.randint(1, 10) * self.try_count
-            logger.error(f"WSS start(): {ex}, restart try count: {self.try_count}, delay: {delay}s")
+            logger.error(f"WSS start({self.exchange}): {ex}, restart try count: {self.try_count}, delay: {delay}s")
             await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
         except Exception as ex:
@@ -169,6 +169,8 @@ class EventsDataStream:
                             await self._handle_event(msg_data, symbol, ch_type)
                     else:
                         await self._handle_event(msg_data, symbol, ch_type)
+                else:
+                    logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
 
 class MarketEventsDataStream(EventsDataStream):
@@ -228,7 +230,10 @@ class MarketEventsDataStream(EventsDataStream):
                     request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', }
                 await self.upstream_bitfinex(request, symbol, ch_type)
             elif self.exchange == 'huobi':
-                self.web_socket = await self.session.ws_connect(self.endpoint, proxy=self.client.proxy, autoping=False)
+                self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                                receive_timeout=20,
+                                                                proxy=self.client.proxy,
+                                                                autoping=False)
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
                     request = {'sub': f"market.{symbol}.{ch_type}"}
@@ -306,7 +311,10 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint, proxy=self.client.proxy, autoping=False)
+        self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                        receive_timeout=60,
+                                                        proxy=self.client.proxy,
+                                                        autoping=False)
         ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
         _params = {
                 "accessKey": self.client.api_key,

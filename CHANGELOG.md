@@ -1,3 +1,8 @@
+## v1.2.6 2022-10-13
+### Fixed
+* Huobi Restart WSS for PING timeout, 20s for market and 60s for user streams
+* Removed unnecessary refine amount/price in create_order() for Bitfinex, FTX and Huobi
+
 ## v1.2.6b1 2022-10-12
 ### Added for new features
 * Huobi exchange
