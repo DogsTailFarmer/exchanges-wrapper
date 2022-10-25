@@ -25,6 +25,7 @@ from exchanges_wrapper.events import Events
 import exchanges_wrapper.ftx_parser as ftx
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
+import exchanges_wrapper.okx_parser as okx
 
 logger = logging.getLogger('exch_srv_logger')
 
@@ -86,7 +87,7 @@ class Client:
 
     async def load(self):
         infos = await self.fetch_exchange_info()
-        if infos.get('success') or infos.get('serverTime'):
+        if infos.get('serverTime'):
             # load available symbols
             self.highest_precision = 8
             original_symbol_infos = infos["symbols"]

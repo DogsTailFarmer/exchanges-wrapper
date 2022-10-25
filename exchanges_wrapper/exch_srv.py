@@ -89,20 +89,24 @@ class OpenClient:
     @classmethod
     def get_id(cls, _account_name):
         _id = 0
-        for open_client in cls.open_clients:
-            if open_client.name == _account_name:
-                _id = id(open_client)
+        for client in cls.open_clients:
+            if client.name == _account_name:
+                _id = id(client)
                 break
         return _id
 
     @classmethod
     def get_client(cls, _id):
         _client = None
-        for open_client in cls.open_clients:
-            if id(open_client) == _id:
-                _client = open_client
+        for client in cls.open_clients:
+            if id(client) == _id:
+                _client = client
                 break
         return _client
+
+    @classmethod
+    def remove_client(cls, _account_name):
+        cls.open_clients[:] = [i for i in cls.open_clients if i.name != _account_name]
 
 
 # noinspection PyPep8Naming,PyMethodMayBeStatic
@@ -112,14 +116,12 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def OpenClientConnection(self, request: api_pb2.OpenClientConnectionRequest,
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
-        if request.trade_id:
-            logger.info(f"OpenClientConnection start trade: {request.trade_id}")
-        else:
-            logger.error("Unique identifier not specified")
+        logger.info(f"OpenClientConnection start trade: {request.trade_id}")
         client_id = OpenClient.get_id(request.account_name)
         if not client_id:
             try:
                 open_client = OpenClient(request.account_name)
+                client_id = id(open_client)
             except UserWarning:
                 _context.set_details(f"Account {request.account_name} not registered into"
                                      f" {WORK_PATH}/config/exch_srv_cfg.toml")
@@ -127,22 +129,22 @@ class Martin(api_pb2_grpc.MartinServicer):
             else:
                 try:
                     await open_client.client.load()
-                    client_id = id(open_client)
                 except asyncio.CancelledError:
                     pass  # Task cancellation should not be logged as an error
                 except Exception as ex:
                     logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
                     _context.set_details(f"{ex}")
                     _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+                    await OpenClient.get_client(client_id).client.session.close()
+                    OpenClient.remove_client(request.account_name)
+                    client_id = None
         else:
             OpenClient.get_client(client_id).client.http.rate_limit_reached = False
-        exchange = None
         if client_id:
             exchange = OpenClient.get_client(client_id).client.exchange
             # Set rate_limiter
             Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
-
-        return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
+            return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
                               _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
@@ -195,8 +197,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception:"
-                         f" {ex}\n{traceback.format_exc()}")
+            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
+            logger.debug(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
@@ -682,8 +684,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception:"
-                         f" {ex}\n{traceback.format_exc()}")
+            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
+            logger.debug(f"CreateLimitOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
