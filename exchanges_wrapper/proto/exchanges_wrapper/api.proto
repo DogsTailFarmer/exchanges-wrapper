@@ -26,6 +26,7 @@ service Martin {
   rpc StopStream (MarketRequest) returns (SimpleResponse) {}
   rpc StartStream (StartStreamRequest) returns (SimpleResponse) {}
   rpc OnFundsUpdate (OnFundsUpdateRequest) returns (stream OnFundsUpdateResponse) {}
+  rpc OnBalanceUpdate (MarketRequest) returns (stream OnBalanceUpdateResponse) {}
   rpc OnOrderUpdate (MarketRequest) returns (stream OnOrderUpdateResponse) {}
   rpc CreateLimitOrder (CreateLimitOrderRequest) returns (CreateLimitOrderResponse) {}
   rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {}
@@ -33,6 +34,10 @@ service Martin {
   rpc ResetRateLimit (OpenClientConnectionId) returns (SimpleResponse) {}
   rpc OnKlinesUpdate(FetchKlinesRequest) returns (stream OnKlinesUpdateResponse) {}
   rpc FetchFundingWallet(FetchFundingWalletRequest) returns (FetchFundingWalletResponse) {}
+}
+
+message OnBalanceUpdateResponse {
+  string balance = 1;
 }
 
 message FetchFundingWalletRequest{

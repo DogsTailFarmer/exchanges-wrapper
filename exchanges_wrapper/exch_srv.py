@@ -462,8 +462,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
-                logger.info(f"OnKlinesUpdate: Stop market stream for {open_client.name}:{request.symbol}:"
-                            f"{_intervals}")
+                logger.info(f"OnKlinesUpdate: Stop market stream for {open_client.name}:{request.symbol}:{_intervals}")
                 return
             else:
                 # logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
@@ -604,6 +603,33 @@ class Martin(api_pb2_grpc.MartinServicer):
             elif isinstance(_event, events.OutboundAccountPositionWrapper):
                 logger.debug(f"OnFundsUpdate: {_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
+                yield response
+
+    async def OnBalanceUpdate(self, request: api_pb2.MarketRequest,
+                              _context: grpc.aio.ServicerContext) -> api_pb2.OnBalanceUpdateResponse:
+        response = api_pb2.OnBalanceUpdateResponse()
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
+        _queue = asyncio.Queue(MAX_QUEUE_SIZE)
+        client.stream_queue[request.trade_id] |= {_queue}
+        if client.exchange == 'binance':
+            client.events.register_user_event(functools.partial(
+                event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
+        while True:
+            _event = await _queue.get()
+            if isinstance(_event, str) and _event == request.trade_id:
+                client.stream_queue.get(request.trade_id, set()).discard(_queue)
+                logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}: {request.symbol}")
+                return
+            elif isinstance(_event, events.BalanceUpdateWrapper):
+                logger.debug(f"OnBalanceUpdate: {_event.asset}:{_event.balance_delta}")
+                balance = {
+                    "event_time": _event.event_time,
+                    "asset": _event.asset,
+                    "balance_delta": _event.balance_delta,
+                    "clear_time": _event.clear_time
+                }
+                response.balance = json.dumps(balance)
                 yield response
 
     async def OnOrderUpdate(self, request: api_pb2.MarketRequest,
