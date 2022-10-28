@@ -612,6 +612,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
         client.stream_queue[request.trade_id] |= {_queue}
+        _balance = None
         if client.exchange == 'binance':
             client.events.register_user_event(functools.partial(
                 event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
@@ -629,8 +630,10 @@ class Martin(api_pb2_grpc.MartinServicer):
                     "balance_delta": _event.balance_delta,
                     "clear_time": _event.clear_time
                 }
-                response.balance = json.dumps(balance)
-                yield response
+                if _balance != balance:
+                    _balance = balance
+                    response.balance = json.dumps(balance)
+                    yield response
 
     async def OnOrderUpdate(self, request: api_pb2.MarketRequest,
                             _context: grpc.aio.ServicerContext) -> api_pb2.OnOrderUpdateResponse:
