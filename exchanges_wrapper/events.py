@@ -15,13 +15,20 @@ logger = logging.getLogger('exch_srv_logger')
 class Handlers(list):
     async def __call__(self, *args, **kwargs):
         loop = asyncio.get_running_loop()
+        trade_id = kwargs.pop('trade_id', None)
+        _trade_id = None
         for func in self:
-            if asyncio.iscoroutinefunction(func):
-                await func(*args, **kwargs)
-                continue
-            if kwargs:
-                func = functools.partial(func, **kwargs)
-            loop.run_in_executor(None, func, *args)
+            try:
+                _trade_id = func.args[2]
+            except Exception as ex:
+                logger.warning(f"Handlers error when try get trade_id: {ex}")
+            if trade_id is None or trade_id == _trade_id:
+                if asyncio.iscoroutinefunction(func):
+                    await func(*args, **kwargs)
+                    continue
+                if kwargs:
+                    func = functools.partial(func, **kwargs)
+                loop.run_in_executor(None, func, *args)
 
     def __repr__(self):
         return f"Handlers({list.__repr__(self)})"
@@ -95,9 +102,9 @@ class EventWrapper:
     def __init__(self, _event_data, handlers):
         self.handlers = handlers
 
-    async def fire(self):
+    async def fire(self, trade_id=None):
         if self.handlers:
-            await self.handlers(self)
+            await self.handlers(self, trade_id=trade_id)
 
 
 # MARKET EVENTS

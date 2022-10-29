@@ -189,7 +189,7 @@ class MarketEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
-        logger.info(f"Start market WSS {self.channel} for {self.exchange}")
+        logger.info(f"Start market WSS {self.channel if self.channel else ''} for {self.exchange}")
         registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
         if self.exchange == 'binance':
             combined_streams = "/".join(registered_streams)
@@ -291,11 +291,11 @@ class MarketEventsDataStream(EventsDataStream):
             stream_name = content["stream"]
             content = content["data"]
             content["stream"] = stream_name
-            await self.client.events.wrap_event(content).fire()
+            await self.client.events.wrap_event(content).fire(self.trade_id)
         elif isinstance(content, list):
             for event_content in content:
                 event_content["stream"] = stream_name
-                await self.client.events.wrap_event(event_content).fire()
+                await self.client.events.wrap_event(event_content).fire(self.trade_id)
 
 
 class HbpPrivateEventsDataStream(EventsDataStream):
@@ -360,7 +360,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
                 content = hbp.on_order_update(data)
         if content:
             logger.debug(f"HbpPrivateEventsDataStream._handle_event.content: {content}")
-            await self.client.events.wrap_event(content).fire()
+            await self.client.events.wrap_event(content).fire(self.trade_id)
 
 
 class FtxPrivateEventsDataStream(EventsDataStream):
@@ -407,7 +407,7 @@ class FtxPrivateEventsDataStream(EventsDataStream):
             content = ftx.stream_convert(msg_data)
         if content:
             logger.debug(f"FtxPrivateEventsDataStream._handle_event.content: {content}")
-            await self.client.events.wrap_event(content).fire()
+            await self.client.events.wrap_event(content).fire(self.trade_id)
 
 
 class BfxPrivateEventsDataStream(EventsDataStream):
@@ -462,7 +462,7 @@ class BfxPrivateEventsDataStream(EventsDataStream):
                     executed_qty = self.client.active_orders.get(order_id, {}).get('executedQty', '0')
                     content = bfx.on_order_trade(msg_data[2], executed_qty)
         if content:
-            await self.client.events.wrap_event(content).fire()
+            await self.client.events.wrap_event(content).fire(self.trade_id)
 
 
 class UserEventsDataStream(EventsDataStream):
@@ -497,4 +497,4 @@ class UserEventsDataStream(EventsDataStream):
         self.try_count = 0
         logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
         event = self.client.events.wrap_event(content)
-        await event.fire()
+        await event.fire(self.trade_id)

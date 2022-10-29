@@ -121,6 +121,7 @@ class Client:
 
     async def start_user_events_listener(self, _trade_id, symbol):
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
+
         user_data_stream = None
         if self.exchange == 'binance':
             user_data_stream = UserEventsDataStream(self,

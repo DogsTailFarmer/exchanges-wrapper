@@ -116,7 +116,7 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def OpenClientConnection(self, request: api_pb2.OpenClientConnectionRequest,
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
-        logger.info(f"OpenClientConnection start trade: {request.trade_id}")
+        logger.info(f"OpenClientConnection start trade: {request.account_name}:{request.trade_id}")
         client_id = OpenClient.get_id(request.account_name)
         if not client_id:
             try:
@@ -612,7 +612,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
         client.stream_queue[request.trade_id] |= {_queue}
-        _balance = None
         if client.exchange == 'binance':
             client.events.register_user_event(functools.partial(
                 event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
@@ -623,15 +622,14 @@ class Martin(api_pb2_grpc.MartinServicer):
                 logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             elif isinstance(_event, events.BalanceUpdateWrapper):
-                logger.debug(f"OnBalanceUpdate: {_event.asset}:{_event.balance_delta}")
-                balance = {
-                    "event_time": _event.event_time,
-                    "asset": _event.asset,
-                    "balance_delta": _event.balance_delta,
-                    "clear_time": _event.clear_time
-                }
-                if _balance != balance:
-                    _balance = balance
+                logger.debug(f"OnBalanceUpdate: {_event.event_time}:{_event.asset}:{_event.balance_delta}")
+                if _event.asset in request.symbol:
+                    balance = {
+                        "event_time": _event.event_time,
+                        "asset": _event.asset,
+                        "balance_delta": _event.balance_delta,
+                        "clear_time": _event.clear_time
+                    }
                     response.balance = json.dumps(balance)
                     yield response
 
