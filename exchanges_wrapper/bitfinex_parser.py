@@ -496,6 +496,17 @@ def on_funds_update(res: []) -> {}:
     return binance_funds
 
 
+def on_balance_update(res: []) -> {}:
+    balance = {
+        'e': 'balanceUpdate',
+        'E': res[3],
+        'a': res[1],
+        'd': res[5],
+        'T': int(time.time() * 1000)
+    }
+    return balance
+
+
 def on_order_update(res: [], last_event: tuple) -> {}:
     # print(f"on_order_update.res: {res}")
     side = 'BUY' if res[7] > 0 else 'SELL'

@@ -600,8 +600,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                         content = ftx.on_funds_update(assets_balances)
                         balances_prev = assets_balances.copy()
                         _event = client.events.wrap_event(content)
-            elif isinstance(_event, events.OutboundAccountPositionWrapper):
-                logger.debug(f"OnFundsUpdate: {_event.balances.items()}")
+            if isinstance(_event, events.OutboundAccountPositionWrapper):
+                logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
                 yield response
 
@@ -616,12 +616,26 @@ class Martin(api_pb2_grpc.MartinServicer):
             client.events.register_user_event(functools.partial(
                 event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
         while True:
-            _event = await _queue.get()
+            try:
+                _event = await asyncio.wait_for(_queue.get(), timeout=HEARTBEAT * 5)
+            except asyncio.TimeoutError:
+                _event = None
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
-            elif isinstance(_event, events.BalanceUpdateWrapper):
+            if client.exchange == 'bitfinex':
+                # https://docs.bitfinex.com/reference/rest-auth-ledgers
+                category = [51, 101, 104]
+                try:
+                    balance = await client.fetch_ledgers(category)
+                except Exception as _ex:
+                    logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
+                else:
+                    logger.info(f"OnBalanceUpdate.balance: {balance}")
+                    if 0:  # balance:
+                        _event = client.events.wrap_event(balance)
+            if isinstance(_event, events.BalanceUpdateWrapper):
                 logger.debug(f"OnBalanceUpdate: {_event.event_time}:{_event.asset}:{_event.balance_delta}")
                 if _event.asset in request.symbol:
                     balance = {

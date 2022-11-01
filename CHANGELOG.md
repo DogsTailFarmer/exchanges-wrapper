@@ -1,3 +1,10 @@
+## v1.2.x 2022-mm-dd
+### Fixed
+* FTX: OnFundsUpdate() did not return a result
+
+### Added for new features
+* Binance, : OnBalanceUpdate() for autocorrect depo and initial balance
+
 ## v1.2.6 2022-10-13
 ### Fixed
 * Huobi Restart WSS for PING timeout, 20s for market and 60s for user streams

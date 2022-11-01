@@ -84,6 +84,7 @@ class Client:
         self.wss_buffer = {}
         self.stream_queue = defaultdict(set)
         self.hbp_account_id = None
+        self.ledgers_id = []
 
     async def load(self):
         infos = await self.fetch_exchange_info()
@@ -358,6 +359,32 @@ class Client:
                 f"{limit} is not a valid limit. Valid limits: {valid_limits}"
             )
         return binance_res
+
+    async def fetch_ledgers(self, category, limit=10):
+        if self.exchange == 'bitfinex':
+            res = []
+            # start - window 10 min before now
+            for i in category:
+                params = {'limit': limit,
+                          'category': i,
+                          'start': (int(time.time()) - 60 * 10) * 1000}
+                _res = await self.http.send_api_call(
+                    f"v2/auth/r/ledgers/hist",
+                    method="POST",
+                    signed=True,
+                    **params
+                )
+                if _res:
+                    res.extend(_res)
+                await asyncio.sleep(2)
+            for _res in res:
+                if _res[0] not in self.ledgers_id:
+                    self.ledgers_id.append(_res[0])
+                    if len(self.ledgers_id) > limit*len(category):
+                        del self.ledgers_id[0]
+                    if _res:
+                        binance_res = bfx.on_balance_update(_res)
+                        return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
     async def fetch_recent_trades_list(self, symbol, limit=500):
