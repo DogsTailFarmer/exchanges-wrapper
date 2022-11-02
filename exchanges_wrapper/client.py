@@ -360,7 +360,7 @@ class Client:
             )
         return binance_res
 
-    async def fetch_ledgers(self, category, limit=10):
+    async def fetch_ledgers(self, symbol, category, limit=10):
         if self.exchange == 'bitfinex':
             res = []
             # start - window 10 min before now
@@ -378,7 +378,7 @@ class Client:
                     res.extend(_res)
                 await asyncio.sleep(2)
             for _res in res:
-                if _res[0] not in self.ledgers_id:
+                if _res[1] in symbol and _res[0] not in self.ledgers_id:
                     self.ledgers_id.append(_res[0])
                     if len(self.ledgers_id) > limit*len(category):
                         del self.ledgers_id[0]
