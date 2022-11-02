@@ -10,6 +10,17 @@ import logging
 logger = logging.getLogger('exch_srv_logger')
 
 
+def on_balance_update(res: {}) -> {}:
+    balance = {
+        'e': 'balanceUpdate',
+        'E': res.get('transactTime'),
+        'a': res.get('currency').upper(),
+        'd': str(res.get('transactAmt')),
+        'T': int(time.time() * 1000)
+    }
+    return balance
+
+
 def fetch_server_time(res: {}) -> {}:
     return {'serverTime': res}
 

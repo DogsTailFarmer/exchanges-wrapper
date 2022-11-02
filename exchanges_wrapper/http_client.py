@@ -51,7 +51,7 @@ class HttpClient:
             self.rate_limit_reached = True if self.exchange == 'binance' else None
             raise RateLimitReached(RateLimitReached.message)
         payload = await response.json()
-        if payload and "code" in payload:
+        if self.exchange == 'binance' and payload and "code" in payload:
             # as defined here: https://github.com/binance/binance-spot-api-docs/blob/
             # master/errors.md#error-codes-for-binance-2019-09-25
             raise ExchangeError(payload["msg"])
@@ -69,7 +69,7 @@ class HttpClient:
             return payload
         elif self.exchange == 'ftx' and payload and payload.get('success'):
             return payload.get('result')
-        elif self.exchange == 'huobi' and payload and payload.get('status') == 'ok':
+        elif self.exchange == 'huobi' and payload and (payload.get('status', None) == 'ok' or payload.get('ok', None)):
             return payload.get('data', payload.get('tick'))
         else:
             raise HTTPError(f"API request failed: {payload}")

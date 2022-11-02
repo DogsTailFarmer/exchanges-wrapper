@@ -617,18 +617,16 @@ class Martin(api_pb2_grpc.MartinServicer):
                 event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
         while True:
             try:
-                _event = await asyncio.wait_for(_queue.get(), timeout=HEARTBEAT * 5)
+                _event = await asyncio.wait_for(_queue.get(), timeout=HEARTBEAT * 10)
             except asyncio.TimeoutError:
                 _event = None
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
-                logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}: {request.symbol}")
+                logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}:{request.symbol}")
                 return
-            if client.exchange == 'bitfinex':
-                # https://docs.bitfinex.com/reference/rest-auth-ledgers
-                category = [51, 101, 104]
+            if client.exchange in ('bitfinex', 'huobi'):
                 try:
-                    balance = await client.fetch_ledgers(request.symbol, category)
+                    balance = await client.fetch_ledgers(request.symbol)
                 except Exception as _ex:
                     logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
                 else:

@@ -334,19 +334,16 @@ class HbpPrivateEventsDataStream(EventsDataStream):
         }
         await self.web_socket.send_json(request)
         await self._handle_messages(self.web_socket)
-
         request = {
             "action": "sub",
             "ch": "accounts.update#2"
         }
         await self.web_socket.send_json(request)
-
         request = {
             "action": "sub",
             "ch": f"trade.clearing#{self.symbol.lower()}#0"
         }
         await self.web_socket.send_json(request)
-
         await self._handle_messages(self.web_socket)
 
     async def _handle_event(self, msg_data, *args):

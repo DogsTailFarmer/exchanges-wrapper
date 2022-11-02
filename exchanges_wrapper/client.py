@@ -360,14 +360,17 @@ class Client:
             )
         return binance_res
 
-    async def fetch_ledgers(self, symbol, category, limit=10):
+    async def fetch_ledgers(self, symbol, limit=10):
+        self.assert_symbol(symbol)
         if self.exchange == 'bitfinex':
+            # https://docs.bitfinex.com/reference/rest-auth-ledgers
+            category = [51, 101, 104]
             res = []
-            # start - window 10 min before now
+            # start = current time - 5min
             for i in category:
                 params = {'limit': limit,
                           'category': i,
-                          'start': (int(time.time()) - 60 * 10) * 1000}
+                          'start': (int(time.time()) - 60 * 5) * 1000}
                 _res = await self.http.send_api_call(
                     f"v2/auth/r/ledgers/hist",
                     method="POST",
@@ -385,6 +388,23 @@ class Client:
                     if _res:
                         binance_res = bfx.on_balance_update(_res)
                         return binance_res
+        elif self.exchange == 'huobi':
+            params = {'accountId': str(self.hbp_account_id),
+                      'limit': limit}
+            res = await self.http.send_api_call(
+                "v2/account/ledger",
+                signed=True,
+                **params,
+            )
+            for res_i in res:
+                time_select = (int(time.time() * 1000) - res_i.get('transactTime')) < 1000 * 60 * 5
+                if (time_select and res_i.get('currency').upper() in symbol and
+                        res_i.get('transactId') not in self.ledgers_id):
+                    self.ledgers_id.append(res_i.get('transactId'))
+                    if len(self.ledgers_id) > limit:
+                        del self.ledgers_id[0]
+                    binance_res = hbp.on_balance_update(res_i)
+                    return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
     async def fetch_recent_trades_list(self, symbol, limit=500):
