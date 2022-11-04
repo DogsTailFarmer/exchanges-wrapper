@@ -624,7 +624,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}:{request.symbol}")
                 return
-            if client.exchange in ('bitfinex', 'huobi'):
+            if client.exchange in ('bitfinex', 'huobi', 'ftx'):
                 try:
                     balance = await client.fetch_ledgers(request.symbol)
                 except Exception as _ex:

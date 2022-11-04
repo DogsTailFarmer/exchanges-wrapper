@@ -80,6 +80,19 @@ class OrderBook:
         return self
 
 
+def on_balance_update(res: {}) -> {}:
+    ftx_time = res.get('time')
+    _time = int(datetime.datetime.strptime(ftx_time.split('+')[0], TIMESTAMP_PATTERN).timestamp() * 1000)
+    balance = {
+        'e': 'balanceUpdate',
+        'E': _time,
+        'a': res.get('coin'),
+        'd': str(res.get('size')),
+        'T': int(time.time() * 1000)
+    }
+    return balance
+
+
 def on_funds_update(res: []) -> {}:
     binance_funds = {
         'e': 'outboundAccountPosition',
