@@ -39,6 +39,7 @@ def get_account(_account_name: str) -> ():
             #
             api_key = account['api_key']
             api_secret = account['api_secret']
+            passphrase = account.get('passphrase')
             #
             endpoint = config['endpoint'][exchange]
             #
@@ -57,7 +58,8 @@ def get_account(_account_name: str) -> ():
                    ws_public,       # 6
                    api_auth,        # 7
                    ws_auth,         # 8
-                   ws_public_mbr)   # 9
+                   ws_public_mbr,   # 9
+                   passphrase)      # 10
             break
     return res
 
@@ -73,6 +75,7 @@ class OpenClient:
             self.client = Client(
                 account[0],     # exchange
                 account[1],     # sub_account
+                account[2],     # test_net
                 account[3],     # api_key
                 account[4],     # api_secret
                 account[5],     # api_public
@@ -80,6 +83,7 @@ class OpenClient:
                 account[7],     # api_auth
                 account[8],     # ws_auth
                 account[9],     # ws_public_mbr
+                account[10],    # passphrase
             )
             self.on_order_update_queues = {}
             OpenClient.open_clients.append(self)
@@ -202,7 +206,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            # logger.debug(f"FetchOpenOrders.res: {res}")
+            # logger.info(f"FetchOpenOrders.res: {res}")
             active_orders = []
             for order in res:
                 active_orders.append(order['orderId'])
@@ -229,7 +233,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                          _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        _queue = open_client.on_order_update_queues.get(request.trade_id, None)
+        _queue = open_client.on_order_update_queues.get(request.trade_id)
         response = api_pb2.FetchOrderResponse()
         try:
             res = await client.fetch_order(symbol=request.symbol,

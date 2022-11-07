@@ -12,8 +12,7 @@ import logging
 import time
 from collections import defaultdict
 
-
-from exchanges_wrapper.http_client import HttpClient
+from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientFTX, ClientHBP, ClientOKX
 from exchanges_wrapper.errors import ExchangePyError, RateLimitReached
 from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             MarketEventsDataStream,\
@@ -42,6 +41,7 @@ class Client:
         self,
         exchange,
         sub_account,
+        test_net,
         api_key,
         api_secret,
         endpoint_api_public,
@@ -49,13 +49,16 @@ class Client:
         endpoint_api_auth,
         endpoint_ws_auth,
         ws_public_mbr=None,
+        passphrase=None,
         user_agent=None,
         proxy=str()
     ):
         self.exchange = exchange
         self.sub_account = sub_account
+        self.test_net = test_net
         self.api_key = api_key
         self.api_secret = api_secret
+        self.passphrase = passphrase
         self.endpoint_api_public = endpoint_api_public
         self.endpoint_ws_public = endpoint_ws_public
         self.endpoint_api_auth = endpoint_api_auth
@@ -63,16 +66,32 @@ class Client:
         self.ws_public_mbr = ws_public_mbr
         #
         self.session = aiohttp.ClientSession()
-        self.http = HttpClient(
-            api_key,
-            api_secret,
-            endpoint_api_auth,
-            user_agent,
-            proxy,
-            session=self.session,
-            exchange=self.exchange,
-            sub_account=self.sub_account,
-        )
+        client_init_params = {
+            'api_key': api_key,
+            'api_secret': api_secret,
+            'passphrase': passphrase,
+            'endpoint': endpoint_api_auth,
+            'user_agent': user_agent,
+            'proxy': proxy,
+            'session': self.session,
+            'exchange': exchange,
+            'sub_account': sub_account,
+            'test_net': test_net
+        }
+
+        if exchange == 'binance':
+            self.http = ClientBinance(**client_init_params)
+        elif exchange == 'bitfinex':
+            self.http = ClientBFX(**client_init_params)
+        elif exchange == 'ftx':
+            self.http = ClientFTX(**client_init_params)
+        elif exchange == 'huobi':
+            self.http = ClientHBP(**client_init_params)
+        elif exchange == 'okx':
+            self.http = ClientOKX(**client_init_params)
+        else:
+            raise UserWarning(f"Exchange {exchange} not yet connected")
+
         self.user_agent = user_agent
         self.proxy = proxy
         self.loaded = False
@@ -200,6 +219,10 @@ class Client:
             res = f"t{base_asset}{quote_asset}"
         return res
 
+    def symbol_to_okx(self, symbol) -> str:
+        symbol_info = self.symbols.get(symbol)
+        return f"{symbol_info.get('baseAsset')}-{symbol_info.get('quoteAsset')}"
+
     def active_orders_clear(self, active_orders: list = None):
         limit_time = int(time.time())
         self.active_orders = {key: val for key, val in self.active_orders.items()
@@ -262,8 +285,11 @@ class Client:
         if self.exchange == 'binance':
             binance_res = await self.http.send_api_call("/api/v3/time", send_api_key=False)
         elif self.exchange == 'huobi':
-            res = await self.http.send_api_call("v1/common/timestamp", send_api_key=False)
+            res = await self.http.send_api_call("v1/common/timestamp")
             binance_res = hbp.fetch_server_time(res)
+        elif self.exchange == 'okx':
+            res = await self.http.send_api_call("/api/v5/public/time")
+            binance_res = okx.fetch_server_time(res)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#exchange-information
@@ -295,7 +321,7 @@ class Client:
                 binance_res = bfx.exchange_info(symbols_details, tickers)
         elif self.exchange == 'huobi':
             server_time = await self.fetch_server_time()
-            trading_symbols = await self.http.send_api_call("v1/common/symbols", send_api_key=False)
+            trading_symbols = await self.http.send_api_call("v1/common/symbols")
             if self.hbp_account_id is None:
                 accounts = await self.http.send_api_call("v1/account/accounts", signed=True)
                 for account in accounts:
@@ -303,6 +329,12 @@ class Client:
                         self.hbp_account_id = account.get('id')
                         break
             binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbols)
+        elif self.exchange == 'okx':
+            params = {'instType': 'SPOT'}
+            server_time = await self.fetch_server_time()
+            instruments = await self.http.send_api_call("/api/v5/public/instruments", **params)
+            tickers = await self.http.send_api_call("/api/v5/market/tickers", **params)
+            binance_res = okx.exchange_info(server_time.get('serverTime'), instruments, tickers)
         return binance_res
 
     # MARKET DATA ENDPOINTS
@@ -362,6 +394,7 @@ class Client:
 
     async def fetch_ledgers(self, symbol, limit=10):
         self.assert_symbol(symbol)
+        # From exchange get ledger records about deposit/withdraw/transfer in last 60s time-frame
         if self.exchange == 'bitfinex':
             # https://docs.bitfinex.com/reference/rest-auth-ledgers
             category = [51, 101, 104]
@@ -1032,6 +1065,29 @@ class Client:
                 if str(order.get('orderId')) in ids_canceled:
                     orders_canceled.append(order)
             binance_res = orders_canceled
+        elif self.exchange == 'okx':
+            orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window, response_type=True)
+            _symbol = self.symbol_to_okx(symbol)
+            while orders:
+                orders_canceled = []
+                params = []
+                i = 1
+                for order in orders:
+                    orders_canceled.append(order)
+                    params.append({'instId': _symbol, 'ordId': order.get('orderId')})
+                    if i >= 20:
+                        break
+                    i += 1
+                del orders[:20]
+                res = await self.http.send_api_call(
+                    "/api/v5/trade/cancel-batch-orders",
+                    method="POST",
+                    signed=True,
+                    data=params,
+                )
+                ids_canceled = [int(d['ordId']) for d in res if d['sCode'] == '0']
+                orders_canceled[:] = [i for i in orders_canceled if i['orderId'] in ids_canceled]
+                binance_res.extend(orders_canceled)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
@@ -1076,6 +1132,15 @@ class Client:
             )
             # print(f"fetch_open_orders.res: {res}")
             binance_res = hbp.orders(res, response_type=response_type)
+        elif self.exchange == 'okx':
+            params = {'instType': 'SPOT'}
+            res = await self.http.send_api_call(
+                "/api/v5/trade/orders-pending",
+                signed=True,
+                **params,
+            )
+            # print(f"fetch_open_orders.res: {res}")
+            binance_res = okx.orders(res, response_type=response_type)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#all-orders-user_data

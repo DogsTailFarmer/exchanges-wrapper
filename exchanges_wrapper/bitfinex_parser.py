@@ -122,7 +122,7 @@ def exchange_info(symbols_details: [], tickers: []) -> {}:
                 "filterType": "MIN_NOTIONAL",
                 "minNotional": str(_min_notional),
                 "applyToMarket": True,
-                "avgPriceMins": 5
+                "avgPriceMins": 0
             }
 
             symbol = {

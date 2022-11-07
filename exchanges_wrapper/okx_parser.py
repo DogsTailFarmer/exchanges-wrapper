@@ -10,66 +10,69 @@ import logging
 logger = logging.getLogger('exch_srv_logger')
 
 
-def fetch_server_time(res: {}) -> {}:
-    return {'serverTime': res}
+def fetch_server_time(res: []) -> {}:
+    if res:
+        return {'serverTime': int(res[0].get('ts'))}
 
 
-def exchange_info(server_time: int, trading_symbol: []) -> {}:
+def exchange_info(server_time: int, trading_symbol: [], tickers: []) -> {}:
     symbols = []
+    symbols_price = {}
+    for pair in tickers:
+        symbols_price[pair.get('instId').replace('-', '')] = Decimal(pair.get('last'))
+
     for market in trading_symbol:
-        if not market.get('underlying'):
-            _symbol = str(market.get("symbol")).upper()
-            _base_asset = str(market.get("base-currency")).upper()
-            _quote_asset = str(market.get("quote-currency")).upper()
-            _base_asset_precision = market.get('amount-precision')
-            # Filters var
-            _tick_size = 10**(-market.get('price-precision'))
-            _min_qty = market.get('min-order-amt')
-            _max_qty = market.get('max-order-amt')
-            _step_size = 10**(-market.get('amount-precision'))
-            _min_notional = market.get('min-order-value')
+        _symbol = market.get("instId").replace('-', '')
+        _base_asset = market.get("baseCcy")
+        _quote_asset = market.get("quoteCcy")
+        _base_asset_precision = len(market.get('lotSz')) - 2
+        # Filters var
+        _tick_size = market.get('tickSz')
+        _min_qty = market.get('minSz')
+        _max_qty = market.get('maxLmtSz')
+        _step_size = market.get('lotSz')
+        _min_notional = str(Decimal(_min_qty) * symbols_price.get(_symbol))
+        _price_filter = {
+            "filterType": "PRICE_FILTER",
+            "minPrice": str(_tick_size),
+            "maxPrice": "100000.00000000",
+            "tickSize": str(_tick_size)
+        }
+        _lot_size = {
+            "filterType": "LOT_SIZE",
+            "minQty": str(_min_qty),
+            "maxQty": str(_max_qty),
+            "stepSize": str(_step_size)
+        }
+        _min_notional = {
+            "filterType": "MIN_NOTIONAL",
+            "minNotional": str(_min_notional),
+            "applyToMarket": True,
+            "avgPriceMins": 0
+        }
 
-            _price_filter = {
-                "filterType": "PRICE_FILTER",
-                "minPrice": str(_tick_size),
-                "maxPrice": "100000.00000000",
-                "tickSize": str(_tick_size)
-            }
-            _lot_size = {
-                "filterType": "LOT_SIZE",
-                "minQty": str(_min_qty),
-                "maxQty": str(_max_qty),
-                "stepSize": str(_step_size)
-            }
-            _min_notional = {
-                "filterType": "MIN_NOTIONAL",
-                "minNotional": str(_min_notional),
-                "applyToMarket": True,
-                "avgPriceMins": 5
-            }
-
-            symbol = {
-                "symbol": _symbol,
-                "status": "TRADING",
-                "baseAsset": _base_asset,
-                "baseAssetPrecision": _base_asset_precision,
-                "quoteAsset": _quote_asset,
-                "quotePrecision": _base_asset_precision,
-                "quoteAssetPrecision": _base_asset_precision,
-                "baseCommissionPrecision": 8,
-                "quoteCommissionPrecision": 8,
-                "orderTypes": ["LIMIT", "MARKET"],
-                "icebergAllowed": False,
-                "ocoAllowed": False,
-                "quoteOrderQtyMarketAllowed": False,
-                "allowTrailingStop": False,
-                "cancelReplaceAllowed": False,
-                "isSpotTradingAllowed": True,
-                "isMarginTradingAllowed": False,
-                "filters": [_price_filter, _lot_size, _min_notional],
-                "permissions": ["SPOT"],
-            }
-            symbols.append(symbol)
+        symbol = {
+            "symbol": _symbol,
+            "status": "TRADING",
+            "baseAsset": _base_asset,
+            "baseAssetPrecision": _base_asset_precision,
+            "quoteAsset": _quote_asset,
+            "quotePrecision": _base_asset_precision,
+            "quoteAssetPrecision": _base_asset_precision,
+            "baseCommissionPrecision": 8,
+            "quoteCommissionPrecision": 8,
+            "orderTypes": ["LIMIT", "MARKET"],
+            "icebergAllowed": False,
+            "ocoAllowed": False,
+            "quoteOrderQtyMarketAllowed": False,
+            "allowTrailingStop": False,
+            "cancelReplaceAllowed": False,
+            "isSpotTradingAllowed": True,
+            "isMarginTradingAllowed": False,
+            "filters": [_price_filter, _lot_size, _min_notional],
+            "permissions": ["SPOT"],
+        }
+        symbols.append(symbol)
 
     _binance_res = {
         "timezone": "UTC",
@@ -90,19 +93,20 @@ def orders(res: [], response_type=None) -> []:
 
 
 def order(res: {}, response_type=None) -> {}:
-    symbol = res.get('symbol').upper()
-    order_id = res.get('id')
+    symbol = res.get('instId').replace('-', '')
+    order_id = int(res.get('ordId'))
     order_list_id = -1
-    client_order_id = res.get('client-order-id')
-    price = res.get('price', "0")
-    orig_qty = res.get('amount', "0")
-    executed_qty = res.get('filled-amount', res.get('field-amount', "0"))
-    cummulative_quote_qty = res.get('filled-cash-amount', res.get('field-cash-amount', "0"))
+    client_order_id = res.get('clOrdId')
+    price = res.get('px', "0")
+    orig_qty = res.get('sz', "0")
+    executed_qty = res.get('accFillSz')
+    avg_filled_price = res.get('avgPx') or "0"
+    cummulative_quote_qty = str(Decimal(executed_qty) * Decimal(avg_filled_price))
     orig_quote_order_qty = str(Decimal(orig_qty) * Decimal(price))
     #
-    if res.get('state') in ('canceled', 'partial-canceled'):
+    if res.get('state') == 'canceled':
         status = 'CANCELED'
-    elif res.get('state') == 'partial-filled':
+    elif res.get('state') == 'partially_filled':
         status = 'PARTIALLY_FILLED'
     elif res.get('state') == 'filled':
         status = 'FILLED'
@@ -111,11 +115,11 @@ def order(res: {}, response_type=None) -> {}:
     #
     _type = "LIMIT"
     time_in_force = "GTC"
-    side = 'BUY' if 'buy' in res.get('type') else 'SELL'
+    side = 'BUY' if 'buy' in res.get('side') else 'SELL'
     stop_price = '0.0'
     iceberg_qty = '0.0'
-    _time = res.get('created-at')
-    update_time = res.get('canceled-at') or res.get('finished-at') or _time
+    _time = int(res.get('cTime'))
+    update_time = int(res.get('uTime'))
     is_working = True
     #
     if response_type:
@@ -173,6 +177,7 @@ def order(res: {}, response_type=None) -> {}:
         }
     # print(f"order.binance_order: {binance_order}")
     return binance_order
+###############################################################################
 
 
 def account_information(res: {}) -> {}:

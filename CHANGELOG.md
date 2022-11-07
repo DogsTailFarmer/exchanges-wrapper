@@ -3,7 +3,10 @@
 * FTX: OnFundsUpdate() did not return a result
 
 ### Added for new features
-* Binance, : OnBalanceUpdate() for autocorrect depo and initial balance
+* OnBalanceUpdate() for autocorrect depo and initial balance
+
+### Update
+* refactoring http_client module for multi exchanges purposes
 
 ## v1.2.6 2022-10-13
 ### Fixed
