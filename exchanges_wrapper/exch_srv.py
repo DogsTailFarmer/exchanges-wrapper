@@ -364,7 +364,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _locked = float(i.get('locked'))
             if _free or _locked:
                 balances.append({'asset': i.get('asset'), 'free': i.get('free'), 'locked': i.get('locked')})
-        # logger.debug(f"account_information.balances: {balances}")
+        # logger.info(f"account_information.balances: {balances}")
         for balance in balances:
             new_balance = json_format.ParseDict(balance, response_balance)
             response.balances.extend([new_balance])
@@ -394,7 +394,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                              _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.FetchOrderBookResponse()
-        limit = 1 if client.exchange == 'bitfinex' else 5
+        limit = 1 if client.exchange in ('bitfinex', 'okx') else 5
         res = await client.fetch_order_book(symbol=request.symbol, limit=limit)
         res_bids = res.get('bids', [])
         res_asks = res.get('asks', [])

@@ -177,28 +177,15 @@ def order(res: {}, response_type=None) -> {}:
         }
     # print(f"order.binance_order: {binance_order}")
     return binance_order
-###############################################################################
 
 
-def account_information(res: {}) -> {}:
+def account_information(res: [], u_time: str) -> {}:
     balances = []
-    res[:] = [i for i in res if i.get('balance') != '0']
-    assets = {}
-    for balance in res:
-        asset = balance.get('currency')
-        asset_i = assets.get(asset, {})
-        if balance.get('available'):
-            asset_i.setdefault('available', balance.get('available'))
-        else:
-            asset_i.setdefault('frozen', balance.get('balance', '0'))
-        assets.update({asset: asset_i})
-    for asset in assets:
-        free = assets.get(asset, {}).get('available', '0')
-        locked = assets.get(asset, {}).get('frozen', '0')
+    for asset in res:
         _binance_res = {
-            "asset": asset.upper(),
-            "free": free,
-            "locked": locked,
+            "asset": asset.get('ccy'),
+            "free": asset.get('availBal'),
+            "locked": asset.get('frozenBal'),
         }
         balances.append(_binance_res)
 
@@ -210,7 +197,8 @@ def account_information(res: {}) -> {}:
       "canTrade": True,
       "canWithdraw": False,
       "canDeposit": False,
-      "updateTime": int(time.time() * 1000),
+      "brokered": False,
+      "updateTime": int(u_time),
       "accountType": "SPOT",
       "balances": balances,
       "permissions": [
@@ -225,6 +213,9 @@ def order_book(res: {}) -> {}:
     binance_order_book.setdefault('bids', res.get('bids'))
     binance_order_book.setdefault('asks', res.get('asks'))
     return binance_order_book
+
+
+###############################################################################
 
 
 def order_book_ws(res: {}, symbol: str) -> {}:

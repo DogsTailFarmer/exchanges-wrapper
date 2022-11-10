@@ -7,6 +7,7 @@
 
 ### Update
 * refactoring http_client module for multi exchanges purposes
+* added _percent_price filter dummy for all parsers
 
 ## v1.2.6 2022-10-13
 ### Fixed

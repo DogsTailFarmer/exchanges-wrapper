@@ -160,6 +160,12 @@ def exchange_info(res: []) -> {}:
                 "applyToMarket": True,
                 "avgPriceMins": 5
             }
+            _percent_price = {
+                "filterType": "PERCENT_PRICE",
+                "multiplierUp": "5",
+                "multiplierDown": "0.2",
+                "avgPriceMins": 5
+            }
 
             symbol = {
                 "symbol": _symbol,
@@ -179,7 +185,7 @@ def exchange_info(res: []) -> {}:
                 "cancelReplaceAllowed": False,
                 "isSpotTradingAllowed": True,
                 "isMarginTradingAllowed": False,
-                "filters": [_price_filter, _lot_size, _min_notional],
+                "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
                 "permissions": ["SPOT"],
             }
             symbols.append(symbol)

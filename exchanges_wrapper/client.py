@@ -351,6 +351,8 @@ class Client:
             valid_limits = [1, 25, 100]
         elif self.exchange == 'huobi':
             valid_limits = [5, 10, 20]
+        elif self.exchange == 'okx':
+            valid_limits = [1, 5, 10, 20, 50, 100, 400]
         binance_res = {}
         if limit in valid_limits:
             if self.exchange == 'binance':
@@ -386,6 +388,13 @@ class Client:
                     **params
                 )
                 binance_res = hbp.order_book(res)
+            elif self.exchange == 'okx':
+                params = {'instId': self.symbol_to_okx(symbol),
+                          'sz': str(limit)}
+                res = await self.http.send_api_call("/api/v5/market/books", **params)
+                print(f"fetch_order_book.res: {res}")
+
+                # binance_res = okx.order_book(res)
         else:
             raise ValueError(
                 f"{limit} is not a valid limit. Valid limits: {valid_limits}"
@@ -1072,6 +1081,7 @@ class Client:
                 orders_canceled = []
                 params = []
                 i = 1
+                # 20 is OKX limit fo bulk orders cancel
                 for order in orders:
                     orders_canceled.append(order)
                     params.append({'instId': _symbol, 'ordId': order.get('orderId')})
@@ -1085,7 +1095,7 @@ class Client:
                     signed=True,
                     data=params,
                 )
-                ids_canceled = [int(d['ordId']) for d in res if d['sCode'] == '0']
+                ids_canceled = [int(ordr['ordId']) for ordr in res if ordr['sCode'] == '0']
                 orders_canceled[:] = [i for i in orders_canceled if i['orderId'] in ids_canceled]
                 binance_res.extend(orders_canceled)
         return binance_res
@@ -1362,6 +1372,9 @@ class Client:
         elif self.exchange == 'huobi':
             res = await self.http.send_api_call(f"v1/account/accounts/{self.hbp_account_id}/balance", signed=True)
             binance_res = hbp.account_information(res.get('list'))
+        elif self.exchange == 'okx':
+            res = await self.http.send_api_call(f"/api/v5/account/balance", signed=True)
+            binance_res = okx.account_information(res[0].get('details'), res[0].get('uTime'))
         return binance_res
 
     # https://binance-docs.github.io/apidocs/spot/en/#funding-wallet-user_data
