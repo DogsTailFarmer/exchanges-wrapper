@@ -39,6 +39,7 @@ def get_account(_account_name: str) -> ():
             #
             api_key = account['api_key']
             api_secret = account['api_secret']
+            passphrase = account.get('passphrase')
             #
             endpoint = config['endpoint'][exchange]
             #
@@ -57,7 +58,8 @@ def get_account(_account_name: str) -> ():
                    ws_public,       # 6
                    api_auth,        # 7
                    ws_auth,         # 8
-                   ws_public_mbr)   # 9
+                   ws_public_mbr,   # 9
+                   passphrase)      # 10
             break
     return res
 
@@ -73,6 +75,7 @@ class OpenClient:
             self.client = Client(
                 account[0],     # exchange
                 account[1],     # sub_account
+                account[2],     # test_net
                 account[3],     # api_key
                 account[4],     # api_secret
                 account[5],     # api_public
@@ -80,6 +83,7 @@ class OpenClient:
                 account[7],     # api_auth
                 account[8],     # ws_auth
                 account[9],     # ws_public_mbr
+                account[10],    # passphrase
             )
             self.on_order_update_queues = {}
             OpenClient.open_clients.append(self)
@@ -89,20 +93,24 @@ class OpenClient:
     @classmethod
     def get_id(cls, _account_name):
         _id = 0
-        for open_client in cls.open_clients:
-            if open_client.name == _account_name:
-                _id = id(open_client)
+        for client in cls.open_clients:
+            if client.name == _account_name:
+                _id = id(client)
                 break
         return _id
 
     @classmethod
     def get_client(cls, _id):
         _client = None
-        for open_client in cls.open_clients:
-            if id(open_client) == _id:
-                _client = open_client
+        for client in cls.open_clients:
+            if id(client) == _id:
+                _client = client
                 break
         return _client
+
+    @classmethod
+    def remove_client(cls, _account_name):
+        cls.open_clients[:] = [i for i in cls.open_clients if i.name != _account_name]
 
 
 # noinspection PyPep8Naming,PyMethodMayBeStatic
@@ -112,14 +120,12 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def OpenClientConnection(self, request: api_pb2.OpenClientConnectionRequest,
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
-        if request.trade_id:
-            logger.info(f"OpenClientConnection start trade: {request.trade_id}")
-        else:
-            logger.error("Unique identifier not specified")
+        logger.info(f"OpenClientConnection start trade: {request.account_name}:{request.trade_id}")
         client_id = OpenClient.get_id(request.account_name)
         if not client_id:
             try:
                 open_client = OpenClient(request.account_name)
+                client_id = id(open_client)
             except UserWarning:
                 _context.set_details(f"Account {request.account_name} not registered into"
                                      f" {WORK_PATH}/config/exch_srv_cfg.toml")
@@ -127,22 +133,22 @@ class Martin(api_pb2_grpc.MartinServicer):
             else:
                 try:
                     await open_client.client.load()
-                    client_id = id(open_client)
                 except asyncio.CancelledError:
                     pass  # Task cancellation should not be logged as an error
                 except Exception as ex:
                     logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
                     _context.set_details(f"{ex}")
                     _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+                    await OpenClient.get_client(client_id).client.session.close()
+                    OpenClient.remove_client(request.account_name)
+                    client_id = None
         else:
             OpenClient.get_client(client_id).client.http.rate_limit_reached = False
-        exchange = None
         if client_id:
             exchange = OpenClient.get_client(client_id).client.exchange
             # Set rate_limiter
             Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
-
-        return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
+            return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
                               _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
@@ -195,12 +201,12 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception:"
-                         f" {ex}\n{traceback.format_exc()}")
+            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
+            logger.debug(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            # logger.debug(f"FetchOpenOrders.res: {res}")
+            # logger.info(f"FetchOpenOrders.res: {res}")
             active_orders = []
             for order in res:
                 active_orders.append(order['orderId'])
@@ -227,7 +233,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                          _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        _queue = open_client.on_order_update_queues.get(request.trade_id, None)
+        _queue = open_client.on_order_update_queues.get(request.trade_id)
         response = api_pb2.FetchOrderResponse()
         try:
             res = await client.fetch_order(symbol=request.symbol,
@@ -358,7 +364,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _locked = float(i.get('locked'))
             if _free or _locked:
                 balances.append({'asset': i.get('asset'), 'free': i.get('free'), 'locked': i.get('locked')})
-        # logger.debug(f"account_information.balances: {balances}")
+        # logger.info(f"account_information.balances: {balances}")
         for balance in balances:
             new_balance = json_format.ParseDict(balance, response_balance)
             response.balances.extend([new_balance])
@@ -388,7 +394,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                              _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.FetchOrderBookResponse()
-        limit = 1 if client.exchange == 'bitfinex' else 5
+        limit = 1 if client.exchange in ('bitfinex', 'okx') else 5
         res = await client.fetch_order_book(symbol=request.symbol, limit=limit)
         res_bids = res.get('bids', [])
         res_asks = res.get('asks', [])
@@ -460,8 +466,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
-                logger.info(f"OnKlinesUpdate: Stop market stream for {open_client.name}:{request.symbol}:"
-                            f"{_intervals}")
+                logger.info(f"OnKlinesUpdate: Stop market stream for {open_client.name}:{request.symbol}:{_intervals}")
                 return
             else:
                 # logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
@@ -599,10 +604,49 @@ class Martin(api_pb2_grpc.MartinServicer):
                         content = ftx.on_funds_update(assets_balances)
                         balances_prev = assets_balances.copy()
                         _event = client.events.wrap_event(content)
-            elif isinstance(_event, events.OutboundAccountPositionWrapper):
-                logger.debug(f"OnFundsUpdate: {_event.balances.items()}")
+            if isinstance(_event, events.OutboundAccountPositionWrapper):
+                logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
                 yield response
+
+    async def OnBalanceUpdate(self, request: api_pb2.MarketRequest,
+                              _context: grpc.aio.ServicerContext) -> api_pb2.OnBalanceUpdateResponse:
+        response = api_pb2.OnBalanceUpdateResponse()
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
+        _queue = asyncio.Queue(MAX_QUEUE_SIZE)
+        client.stream_queue[request.trade_id] |= {_queue}
+        if client.exchange == 'binance':
+            client.events.register_user_event(functools.partial(
+                event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
+        while True:
+            try:
+                _event = await asyncio.wait_for(_queue.get(), timeout=HEARTBEAT * 10)
+            except asyncio.TimeoutError:
+                _event = None
+            if isinstance(_event, str) and _event == request.trade_id:
+                client.stream_queue.get(request.trade_id, set()).discard(_queue)
+                logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}:{request.symbol}")
+                return
+            if client.exchange in ('bitfinex', 'huobi', 'ftx'):
+                try:
+                    balance = await client.fetch_ledgers(request.symbol)
+                except Exception as _ex:
+                    logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
+                else:
+                    if balance:
+                        _event = client.events.wrap_event(balance)
+            if isinstance(_event, events.BalanceUpdateWrapper):
+                logger.debug(f"OnBalanceUpdate: {_event.event_time}:{_event.asset}:{_event.balance_delta}")
+                if _event.asset in request.symbol:
+                    balance = {
+                        "event_time": _event.event_time,
+                        "asset": _event.asset,
+                        "balance_delta": _event.balance_delta,
+                        "clear_time": _event.clear_time
+                    }
+                    response.balance = json.dumps(balance)
+                    yield response
 
     async def OnOrderUpdate(self, request: api_pb2.MarketRequest,
                             _context: grpc.aio.ServicerContext) -> api_pb2.OnOrderUpdateResponse:
@@ -682,8 +726,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
         except Exception as ex:
-            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception:"
-                         f" {ex}\n{traceback.format_exc()}")
+            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
+            logger.debug(f"CreateLimitOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:

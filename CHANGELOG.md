@@ -1,3 +1,14 @@
+## v1.2.6-1 2022-11-11
+### Fixed
+* FTX: OnFundsUpdate() did not return a result
+
+### Added for new features
+* OnBalanceUpdate() for autocorrect depo and initial balance
+
+### Update
+* refactoring http_client module for multi exchanges purposes
+* added _percent_price filter dummy for all parsers
+
 ## v1.2.6 2022-10-13
 ### Fixed
 * Huobi Restart WSS for PING timeout, 20s for market and 60s for user streams

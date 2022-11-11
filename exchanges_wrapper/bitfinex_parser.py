@@ -122,6 +122,12 @@ def exchange_info(symbols_details: [], tickers: []) -> {}:
                 "filterType": "MIN_NOTIONAL",
                 "minNotional": str(_min_notional),
                 "applyToMarket": True,
+                "avgPriceMins": 0
+            }
+            _percent_price = {
+                "filterType": "PERCENT_PRICE",
+                "multiplierUp": "5",
+                "multiplierDown": "0.2",
                 "avgPriceMins": 5
             }
 
@@ -143,7 +149,7 @@ def exchange_info(symbols_details: [], tickers: []) -> {}:
                 "cancelReplaceAllowed": False,
                 "isSpotTradingAllowed": True,
                 "isMarginTradingAllowed": False,
-                "filters": [_price_filter, _lot_size, _min_notional],
+                "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
                 "permissions": ["SPOT"],
             }
             symbols.append(symbol)
@@ -494,6 +500,17 @@ def on_funds_update(res: []) -> {}:
             funds.append(balance)
     binance_funds['B'] = funds
     return binance_funds
+
+
+def on_balance_update(res: []) -> {}:
+    balance = {
+        'e': 'balanceUpdate',
+        'E': res[3],
+        'a': res[1],
+        'd': res[5],
+        'T': int(time.time() * 1000)
+    }
+    return balance
 
 
 def on_order_update(res: [], last_event: tuple) -> {}:

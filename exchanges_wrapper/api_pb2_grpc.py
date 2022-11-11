@@ -94,6 +94,11 @@ class MartinStub(object):
                 request_serializer=exchanges__wrapper_dot_api__pb2.OnFundsUpdateRequest.SerializeToString,
                 response_deserializer=exchanges__wrapper_dot_api__pb2.OnFundsUpdateResponse.FromString,
                 )
+        self.OnBalanceUpdate = channel.unary_stream(
+                '/martin.Martin/OnBalanceUpdate',
+                request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
+                response_deserializer=exchanges__wrapper_dot_api__pb2.OnBalanceUpdateResponse.FromString,
+                )
         self.OnOrderUpdate = channel.unary_stream(
                 '/martin.Martin/OnOrderUpdate',
                 request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
@@ -230,6 +235,12 @@ class MartinServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def OnBalanceUpdate(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def OnOrderUpdate(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -354,6 +365,11 @@ def add_MartinServicer_to_server(servicer, server):
                     servicer.OnFundsUpdate,
                     request_deserializer=exchanges__wrapper_dot_api__pb2.OnFundsUpdateRequest.FromString,
                     response_serializer=exchanges__wrapper_dot_api__pb2.OnFundsUpdateResponse.SerializeToString,
+            ),
+            'OnBalanceUpdate': grpc.unary_stream_rpc_method_handler(
+                    servicer.OnBalanceUpdate,
+                    request_deserializer=exchanges__wrapper_dot_api__pb2.MarketRequest.FromString,
+                    response_serializer=exchanges__wrapper_dot_api__pb2.OnBalanceUpdateResponse.SerializeToString,
             ),
             'OnOrderUpdate': grpc.unary_stream_rpc_method_handler(
                     servicer.OnOrderUpdate,
@@ -669,6 +685,23 @@ class Martin(object):
         return grpc.experimental.unary_stream(request, target, '/martin.Martin/OnFundsUpdate',
             exchanges__wrapper_dot_api__pb2.OnFundsUpdateRequest.SerializeToString,
             exchanges__wrapper_dot_api__pb2.OnFundsUpdateResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def OnBalanceUpdate(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(request, target, '/martin.Martin/OnBalanceUpdate',
+            exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
+            exchanges__wrapper_dot_api__pb2.OnBalanceUpdateResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
