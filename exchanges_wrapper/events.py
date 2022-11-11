@@ -20,7 +20,7 @@ class Handlers(list):
         for func in self:
             try:
                 _trade_id = func.args[2]
-            except Exception as ex:
+            except Exception as ex:  # skipcq: PYL-W0703
                 logger.warning(f"Handlers error when try get trade_id: {ex}")
             if trade_id is None or trade_id == _trade_id:
                 if asyncio.iscoroutinefunction(func):
