@@ -593,7 +593,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             if client.exchange == 'ftx':
                 try:
                     account_information = await client.fetch_account_information(receive_window=None)
-                except (asyncio.exceptions.TimeoutError, errors.HTTPError, Exception) as _ex:
+                except Exception as _ex:  # skipcq: PYL-W0703
                     logger.warning(f"OnFundsUpdate: for {open_client.name}"
                                    f" {request.base_asset}/{request.quote_asset}: {_ex}")
                 else:

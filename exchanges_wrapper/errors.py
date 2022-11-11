@@ -14,7 +14,7 @@ class ExchangeError(ExchangePyError):
 
 
 class QueryCanceled(ExchangePyError):
-    pass
+    message = "Rate limit reached, to avoid an IP ban, this query has been cancelled"
 
 
 class HTTPError(ExchangePyError):

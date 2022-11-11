@@ -19,6 +19,8 @@ from exchanges_wrapper.errors import (
 
 logger = logging.getLogger('exch_srv_logger')
 
+AJ = 'application/json'
+
 
 class HttpClient:
     def __init__(self, **kwargs):
@@ -67,7 +69,14 @@ class HttpClient:
         else:
             raise HTTPError(f"API request failed: {payload}")
 
-    async def send_api_call(self, *args, **kwargs):
+    async def send_api_call(self,
+                            path,
+                            method="GET",
+                            signed=False,
+                            send_api_key=True,
+                            endpoint=None,
+                            timeout=None,
+                            **kwargs):
         pass  # meant to be overridden in a subclass
 
 
@@ -82,7 +91,7 @@ class ClientBinance(HttpClient):
                             timeout=None,
                             **kwargs):
         if self.rate_limit_reached:
-            raise QueryCanceled("Rate limit reached, to avoid an IP ban, this query has been cancelled")
+            raise QueryCanceled(QueryCanceled.message)
         _endpoint = endpoint or self.endpoint
         url = f'{_endpoint}{path}'
         query_kwargs = dict({"headers": {"User-Agent": self.user_agent}}, **kwargs)
@@ -90,7 +99,7 @@ class ClientBinance(HttpClient):
             query_kwargs["headers"]["X-MBX-APIKEY"] = self.api_key
         if signed:
             content = str()
-            query_kwargs["headers"]["Content-Type"] = 'application/json'
+            query_kwargs["headers"]["Content-Type"] = AJ
             location = "params" if "params" in kwargs else "data"
             query_kwargs[location]["timestamp"] = str(int(time.time() * 1000))
             if "params" in kwargs:
@@ -117,13 +126,13 @@ class ClientBFX(HttpClient):
                             timeout=None,
                             **kwargs):
         if self.rate_limit_reached:
-            raise QueryCanceled("Rate limit reached, to avoid an IP ban, this query has been cancelled")
+            raise QueryCanceled(QueryCanceled.message)
         _endpoint = endpoint or self.endpoint
         content = str()
         bfx_post = self.exchange == 'bitfinex' and ((method == 'POST' and kwargs) or "params" in kwargs)
         _params = json.dumps(kwargs) if bfx_post else None
         url = f'{_endpoint}/{path}'
-        query_kwargs = {"headers": {"Accept": 'application/json'}}
+        query_kwargs = {"headers": {"Accept": AJ}}
         content += urlencode(kwargs, safe='/')
         if content and not bfx_post:
             url += f'?{content}'
@@ -131,7 +140,7 @@ class ClientBFX(HttpClient):
             query_kwargs.update({'data': _params})
         if signed:
             ts = int(time.time() * 1000)
-            query_kwargs["headers"]["Content-Type"] = 'application/json'
+            query_kwargs["headers"]["Content-Type"] = AJ
             if bfx_post:
                 query_kwargs.update({'data': _params})
             if send_api_key:
@@ -156,15 +165,16 @@ class ClientFTX(HttpClient):
                             path,
                             method="GET",
                             signed=False,
+                            send_api_key=None,
                             endpoint=None,
                             timeout=None,
                             **kwargs):
         if self.rate_limit_reached:
-            raise QueryCanceled("Rate limit reached, to avoid an IP ban, this query has been cancelled")
+            raise QueryCanceled(QueryCanceled.message)
         content = str()
         _params = json.dumps(kwargs) if method == 'POST' else None
         url = f'{endpoint or self.endpoint}/{path}'
-        query_kwargs = {"headers": {"Accept": 'application/json'}}
+        query_kwargs = {"headers": {"Accept": AJ}}
         query_kwargs["headers"]["FTX-KEY"] = self.api_key
         if self.sub_account:
             query_kwargs["headers"]["FTX-SUBACCOUNT"] = self.sub_account
@@ -173,7 +183,7 @@ class ClientFTX(HttpClient):
             url += f'?{content}'
         if signed and self.exchange != 'huobi':
             ts = int(time.time() * 1000)
-            query_kwargs["headers"]["Content-Type"] = 'application/json'
+            query_kwargs["headers"]["Content-Type"] = AJ
             if method == 'POST':
                 query_kwargs.update({'data': _params})
                 content = f"{_params}"
@@ -199,11 +209,12 @@ class ClientHBP(HttpClient):
                             path,
                             method="GET",
                             signed=False,
+                            send_api_key=None,
                             endpoint=None,
                             timeout=None,
                             **kwargs):
         if self.rate_limit_reached:
-            raise QueryCanceled("Rate limit reached, to avoid an IP ban, this query has been cancelled")
+            raise QueryCanceled(QueryCanceled.message)
         _endpoint = endpoint or self.endpoint
         query_kwargs = {}
         _params = {}
@@ -240,11 +251,12 @@ class ClientOKX(HttpClient):
                             path,
                             method="GET",
                             signed=False,
+                            send_api_key=None,
                             endpoint=None,
                             timeout=None,
                             **kwargs):
         if self.rate_limit_reached:
-            raise QueryCanceled("Rate limit reached, to avoid an IP ban, this query has been cancelled")
+            raise QueryCanceled(QueryCanceled.message)
         _endpoint = endpoint or self.endpoint
         params = None
         query_kwargs = None
@@ -260,7 +272,7 @@ class ClientOKX(HttpClient):
                 signature_payload = f"{ts}{method}{path}"
             signature = generate_signature(self.exchange, self.api_secret, signature_payload)
             params = {
-                "Content-Type": 'application/json',
+                "Content-Type": AJ,
                 "OK-ACCESS-KEY": self.api_key,
                 "OK-ACCESS-SIGN": signature,
                 "OK-ACCESS-PASSPHRASE": self.passphrase,

@@ -394,7 +394,6 @@ class Client:
                 res = await self.http.send_api_call("/api/v5/market/books", **params)
                 print(f"fetch_order_book.res: {res}")
 
-                # binance_res = okx.order_book(res)
         else:
             raise ValueError(
                 f"{limit} is not a valid limit. Valid limits: {valid_limits}"
@@ -414,7 +413,7 @@ class Client:
                           'category': i,
                           'start': (int(time.time()) - 60) * 1000}
                 _res = await self.http.send_api_call(
-                    f"v2/auth/r/ledgers/hist",
+                    "v2/auth/r/ledgers/hist",
                     method="POST",
                     signed=True,
                     **params
@@ -1373,7 +1372,7 @@ class Client:
             res = await self.http.send_api_call(f"v1/account/accounts/{self.hbp_account_id}/balance", signed=True)
             binance_res = hbp.account_information(res.get('list'))
         elif self.exchange == 'okx':
-            res = await self.http.send_api_call(f"/api/v5/account/balance", signed=True)
+            res = await self.http.send_api_call("/api/v5/account/balance", signed=True)
             binance_res = okx.account_information(res[0].get('details'), res[0].get('uTime'))
         return binance_res
 
