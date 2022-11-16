@@ -20,7 +20,7 @@ class Handlers(list):
         for func in self:
             try:
                 _trade_id = func.args[2]
-            except Exception as ex:
+            except Exception as ex:  # skipcq: PYL-W0703
                 logger.warning(f"Handlers error when try get trade_id: {ex}")
             if trade_id is None or trade_id == _trade_id:
                 if asyncio.iscoroutinefunction(func):
@@ -49,6 +49,8 @@ class Events:
             event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         elif exchange == 'bitfinex':
             event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
+        elif exchange == 'okx':
+            event_type = f"{event_type.split('@')[0].replace('-', '').lower()}@{event_type.split('@')[1]}"
         self.handlers[event_type].append(listener)
         logger.debug(f"register_event: registered_streams{self.registered_streams}")
 

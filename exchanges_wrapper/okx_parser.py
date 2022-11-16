@@ -20,7 +20,6 @@ def exchange_info(server_time: int, trading_symbol: [], tickers: []) -> {}:
     symbols_price = {}
     for pair in tickers:
         symbols_price[pair.get('instId').replace('-', '')] = Decimal(pair.get('last'))
-
     for market in trading_symbol:
         _symbol = market.get("instId").replace('-', '')
         _base_asset = market.get("baseCcy")
@@ -50,6 +49,12 @@ def exchange_info(server_time: int, trading_symbol: [], tickers: []) -> {}:
             "applyToMarket": True,
             "avgPriceMins": 0
         }
+        _percent_price = {
+            "filterType": "PERCENT_PRICE",
+            "multiplierUp": "5",
+            "multiplierDown": "0.2",
+            "avgPriceMins": 5
+        }
 
         symbol = {
             "symbol": _symbol,
@@ -69,7 +74,7 @@ def exchange_info(server_time: int, trading_symbol: [], tickers: []) -> {}:
             "cancelReplaceAllowed": False,
             "isSpotTradingAllowed": True,
             "isMarginTradingAllowed": False,
-            "filters": [_price_filter, _lot_size, _min_notional],
+            "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
             "permissions": ["SPOT"],
         }
         symbols.append(symbol)
@@ -209,11 +214,153 @@ def account_information(res: [], u_time: str) -> {}:
 
 
 def order_book(res: {}) -> {}:
-    binance_order_book = {"lastUpdateId": res.get('ts')}
-    binance_order_book.setdefault('bids', res.get('bids'))
-    binance_order_book.setdefault('asks', res.get('asks'))
+    asks = []
+    bids = []
+    binance_order_book = {"lastUpdateId": int(res.get('ts'))}
+    [asks.append(ask[:2]) for ask in res.get('asks')]
+    binance_order_book.setdefault('asks', asks)
+    [bids.append(bid[:2]) for bid in res.get('bids')]
+    binance_order_book.setdefault('bids', bids)
     return binance_order_book
 
+
+def ticker_price_change_statistics(res: {}) -> {}:
+    price_change = str(Decimal(res.get('last')) - Decimal(res.get('open24h')))
+    price_change_percent = str(100 * (Decimal(res.get('last')) - Decimal(res.get('open24h'))) /
+                               Decimal(res.get('open24h')))
+    close_time = int(res.get('ts'))
+    open_time = close_time - 60 * 60 * 24
+    binance_price_ticker = {
+        "symbol": res.get('instId').replace('-', ''),
+        "priceChange": price_change,
+        "priceChangePercent": price_change_percent,
+        "weightedAvgPrice": str(Decimal(res.get('volCcy24h')) / Decimal(res.get('vol24h'))),
+        "prevClosePrice": res.get('open24h'),
+        "lastPrice": res.get('last'),
+        "lastQty": res.get('lastSz'),
+        "bidPrice": res.get('bidPx'),
+        "bidQty": res.get('bidSz'),
+        "askPrice": res.get('askPx'),
+        "askQty": res.get('askSz'),
+        "openPrice": res.get('open24h'),
+        "highPrice": res.get('high24h'),
+        "lowPrice": res.get('low24h'),
+        "volume": res.get('vol24h'),
+        "quoteVolume": res.get('volCcy24h'),
+        "openTime": open_time,
+        "closeTime": close_time,
+        "firstId": 0,
+        "lastId": 1,
+        "count": 1,
+    }
+    return binance_price_ticker
+
+
+def ticker(res: {}) -> {}:
+    symbol = res.get('instId').replace('-', '')
+    msg_binance = {
+        'stream': f"{symbol.lower()}@miniTicker",
+        'data': {
+            "e": "24hrMiniTicker",
+            "E": int(int(res.get('ts')) / 1000),
+            "s": symbol,
+            "c": str(res.get('last')),
+            "o": str(res.get('open24h')),
+            "h": str(res.get('high24h')),
+            "l": str(res.get('low24h')),
+            "v": str(res.get('vol24h')),
+            "q": str(res.get('volCcy24h'))
+        }
+    }
+    return msg_binance
+
+
+def interval(_interval: str) -> str:
+    resolution = {
+        '1m': '1m',
+        '3m': '3m',
+        '5m': '5m',
+        '15m': '15m',
+        '30m': '30m',
+        '1h': '1H',
+        '2h': '2H',
+        '4h': '4H',
+        '1d': '1Dutc',
+        '1w': '1Wutc',
+        '1M': '1Mutc'
+    }
+    return resolution.get(_interval, 0)
+
+
+def klines(res: [], _interval: str) -> []:
+    binance_klines = []
+    for i in res:
+        start_time = int(i[0])
+        _candle = [
+            start_time,
+            i[1],
+            i[2],
+            i[3],
+            i[4],
+            i[5],
+            start_time + interval2value(_interval) * 1000 - 1,
+            i[6],
+            1,
+            '0.0',
+            '0.0',
+            '0.0',
+        ]
+        binance_klines.append(_candle)
+    return binance_klines
+
+
+def interval2value(_interval: str) -> int:
+    resolution = {
+        '1m': 60,
+        '3m': 60 * 3,
+        '5m': 60 * 5,
+        '15m': 60 * 15,
+        '30m': 60 * 30,
+        '1H': 60 * 60,
+        '2H': 60 * 60 * 2,
+        '4H': 60 * 60 * 4,
+        '1Dutc': 60 * 60 * 24,
+        '1Wutc': 60 * 60 * 24 * 7,
+        '1Mutc': 60 * 60 * 24 * 31
+    }
+    return resolution.get(_interval, 0)
+
+
+def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
+    symbol = symbol.replace('-', '').lower()
+    start_time = int(res[0])
+    _interval = ch_type.replace('kline_', '')
+    end_time = start_time + interval2value(interval(_interval)) * 1000 - 1
+    binance_candle = {
+        'stream': f"{symbol}@{ch_type}",
+        'data': {'e': 'kline',
+                 'E': int(time.time()),
+                 's': symbol.upper(),
+                 'k': {
+                     't': start_time,
+                     'T': end_time,
+                     's': symbol.upper(),
+                     'i': _interval,
+                     'f': 100,
+                     'L': 200,
+                     'o': res[1],
+                     'c': res[4],
+                     'h': res[2],
+                     'l': res[3],
+                     'v': res[5],
+                     'n': 1,
+                     'x': False,
+                     'q': res[6],
+                     'V': '0.0',
+                     'Q': '0.0',
+                     'B': '0'}}
+    }
+    return binance_candle
 
 ###############################################################################
 
@@ -235,136 +382,6 @@ def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
         "symbol": symbol,
         "price": str(res.get('data')[0].get('price'))
     }
-
-
-def ticker_price_change_statistics(res: {}, symbol) -> {}:
-    binance_price_ticker = {
-        "symbol": symbol,
-        "priceChange": str(res.get('close') - res.get('open')),
-        "priceChangePercent": str(100 * (res.get('close') - res.get('open')) / res.get('open')),
-        "weightedAvgPrice": "0.0",
-        "prevClosePrice": str(res.get('open')),
-        "lastPrice": str(res.get('close')),
-        "lastQty": "0.0",
-        "bidPrice": "0",
-        "bidQty": "0.0",
-        "askPrice": "0",
-        "askQty": "0.00",
-        "openPrice": str(res.get('open')),
-        "highPrice": str(res.get('high')),
-        "lowPrice": str(res.get('low')),
-        "volume": str(res.get('vol')),
-        "quoteVolume": "0.0",
-        "openTime": int(time.time() * 1000) - 60 * 60 * 24,
-        "closeTime": int(time.time() * 1000),
-        "firstId": 0,
-        "lastId": res.get('id'),
-        "count": res.get('count'),
-    }
-    return binance_price_ticker
-
-
-def ticker(res: {}, symbol: str = None) -> {}:
-    tick = res.get('tick')
-    msg_binance = {
-        'stream': f"{symbol}@miniTicker",
-        'data': {
-            "e": "24hrMiniTicker",
-            "E": int(res.get('ts') / 1000),
-            "s": symbol.upper(),
-            "c": str(tick.get('lastPrice')),
-            "o": str(tick.get('open')),
-            "h": str(tick.get('high')),
-            "l": str(tick.get('low')),
-            "v": str(tick.get('amount')),
-            "q": str(tick.get('vol'))
-        }
-    }
-    return msg_binance
-
-
-def interval(_interval: str) -> str:
-    resolution = {
-        '1m': '1min',
-        '5m': '5min',
-        '15m': '15min',
-        '30m': '30min',
-        '1h': '60min',
-        '4h': '4hour',
-        '1d': '1day',
-        '1w': '1week',
-        '1M': '1mon'
-    }
-    return resolution.get(_interval, 0)
-
-
-def interval2value(_interval: str) -> int:
-    resolution = {
-        '1min': 60,
-        '5min': 5 * 60,
-        '15min': 15 * 60,
-        '30min': 30 * 60,
-        '60min': 60 * 60,
-        '4hour': 4 * 60 * 60,
-        '1day': 24 * 60 * 60,
-        '1week': 7 * 24 * 60 * 60,
-        '1mon': 31 * 24 * 60 * 60
-    }
-    return resolution.get(_interval, 0)
-
-
-def klines(res: [], _interval: str) -> []:
-    binance_klines = []
-    for i in res:
-        start_time = i.get('id') * 1000
-        _candle = [
-            start_time,
-            str(i.get('open')),
-            str(i.get('high')),
-            str(i.get('low')),
-            str(i.get('close')),
-            str(i.get('amount')),
-            start_time + interval2value(_interval) * 1000 - 1,
-            str(i.get('vol')),
-            i.get('count'),
-            '0.0',
-            '0.0',
-            '0.0',
-        ]
-        binance_klines.append(_candle)
-    return binance_klines
-
-
-def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
-    tick = res.get('tick')
-    start_time = tick.get('id')
-    _interval = ch_type.split('_')[1]
-    end_time = start_time + interval2value(interval(_interval)) * 1000 - 1
-    binance_candle = {
-        'stream': f"{symbol}@{ch_type}",
-        'data': {'e': 'kline',
-                 'E': int(time.time()),
-                 's': symbol.upper(),
-                 'k': {
-                     't': start_time,
-                     'T': end_time,
-                     's': symbol.upper(),
-                     'i': _interval,
-                     'f': 100,
-                     'L': 200,
-                     'o': str(tick.get('open')),
-                     'c': str(tick.get('close')),
-                     'h': str(tick.get('high')),
-                     'l': str(tick.get('low')),
-                     'v': str(tick.get('amount')),
-                     'n': tick.get('count'),
-                     'x': False,
-                     'q': str(tick.get('vol')),
-                     'V': '0.0',
-                     'Q': '0.0',
-                     'B': '0'}}
-    }
-    return binance_candle
 
 
 def on_funds_update(res: {}) -> {}:
@@ -474,7 +491,6 @@ def account_trade_list(res: []) -> []:
         }
         binance_trade_list.append(binance_trade)
     return binance_trade_list
-###############################################################################
 
 
 def get_symbols(symbols_details: []) -> str:

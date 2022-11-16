@@ -1,4 +1,4 @@
-## v1.2.x 2022-mm-dd
+## v1.2.6-1 2022-11-11
 ### Fixed
 * FTX: OnFundsUpdate() did not return a result
 

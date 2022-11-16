@@ -137,6 +137,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     pass  # Task cancellation should not be logged as an error
                 except Exception as ex:
                     logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
+                    logger.debug(f"Exception traceback: {traceback.format_exc()}")
                     _context.set_details(f"{ex}")
                     _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
                     await OpenClient.get_client(client_id).client.session.close()
@@ -435,7 +436,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         except Exception as _ex:
             logger.error(f"FetchKlines for {request.symbol} interval: {request.interval}, exception: {_ex}")
         else:
-            # logger.debug(res)
+            # logger.info(f"FetchKlines.res: {res}")
             for candle in res:
                 response.klines.append(json.dumps(candle))
         return response
@@ -453,6 +454,9 @@ class Martin(api_pb2_grpc.MartinServicer):
         if client.exchange == 'bitfinex':
             exchange = 'bitfinex'
             _symbol = client.symbol_to_bfx(request.symbol)
+        elif client.exchange == 'okx':
+            exchange = 'okx'
+            _symbol = client.symbol_to_okx(request.symbol)
         else:
             exchange = 'huobi' if client.exchange == 'huobi' else 'binance'
             _symbol = request.symbol.lower()
@@ -513,7 +517,9 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
         client.stream_queue[request.trade_id] |= {_queue}
-        if client.exchange == 'ftx':
+        if client.exchange == 'okx':
+            _symbol = client.symbol_to_okx(request.symbol)
+        elif client.exchange == 'ftx':
             _symbol = client.symbol_to_ftx(request.symbol)
         elif client.exchange == 'bitfinex':
             _symbol = client.symbol_to_bfx(request.symbol)
@@ -593,7 +599,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             if client.exchange == 'ftx':
                 try:
                     account_information = await client.fetch_account_information(receive_window=None)
-                except (asyncio.exceptions.TimeoutError, errors.HTTPError, Exception) as _ex:
+                except Exception as _ex:  # skipcq: PYL-W0703
                     logger.warning(f"OnFundsUpdate: for {open_client.name}"
                                    f" {request.base_asset}/{request.quote_asset}: {_ex}")
                 else:

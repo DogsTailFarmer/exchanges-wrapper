@@ -176,7 +176,6 @@ class Client:
     async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
         start_list = []
-        logger.debug(f"Start '{self.exchange}' market events listener: ({', '.join(_events)}) for {_trade_id}")
         if self.exchange == 'binance':
             _endpoint = BINANCE_ENDPOINT_WS
             market_data_stream = MarketEventsDataStream(self, _endpoint, self.user_agent, self.exchange, _trade_id)
@@ -392,9 +391,7 @@ class Client:
                 params = {'instId': self.symbol_to_okx(symbol),
                           'sz': str(limit)}
                 res = await self.http.send_api_call("/api/v5/market/books", **params)
-                print(f"fetch_order_book.res: {res}")
-
-                # binance_res = okx.order_book(res)
+                binance_res = okx.order_book(res[0])
         else:
             raise ValueError(
                 f"{limit} is not a valid limit. Valid limits: {valid_limits}"
@@ -414,7 +411,7 @@ class Client:
                           'category': i,
                           'start': (int(time.time()) - 60) * 1000}
                 _res = await self.http.send_api_call(
-                    f"v2/auth/r/ledgers/hist",
+                    "v2/auth/r/ledgers/hist",
                     method="POST",
                     signed=True,
                     **params
@@ -526,9 +523,9 @@ class Client:
             interval = ftx.interval(interval)
         elif self.exchange == 'huobi':
             interval = hbp.interval(interval)
-        if (not interval or
-                (self.exchange == 'bitfinex' and
-                 interval not in ('1m', '5m', '15m', '30m', '1h', '3h', '6h', '12h', '1D', '1W', '14D', '1M'))):
+        elif self.exchange == 'okx':
+            interval = okx.interval(interval)
+        if not interval:
             raise ValueError("This query requires correct interval value")
 
         binance_res = []
@@ -586,6 +583,13 @@ class Client:
             )
             # print(f"fetch_klines.res: {res[::-1]}")
             binance_res = hbp.klines(res[::-1], interval)
+        elif self.exchange == 'okx':
+            params = {'instId': self.symbol_to_okx(symbol),
+                      'bar': interval,
+                      'limit': str(min(limit, 300))}
+            res = await self.http.send_api_call("/api/v5/market/candles", **params)
+            res.sort(reverse=False)
+            binance_res = okx.klines(res, interval)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-average-price
@@ -640,6 +644,11 @@ class Client:
                 **params
             )
             binance_res = hbp.ticker_price_change_statistics(res, symbol)
+        elif self.exchange == 'okx':
+            params = {'instId': self.symbol_to_okx(symbol)}
+            res = await self.http.send_api_call("/api/v5/market/ticker", **params)
+            # print(f"fetch_ticker_price_change_statistics: res: {res}")
+            binance_res = okx.ticker_price_change_statistics(res[0])
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-price-ticker
@@ -1373,7 +1382,7 @@ class Client:
             res = await self.http.send_api_call(f"v1/account/accounts/{self.hbp_account_id}/balance", signed=True)
             binance_res = hbp.account_information(res.get('list'))
         elif self.exchange == 'okx':
-            res = await self.http.send_api_call(f"/api/v5/account/balance", signed=True)
+            res = await self.http.send_api_call("/api/v5/account/balance", signed=True)
             binance_res = okx.account_information(res[0].get('details'), res[0].get('uTime'))
         return binance_res
 
