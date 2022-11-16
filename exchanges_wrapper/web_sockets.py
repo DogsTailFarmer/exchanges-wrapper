@@ -157,7 +157,15 @@ class EventsDataStream:
                         await self._handle_event(msg_data, symbol, ch_type, order_book)
             elif self.exchange == 'huobi':
                 # print(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-                if msg_data.get('ping'):
+                if msg_data.get('tick') or msg_data.get('data'):
+                    if ch_type == 'ticker':
+                        _price = msg_data.get('tick', {}).get('lastPrice', None)
+                        if price != _price:
+                            price = _price
+                            await self._handle_event(msg_data, symbol, ch_type)
+                    else:
+                        await self._handle_event(msg_data, symbol, ch_type)
+                elif msg_data.get('ping'):
                     await self.web_socket.send_json({"pong": msg_data.get('ping')})
                 elif msg_data.get('action') == 'ping':
                     pong = {
@@ -173,14 +181,6 @@ class EventsDataStream:
                       msg_data.get('code') == 500 and
                       msg_data.get('message') == '系统异常:'):
                     raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} WSS")
-                elif msg_data.get('tick') or msg_data.get('data'):
-                    if ch_type == 'ticker':
-                        _price = msg_data.get('tick', {}).get('lastPrice', None)
-                        if price != _price:
-                            price = _price
-                            await self._handle_event(msg_data, symbol, ch_type)
-                    else:
-                        await self._handle_event(msg_data, symbol, ch_type)
                 else:
                     logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
@@ -217,16 +217,13 @@ class MarketEventsDataStream(EventsDataStream):
                 self.web_socket = await self.session.ws_connect(self.endpoint,
                                                                 receive_timeout=29,
                                                                 proxy=self.client.proxy)
-
                 if ch_type == 'miniTicker':
                     _ch_type = 'tickers'
                 elif 'kline_' in ch_type:
                     _ch_type = (f"{ch_type.split('_')[0].replace('kline', 'candle')}"
                                 f"{okx.interval(ch_type.split('_')[1])}")
-
-                # elif ch_type == 'depth5':
-                #     ch_type = 'orderbook'
-
+                elif ch_type == 'depth5':
+                    _ch_type = 'books5'
                 else:
                     _ch_type = None
 
@@ -235,7 +232,6 @@ class MarketEventsDataStream(EventsDataStream):
                                      "instId": symbol}
                                     ]
                            }
-
                 await self.web_socket.send_json(request)
                 _task = asyncio.ensure_future(self._heartbeat_ftx())
                 try:
@@ -331,7 +327,8 @@ class MarketEventsDataStream(EventsDataStream):
                 content = okx.ticker(content)
             elif 'kline_' in ch_type:
                 content = okx.candle(content, symbol, ch_type)
-
+            if ch_type == 'depth5':
+                content = okx.order_book_ws(content, symbol)
         #
         stream_name = None
         if isinstance(content, dict) and "stream" in content:
@@ -480,6 +477,67 @@ class BfxPrivateEventsDataStream(EventsDataStream):
     async def _handle_event(self, msg_data, *args):
         self.try_count = 0
         logger.debug(f"USER_handle_event.msg_data: {msg_data}")
+        content = None
+        if msg_data[1] in ('wu', 'ws'):
+            content = bfx.on_funds_update(msg_data[2])
+        elif msg_data[1] == 'oc':
+            order_id = msg_data[2][0]
+            last_event = self.client.active_orders.get(order_id, {}).get('lastEvent', ())
+            content = bfx.on_order_update(msg_data[2], last_event)
+            if msg_data[2][13] == 'CANCELED':
+                self.client.active_orders.get(order_id, {}).update({'cancelled': True})
+        elif msg_data[1] == 'te':
+            order_id = msg_data[2][3]
+            if self.client.active_orders.get(order_id, None) is None:
+                self.client.wss_buffer.setdefault(order_id, [])
+                self.client.wss_buffer[order_id].append(msg_data[2])
+            else:
+                orig_qty = Decimal(self.client.active_orders[order_id]['origQty'])
+                last_qty = str(abs(msg_data[2][4]))
+                executed_qty = self.client.active_orders[order_id]['executedQty']
+                self.client.active_orders[order_id]['executedQty'] = executed_qty = str(Decimal(executed_qty) +
+                                                                                        Decimal(last_qty))
+                if Decimal(executed_qty) >= orig_qty:
+                    self.client.active_orders[order_id]['lastEvent'] = (msg_data[2][0], last_qty, str(msg_data[2][5]))
+                else:
+                    executed_qty = self.client.active_orders.get(order_id, {}).get('executedQty', '0')
+                    content = bfx.on_order_trade(msg_data[2], executed_qty)
+        if content:
+            await self.client.events.wrap_event(content).fire(self.trade_id)
+
+
+class OkxPrivateEventsDataStream(EventsDataStream):
+
+    async def stop(self):
+        """
+        Stop data stream
+        """
+        if self.web_socket:
+            await self.web_socket.close()
+
+    async def start_wss(self):
+        self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=29, proxy=self.client.proxy)
+        ts = int(time.time())
+        signature_payload = f"{ts}GET/users/self/verify"
+        signature = generate_signature(self.exchange, self.client.api_secret, signature_payload)
+
+        request = {"op": 'login',
+                   "args": [{"apiKey": self.client.api_key,
+                             "passphrase": self.client.passphrase,
+                             "timestamp": ts,
+                             "sign": signature}
+                            ]
+                   }
+        await self.web_socket.send_json(request)
+
+        msg = await self.web_socket.receive()
+
+        print(f"start_wss: {msg.type}: {msg.data}")
+
+    async def _handle_event(self, msg_data, *args):
+        self.try_count = 0
+        # logger.debug(f"USER_handle_event.msg_data: {msg_data}")
+        logger.info(f"USER_handle_event.msg_data: {msg_data}")
         content = None
         if msg_data[1] in ('wu', 'ws'):
             content = bfx.on_funds_update(msg_data[2])

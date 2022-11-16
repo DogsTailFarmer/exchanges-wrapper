@@ -550,7 +550,9 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE * 10)
         client.stream_queue[request.trade_id] |= {_queue}
-        if client.exchange == 'ftx':
+        if client.exchange == 'okx':
+            _symbol = client.symbol_to_okx(request.symbol)
+        elif client.exchange == 'ftx':
             _symbol = client.symbol_to_ftx(request.symbol)
         elif client.exchange == 'bitfinex':
             _symbol = client.symbol_to_bfx(request.symbol)

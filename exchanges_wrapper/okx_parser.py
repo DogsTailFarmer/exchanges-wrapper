@@ -218,9 +218,9 @@ def order_book(res: {}) -> {}:
     bids = []
     binance_order_book = {"lastUpdateId": int(res.get('ts'))}
     [asks.append(ask[:2]) for ask in res.get('asks')]
-    binance_order_book.setdefault('asks', asks)
+    binance_order_book.update({'asks': asks})
     [bids.append(bid[:2]) for bid in res.get('bids')]
-    binance_order_book.setdefault('bids', bids)
+    binance_order_book.update({'bids': bids})
     return binance_order_book
 
 
@@ -362,19 +362,15 @@ def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
     }
     return binance_candle
 
-###############################################################################
-
 
 def order_book_ws(res: {}, symbol: str) -> {}:
-    bids = res.get('tick').get('bids')[0:5]
-    asks = res.get('tick').get('asks')[0:5]
+    symbol = symbol.replace('-', '').lower()
     return {
         'stream': f"{symbol}@depth5",
-        'data': {'lastUpdateId': res.get('ts'),
-                 'bids': bids,
-                 'asks': asks,
-                 }
+        'data': order_book(res)
     }
+
+###############################################################################
 
 
 def fetch_symbol_price_ticker(res: {}, symbol) -> {}:

@@ -18,7 +18,8 @@ from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             MarketEventsDataStream,\
                                             FtxPrivateEventsDataStream,\
                                             BfxPrivateEventsDataStream,\
-                                            HbpPrivateEventsDataStream
+                                            HbpPrivateEventsDataStream,\
+                                            OkxPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
 import exchanges_wrapper.ftx_parser as ftx
@@ -169,6 +170,12 @@ class Client:
                                                           self.exchange,
                                                           _trade_id,
                                                           symbol)
+        elif self.exchange == 'okx':
+            user_data_stream = OkxPrivateEventsDataStream(self,
+                                                          self.endpoint_ws_auth,
+                                                          self.user_agent,
+                                                          self.exchange,
+                                                          _trade_id)
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
             await user_data_stream.start()
