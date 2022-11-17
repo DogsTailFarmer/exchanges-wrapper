@@ -583,7 +583,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
         client.stream_queue[request.trade_id] |= {_queue}
-        if client.exchange in ('binance', 'bitfinex', 'huobi'):
+        if client.exchange in ('binance', 'bitfinex', 'huobi', 'okx'):
             client.events.register_user_event(functools.partial(
                 event_handler, _queue, client, request.trade_id, 'outboundAccountPosition'),
                 'outboundAccountPosition')
@@ -613,7 +613,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                         balances_prev = assets_balances.copy()
                         _event = client.events.wrap_event(content)
             if isinstance(_event, events.OutboundAccountPositionWrapper):
-                logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
+                # logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
+                logger.info(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
                 yield response
 

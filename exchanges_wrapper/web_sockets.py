@@ -79,10 +79,9 @@ class EventsDataStream:
             await self.web_socket.send_json(request)
 
     async def _heartbeat_okx(self, interval=25):
-        request = {"event": "ping"}
         while True:
             await asyncio.sleep(interval)
-            await self.web_socket.send_json(request)
+            await self.web_socket.send('ping')
 
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
@@ -107,8 +106,18 @@ class EventsDataStream:
                 await self._handle_event(msg_data)
 
             elif self.exchange == 'okx':
-                if msg_data.get('data'):
+
+                if not ch_type and msg_data.get('arg', {}).get('channel') == 'account' and msg_data.get('data'):
+                    await self._handle_event(msg_data)
+                elif ch_type and msg_data.get('data'):
                     await self._handle_event(msg_data.get('data')[0], symbol, ch_type, order_book)
+                elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
+                    return
+                elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
+                    logger.info(f"WSS handle messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                    raise aiohttp.ClientOSError(f"Reconnecting OKX user {ch_type} channel")
+                else:
+                    logger.info(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
             elif self.exchange == 'ftx':
                 if ch_type == 'orderbook' and msg_data.get('type') == 'partial':
@@ -180,9 +189,9 @@ class EventsDataStream:
                 elif (msg_data.get('action') == 'sub' and
                       msg_data.get('code') == 500 and
                       msg_data.get('message') == '系统异常:'):
-                    raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} WSS")
+                    raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} channel")
                 else:
-                    logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                    logger.info(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
 
 class MarketEventsDataStream(EventsDataStream):
@@ -233,7 +242,7 @@ class MarketEventsDataStream(EventsDataStream):
                                     ]
                            }
                 await self.web_socket.send_json(request)
-                _task = asyncio.ensure_future(self._heartbeat_ftx())
+                _task = asyncio.ensure_future(self._heartbeat_okx())
                 try:
                     await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
                 finally:
@@ -520,7 +529,7 @@ class OkxPrivateEventsDataStream(EventsDataStream):
         ts = int(time.time())
         signature_payload = f"{ts}GET/users/self/verify"
         signature = generate_signature(self.exchange, self.client.api_secret, signature_payload)
-
+        # Login on account
         request = {"op": 'login',
                    "args": [{"apiKey": self.client.api_key,
                              "passphrase": self.client.passphrase,
@@ -529,40 +538,28 @@ class OkxPrivateEventsDataStream(EventsDataStream):
                             ]
                    }
         await self.web_socket.send_json(request)
-
-        msg = await self.web_socket.receive()
-
-        print(f"start_wss: {msg.type}: {msg.data}")
+        await self._handle_messages(self.web_socket)
+        # Channel subscription
+        request = {"op": 'subscribe',
+                   "args": [{"channel": "account"}
+                            ]
+                   }
+        await self.web_socket.send_json(request)
+        _task = asyncio.ensure_future(self._heartbeat_okx())
+        try:
+            await self._handle_messages(self.web_socket)
+        finally:
+            _task.cancel()
 
     async def _handle_event(self, msg_data, *args):
         self.try_count = 0
         # logger.debug(f"USER_handle_event.msg_data: {msg_data}")
-        logger.info(f"USER_handle_event.msg_data: {msg_data}")
+        # logger.info(f"USER_handle_event.msg_data: {msg_data}")
         content = None
-        if msg_data[1] in ('wu', 'ws'):
-            content = bfx.on_funds_update(msg_data[2])
-        elif msg_data[1] == 'oc':
-            order_id = msg_data[2][0]
-            last_event = self.client.active_orders.get(order_id, {}).get('lastEvent', ())
-            content = bfx.on_order_update(msg_data[2], last_event)
-            if msg_data[2][13] == 'CANCELED':
-                self.client.active_orders.get(order_id, {}).update({'cancelled': True})
-        elif msg_data[1] == 'te':
-            order_id = msg_data[2][3]
-            if self.client.active_orders.get(order_id, None) is None:
-                self.client.wss_buffer.setdefault(order_id, [])
-                self.client.wss_buffer[order_id].append(msg_data[2])
-            else:
-                orig_qty = Decimal(self.client.active_orders[order_id]['origQty'])
-                last_qty = str(abs(msg_data[2][4]))
-                executed_qty = self.client.active_orders[order_id]['executedQty']
-                self.client.active_orders[order_id]['executedQty'] = executed_qty = str(Decimal(executed_qty) +
-                                                                                        Decimal(last_qty))
-                if Decimal(executed_qty) >= orig_qty:
-                    self.client.active_orders[order_id]['lastEvent'] = (msg_data[2][0], last_qty, str(msg_data[2][5]))
-                else:
-                    executed_qty = self.client.active_orders.get(order_id, {}).get('executedQty', '0')
-                    content = bfx.on_order_trade(msg_data[2], executed_qty)
+        if msg_data.get('arg', {}).get('channel') == 'account':
+            content = okx.on_funds_update(msg_data.get('data')[0])
+
+        # logger.info(f"USER_handle_event.content: {content}")
         if content:
             await self.client.events.wrap_event(content).fire(self.trade_id)
 
@@ -598,5 +595,4 @@ class UserEventsDataStream(EventsDataStream):
     async def _handle_event(self, content):
         self.try_count = 0
         logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
-        event = self.client.events.wrap_event(content)
-        await event.fire(self.trade_id)
+        await self.client.events.wrap_event(content).fire(self.trade_id)

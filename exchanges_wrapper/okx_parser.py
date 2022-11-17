@@ -370,6 +370,29 @@ def order_book_ws(res: {}, symbol: str) -> {}:
         'data': order_book(res)
     }
 
+
+def on_funds_update(res: {}) -> {}:
+    event_time = int(time.time() * 1000)
+    data = res.get('details')
+    binance_funds = {
+        'e': 'outboundAccountPosition',
+        'E': event_time,
+    }
+    funds = []
+    ts = 0
+    for currency in data:
+        balance = {
+            'a': currency.get('ccy'),
+            'f': currency.get('availBal'),
+            'l': currency.get('frozenBal'),
+        }
+        funds.append(balance)
+        ts = max(ts, int(currency.get('uTime')))
+
+    binance_funds['u'] = ts or event_time
+    binance_funds['B'] = funds
+    return binance_funds
+
 ###############################################################################
 
 
@@ -378,30 +401,6 @@ def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
         "symbol": symbol,
         "price": str(res.get('data')[0].get('price'))
     }
-
-
-def on_funds_update(res: {}) -> {}:
-    event_time = int(time.time() * 1000)
-    data = res.get('data')
-    binance_funds = {
-        'e': 'outboundAccountPosition',
-        'E': event_time,
-        'u': data.get('changeTime') or event_time,
-    }
-    funds = []
-
-    total = data.get('balance')
-    free = data.get('available')
-    locked = str(Decimal(total) - Decimal(free))
-    balance = {
-        'a': data.get('currency').upper(),
-        'f': free,
-        'l': locked
-    }
-    funds.append(balance)
-
-    binance_funds['B'] = funds
-    return binance_funds
 
 
 def on_order_update(res: {}) -> {}:
