@@ -393,45 +393,35 @@ def on_funds_update(res: {}) -> {}:
     binance_funds['B'] = funds
     return binance_funds
 
-###############################################################################
-
-
-def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
-    return {
-        "symbol": symbol,
-        "price": str(res.get('data')[0].get('price'))
-    }
-
 
 def on_order_update(res: {}) -> {}:
+    a = res.get('')
     # print(f"on_order_update.res: {res}")
-    order_quantity = res.get('orderSize', res.get('orderValue'))
-    order_price = res.get('orderPrice', res.get('tradePrice'))
+    order_quantity = res.get('sz')
+    order_price = res.get('px')
     quote_order_qty = str(Decimal(order_quantity) * Decimal(order_price))
-    cumulative_filled_quantity = "0"
-    cumulative_quote_asset = "0"
+    cumulative_filled_quantity = res.get('accFillSz')
+    cumulative_quote_asset = str(Decimal(cumulative_filled_quantity) * Decimal(res.get('avgPx')))
     #
-    last_executed_quantity = res.get('tradeVolume')
-    last_executed_price = res.get('tradePrice')
+    last_executed_quantity = res.get('fillSz') or '0'
+    last_executed_price = res.get('fillPx') or '0'
     last_quote_asset_transacted = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
     #
-    if res.get('orderStatus') in ('canceled', 'partial-canceled'):
+    if res.get('state') == 'canceled':
         status = 'CANCELED'
-    elif res.get('orderStatus') == 'partial-filled':
+    elif res.get('state') == 'partially_filled':
         status = 'PARTIALLY_FILLED'
-    elif res.get('orderStatus') == 'filled':
+    elif res.get('state') == 'filled':
         status = 'FILLED'
-        cumulative_filled_quantity = order_quantity
-        cumulative_quote_asset = quote_order_qty
     else:
         status = 'NEW'
     #
     msg_binance = {
         "e": "executionReport",
-        "E": int(time.time() * 1000),
-        "s": res.get('symbol').upper(),
-        "c": res.get('clientOrderId'),
-        "S": res.get('orderSide').upper(),
+        "E": int(res.get('uTime')),
+        "s": res.get('instId').replace('-', ''),
+        "c": res.get('clOrdId'),
+        "S": res.get('side').upper(),
         "o": "LIMIT",
         "f": "GTC",
         "q": order_quantity,
@@ -443,24 +433,33 @@ def on_order_update(res: {}) -> {}:
         "x": "TRADE",
         "X": status,
         "r": "NONE",
-        "i": res.get('orderId'),
+        "i": int(res.get('ordId')),
         "l": last_executed_quantity,
         "z": cumulative_filled_quantity,
         "L": last_executed_price,
-        "n": res.get('transactFee'),
-        "N": res.get('feeCurrency').upper(),
-        "T": res.get('tradeTime'),
-        "t": res.get('tradeId'),
+        "n": res.get('fillFee') or '0',
+        "N": res.get('fillFeeCcy'),
+        "T": res.get('uTime'),
+        "t": int(res.get('tradeId') or -1),
         "I": 123456789,
         "w": True,
         "m": False,
         "M": False,
-        "O": res.get('orderCreateTime'),
+        "O": int(res.get('cTime')),
         "Z": cumulative_quote_asset,
         "Y": last_quote_asset_transacted,
         "Q": quote_order_qty
     }
     return msg_binance
+
+###############################################################################
+
+
+def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
+    return {
+        "symbol": symbol,
+        "price": str(res.get('data')[0].get('price'))
+    }
 
 
 def account_trade_list(res: []) -> []:

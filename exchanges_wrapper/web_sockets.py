@@ -50,7 +50,7 @@ class EventsDataStream:
             asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start() other exception: {ex}")
-            logger.debug(traceback.format_exc())
+            logger.info(traceback.format_exc())
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass
@@ -107,10 +107,13 @@ class EventsDataStream:
 
             elif self.exchange == 'okx':
 
-                if not ch_type and msg_data.get('arg', {}).get('channel') == 'account' and msg_data.get('data'):
+                if (not ch_type and
+                        msg_data.get('arg', {}).get('channel') in ('account', 'orders')
+                        and msg_data.get('data')):
+
                     await self._handle_event(msg_data)
                 elif ch_type and msg_data.get('data'):
-                    await self._handle_event(msg_data.get('data')[0], symbol, ch_type, order_book)
+                    await self._handle_event(msg_data.get('data')[0], symbol, ch_type)
                 elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
                     return
                 elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
@@ -516,6 +519,9 @@ class BfxPrivateEventsDataStream(EventsDataStream):
 
 
 class OkxPrivateEventsDataStream(EventsDataStream):
+    def __init__(self, client, endpoint, user_agent, exchange, trade_id, symbol):
+        super().__init__(client, endpoint, user_agent, exchange, trade_id)
+        self.symbol = symbol
 
     async def stop(self):
         """
@@ -541,7 +547,10 @@ class OkxPrivateEventsDataStream(EventsDataStream):
         await self._handle_messages(self.web_socket)
         # Channel subscription
         request = {"op": 'subscribe',
-                   "args": [{"channel": "account"}
+                   "args": [{"channel": "account"},
+                            {"channel": "orders",
+                             "instType": "SPOT",
+                             "instId": self.symbol}
                             ]
                    }
         await self.web_socket.send_json(request)
@@ -556,10 +565,12 @@ class OkxPrivateEventsDataStream(EventsDataStream):
         # logger.debug(f"USER_handle_event.msg_data: {msg_data}")
         # logger.info(f"USER_handle_event.msg_data: {msg_data}")
         content = None
+
         if msg_data.get('arg', {}).get('channel') == 'account':
             content = okx.on_funds_update(msg_data.get('data')[0])
-
-        # logger.info(f"USER_handle_event.content: {content}")
+        elif msg_data.get('arg', {}).get('channel') == 'orders':
+            content = okx.on_order_update(msg_data.get('data')[0])
+            logger.info(f"2 USER_handle_event.content: {content}")
         if content:
             await self.client.events.wrap_event(content).fire(self.trade_id)
 

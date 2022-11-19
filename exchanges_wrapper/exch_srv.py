@@ -613,8 +613,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                         balances_prev = assets_balances.copy()
                         _event = client.events.wrap_event(content)
             if isinstance(_event, events.OutboundAccountPositionWrapper):
-                # logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
-                logger.info(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
+                logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
                 yield response
 

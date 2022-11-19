@@ -175,7 +175,8 @@ class Client:
                                                           self.endpoint_ws_auth,
                                                           self.user_agent,
                                                           self.exchange,
-                                                          _trade_id)
+                                                          _trade_id,
+                                                          self.symbol_to_okx(symbol))
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
             await user_data_stream.start()
