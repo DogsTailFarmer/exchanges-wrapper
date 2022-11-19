@@ -624,7 +624,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
         client.stream_queue[request.trade_id] |= {_queue}
-        if client.exchange == 'binance':
+        if client.exchange in ('binance', 'okx'):
             client.events.register_user_event(functools.partial(
                 event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
         while True:

@@ -104,13 +104,10 @@ class EventsDataStream:
             # logger.info(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
             if self.exchange == 'binance':
                 await self._handle_event(msg_data)
-
             elif self.exchange == 'okx':
-
                 if (not ch_type and
-                        msg_data.get('arg', {}).get('channel') in ('account', 'orders')
+                        msg_data.get('arg', {}).get('channel') in ('account', 'orders', 'balance_and_position')
                         and msg_data.get('data')):
-
                     await self._handle_event(msg_data)
                 elif ch_type and msg_data.get('data'):
                     await self._handle_event(msg_data.get('data')[0], symbol, ch_type)
@@ -550,7 +547,8 @@ class OkxPrivateEventsDataStream(EventsDataStream):
                    "args": [{"channel": "account"},
                             {"channel": "orders",
                              "instType": "SPOT",
-                             "instId": self.symbol}
+                             "instId": self.symbol},
+                            {"channel": "balance_and_position"}
                             ]
                    }
         await self.web_socket.send_json(request)
@@ -565,12 +563,18 @@ class OkxPrivateEventsDataStream(EventsDataStream):
         # logger.debug(f"USER_handle_event.msg_data: {msg_data}")
         # logger.info(f"USER_handle_event.msg_data: {msg_data}")
         content = None
-
         if msg_data.get('arg', {}).get('channel') == 'account':
             content = okx.on_funds_update(msg_data.get('data')[0])
         elif msg_data.get('arg', {}).get('channel') == 'orders':
             content = okx.on_order_update(msg_data.get('data')[0])
-            logger.info(f"2 USER_handle_event.content: {content}")
+        elif msg_data.get('arg', {}).get('channel') == 'balance_and_position':
+            _data = msg_data.get('data')[0]
+            content, self.client.wss_buffer = okx.on_balance_update(_data.get('balData', []),
+                                                                    self.client.wss_buffer,
+                                                                    bool(_data.get('eventType') == 'transferred'))
+            for i in content:
+                await self.client.events.wrap_event(i).fire(self.trade_id)
+            content = None
         if content:
             await self.client.events.wrap_event(content).fire(self.trade_id)
 

@@ -395,7 +395,6 @@ def on_funds_update(res: {}) -> {}:
 
 
 def on_order_update(res: {}) -> {}:
-    a = res.get('')
     # print(f"on_order_update.res: {res}")
     order_quantity = res.get('sz')
     order_price = res.get('px')
@@ -451,6 +450,25 @@ def on_order_update(res: {}) -> {}:
         "Q": quote_order_qty
     }
     return msg_binance
+
+
+def on_balance_update(res: list, buffer: dict, transfer: bool) -> ():
+    res_diff = []
+    for i in res:
+        asset = i.get('ccy')
+        ccy_bal_new = i.get('cashBal')
+        ccy_bal = buffer.get(asset)
+        if ccy_bal and transfer:
+            balance = {
+                'e': 'balanceUpdate',
+                'E': int(i.get('uTime')),
+                'a': asset,
+                'd': str(Decimal(ccy_bal_new) - Decimal(ccy_bal)),
+                'T': int(time.time() * 1000)
+            }
+            res_diff.append(balance)
+        buffer[asset] = ccy_bal_new
+    return res_diff, buffer
 
 ###############################################################################
 
