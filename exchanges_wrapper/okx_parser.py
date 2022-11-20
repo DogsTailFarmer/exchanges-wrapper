@@ -470,6 +470,46 @@ def on_balance_update(res: list, buffer: dict, transfer: bool) -> ():
         buffer[asset] = ccy_bal_new
     return res_diff, buffer
 
+
+def funding_wallet(res: []) -> []:
+    balances = []
+    for balance in res:
+        _binance_res = {
+            "asset": balance.get('ccy'),
+            "free": balance.get('availBal'),
+            "locked": "0",
+            "freeze": balance.get('frozenBal'),
+            "withdrawing": "0",
+            "btcValuation": "0.0",
+        }
+        balances.append(_binance_res)
+    return balances
+
+
+def order_trade_list(res: []) -> []:
+    binance_trade_list = []
+    for trade in res:
+        price = trade.get('fillPx')
+        qty = trade.get('fillSz')
+        quote_qty = str(Decimal(price) * Decimal(qty))
+        binance_trade = {
+            "symbol": trade.get('instId').replace('-', ''),
+            "id": trade.get('tradeId'),
+            "orderId": trade.get('ordId'),
+            "orderListId": -1,
+            "price": price,
+            "qty": qty,
+            "quoteQty": quote_qty,
+            "commission": str(abs(float(trade.get('fee')))),
+            "commissionAsset": trade.get('feeCcy'),
+            "time": trade.get('ts'),
+            "isBuyer": bool('buy' == trade.get('side')),
+            "isMaker": bool('M' == trade.get('execType')),
+            "isBestMatch": True,
+        }
+        binance_trade_list.append(binance_trade)
+    return binance_trade_list
+
 ###############################################################################
 
 
@@ -478,31 +518,6 @@ def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
         "symbol": symbol,
         "price": str(res.get('data')[0].get('price'))
     }
-
-
-def account_trade_list(res: []) -> []:
-    binance_trade_list = []
-    for trade in res:
-        price = trade.get('price')
-        qty = trade.get('filled-amount')
-        quote_qty = str(Decimal(price) * Decimal(qty))
-        binance_trade = {
-            "symbol": trade.get('symbol').upper(),
-            "id": trade.get('trade-id'),
-            "orderId": trade.get('id'),
-            "orderListId": -1,
-            "price": price,
-            "qty": qty,
-            "quoteQty": quote_qty,
-            "commission": trade.get('filled-fees'),
-            "commissionAsset": trade.get('fee-currency'),
-            "time": trade.get('created-at'),
-            "isBuyer": bool('buy' in trade.get('type')),
-            "isMaker": bool('maker' == trade.get('role')),
-            "isBestMatch": True,
-        }
-        binance_trade_list.append(binance_trade)
-    return binance_trade_list
 
 
 def get_symbols(symbols_details: []) -> str:
@@ -588,22 +603,4 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
     return msg_binance
 
 
-def funding_wallet(res: []) -> []:
-    balances = []
-    for balance in res:
-        if balance[0] in ('exchange', 'funding'):
-            total = str(balance[2] or 0.0)
-            free = str(balance[4] or 0.0)
-            locked = str(Decimal(total) - Decimal(free))
-            if float(total):
-                _binance_res = {
-                    "asset": balance[1],
-                    "free": free,
-                    "locked": locked,
-                    "freeze": "0",
-                    "withdrawing": "0",
-                    "btcValuation": "0.0",
-                }
-                balances.append(_binance_res)
 
-    return balances

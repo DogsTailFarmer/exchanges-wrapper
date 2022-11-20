@@ -249,7 +249,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             if _queue and request.filled_update_call:
                 if res.get('status') == 'FILLED':
                     event = OrderUpdateEvent(res)
-                    logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{int(event.order_id)}:"
+                    logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{event.order_id}:"
                                 f"{event.order_status}")
                     _event = weakref.ref(event)
                     await _queue.put(_event())
@@ -378,7 +378,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.FetchFundingWalletResponse()
         response_balance = api_pb2.FetchFundingWalletResponse.Balances()
         res = []
-        if client.exchange == 'bitfinex' or (open_client.real_market and client.exchange in ('binance', 'ftx')):
+        if (client.exchange in ('bitfinex', 'okx') or
+                (open_client.real_market and client.exchange in ('binance', 'ftx'))):
             try:
                 res = await client.fetch_funding_wallet(asset=request.asset,
                                                         need_btc_valuation=request.need_btc_valuation,

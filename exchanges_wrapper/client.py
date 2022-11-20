@@ -874,6 +874,26 @@ class Client:
                     logger.debug(f"RateLimitReached for {symbol}, count {count}, try one else")
             if res:
                 binance_res = await self.fetch_order(symbol, order_id=res, response_type=False)
+        elif self.exchange == 'okx':
+            params = {
+                "instId": self.symbol_to_okx(symbol),
+                "tdMode": "cash",
+                "clOrdId": new_client_order_id,
+                "side": side.lower(),
+                "ordType": order_type.lower(),
+                "sz": quantity,
+                "px": price,
+            }
+            res = await self.http.send_api_call(
+                "/api/v5/trade/order",
+                method="POST",
+                signed=True,
+                **params,
+            )
+            if res[0].get('sCode') == '0':
+                binance_res = await self.fetch_order(symbol, order_id=res[0].get('ordId'), response_type=False)
+            else:
+                raise UserWarning(res[0].get('sMsg'))
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-order-user_data
@@ -938,6 +958,13 @@ class Client:
         elif self.exchange == 'huobi':
             res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
             binance_res = hbp.order(res, response_type=response_type)
+        elif self.exchange == 'okx':
+            params = {'instId': self.symbol_to_okx(symbol),
+                      'ordId': str(order_id),
+                      'clOrdId': str(origin_client_order_id)}
+            res = await self.http.send_api_call("/api/v5/trade/order", signed=True, **params)
+            logger.debug(f"fetch_order.res: {res}")
+            binance_res = okx.order(res[0], response_type=response_type)
         logger.debug(f"fetch_order.binance_res: {binance_res}")
         return binance_res
 
@@ -1029,6 +1056,30 @@ class Client:
                 binance_res = await self.fetch_order(symbol, order_id=res, response_type=True)
                 order_cancelled = bool(binance_res.get('status') == 'CANCELED')
                 await asyncio.sleep(1)
+
+        elif self.exchange == 'okx':
+            params = {
+                "instId": self.symbol_to_okx(symbol),
+                "ordId": str(order_id),
+                "clOrdId": str(origin_client_order_id),
+            }
+            res = await self.http.send_api_call(
+                "/api/v5/trade/cancel-order",
+                method="POST",
+                signed=True,
+                **params,
+            )
+            if res[0].get('sCode') == '0':
+                _canceled_order_id = res[0].get('ordId')
+                order_cancelled = False
+                timeout = STATUS_TIMEOUT
+                while _canceled_order_id and not order_cancelled and timeout:
+                    timeout -= 1
+                    binance_res = await self.fetch_order(symbol, order_id=_canceled_order_id, response_type=True)
+                    order_cancelled = bool(binance_res.get('status') == 'CANCELED')
+                    await asyncio.sleep(1)
+            else:
+                raise UserWarning(res[0].get('sMsg'))
         logger.debug(f"cancel_order.binance_res: {binance_res}")
         return binance_res
 
@@ -1428,6 +1479,12 @@ class Client:
             # print(f"fetch_funding_wallet.res: {res}")
             if res:
                 binance_res = bfx.funding_wallet(res)
+        elif self.exchange == 'okx':
+            params = {}
+            if asset:
+                params = {'ccy': self.symbol_to_okx(asset)}
+            res = await self.http.send_api_call("/api/v5/asset/balances", signed=True, **params)
+            binance_res = okx.funding_wallet(res)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-trade-list-user_data
@@ -1507,6 +1564,18 @@ class Client:
                 raise ValueError(f"{limit} is not a valid limit. A valid limit should be > 0 and <= to 500")
             res = await self.http.send_api_call("v1/order/matchresults", signed=True, **params)
             binance_res = hbp.account_trade_list(res)
+        elif self.exchange == 'okx':
+            params = {'instType': "SPOT",
+                      'instId': self.symbol_to_okx(symbol),
+                      'limit': str(min(limit, 100))}
+            if order_id:
+                params["ordId"] = str(order_id)
+            if start_time:
+                params["begin"] = str(start_time)
+            if end_time:
+                params["end"] = str(end_time)
+            res = await self.http.send_api_call("/api/v5/trade/fills-history", signed=True, **params)
+            binance_res = okx.order_trade_list(res)
         logger.debug(f"fetch_account_trade_list.binance_res: {binance_res}")
         return binance_res
 
@@ -1529,6 +1598,14 @@ class Client:
         elif self.exchange == 'huobi':
             res = await self.http.send_api_call(f"v1/order/orders/{order_id}/matchresults", signed=True)
             binance_res = hbp.account_trade_list(res)
+        elif self.exchange == 'okx':
+            params = {'instType': "SPOT",
+                      'instId': self.symbol_to_okx(symbol),
+                      'ordId': str(order_id),
+                      }
+
+            res = await self.http.send_api_call("/api/v5/trade/fills", signed=True, **params)
+            binance_res = okx.order_trade_list(res)
         logger.debug(f"fetch_order_trade_list.binance_res: {binance_res}")
         return binance_res
 
