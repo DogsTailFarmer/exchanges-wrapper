@@ -50,7 +50,7 @@ class EventsDataStream:
             asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start() other exception: {ex}")
-            logger.info(traceback.format_exc())
+            logger.debug(traceback.format_exc())
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass
@@ -560,8 +560,6 @@ class OkxPrivateEventsDataStream(EventsDataStream):
 
     async def _handle_event(self, msg_data, *args):
         self.try_count = 0
-        # logger.debug(f"USER_handle_event.msg_data: {msg_data}")
-        # logger.info(f"USER_handle_event.msg_data: {msg_data}")
         content = None
         if msg_data.get('arg', {}).get('channel') == 'account':
             content = okx.on_funds_update(msg_data.get('data')[0])
