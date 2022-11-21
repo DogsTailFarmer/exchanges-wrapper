@@ -32,6 +32,14 @@
         ws_public_mbr = 'wss://api.huobi.pro/feed'
         ws_auth = 'wss://api.huobi.pro/ws/v2'
 
+    [endpoint.okx]
+        api_public = 'https://aws.okx.com'
+        api_auth = 'https://aws.okx.com'
+        ws_public = 'wss://wsaws.okx.com:8443/ws/v5/public'
+        ws_auth = 'wss://wsaws.okx.com:8443/ws/v5/private'
+        api_test = 'https://aws.okx.com'
+        ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
+
 # Binance accounts
 [[accounts]]
     exchange = 'binance'
@@ -86,3 +94,12 @@
     api_key = '*********** Place API key there ************'
     api_secret = '*********** Place secret API key there ************'
     test_net = false
+
+# OKX
+[[accounts]]
+    exchange = 'okx'
+    name = 'Demo - OKX'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    passphrase = '*********** Place API password there ************'
+    test_net = true

@@ -1,3 +1,7 @@
+## v1.2.7-1 2022-11-21
+### Update
+* Add OKX section in config file
+
 ## v1.2.7 2022-11-21
 ### Added for new features
 OKX exchange
