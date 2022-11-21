@@ -1,3 +1,7 @@
+## v1.2.7 2022-11-21
+### Added for new features
+OKX exchange
+
 ## v1.2.6-1 2022-11-11
 ### Fixed
 * FTX: OnFundsUpdate() did not return a result

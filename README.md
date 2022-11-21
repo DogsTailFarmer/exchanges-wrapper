@@ -4,9 +4,9 @@
 ***
 <h1 align="center">Crypto exchanges API/WSS wrapper with grpc powered server</h1>
 
-<h2 align="center">Binance, FTX, Bitfinex, Huobi</h2>
+<h2 align="center">Binance, Bitfinex, Huobi, OKX, FTX</h2>
 
-<h3 align="center">For SPOT markets</h2>
+<h3 align="center">For SPOT markets</h3>
 
 ***
 <a href="https://badge.fury.io/py/exchanges-wrapper"><img src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version"></a>
@@ -16,7 +16,7 @@
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_exchanges-wrapper" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_exchanges-wrapper&metric=alert_status"/></a>
 <a href="https://pepy.tech/project/exchanges-wrapper" target="_blank"><img alt="Downloads" title="Downloads" src="https://pepy.tech/badge/exchanges-wrapper/month"/></a>
 ***
-From v1.2.5 work path relocated to ```home/user/.MartinBinance/```
+FTX is bankruptcy now
 ***
 
 ## exchanges-wrapper vs binance.py
