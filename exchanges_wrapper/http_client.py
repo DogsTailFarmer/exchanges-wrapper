@@ -281,5 +281,5 @@ class ClientOKX(HttpClient):
             if self.test_net:
                 params["x-simulated-trading"] = '1'
         async with self.session.request(method, url, timeout=timeout, headers=params, data=query_kwargs) as response:
-            print(f"send_api_call.response: url: {response.url}, status: {response.status}")
+            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
             return await self.handle_errors(response)

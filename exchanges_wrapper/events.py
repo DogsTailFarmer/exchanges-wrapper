@@ -49,6 +49,8 @@ class Events:
             event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
         elif exchange == 'bitfinex':
             event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
+        elif exchange == 'okx':
+            event_type = f"{event_type.split('@')[0].replace('-', '').lower()}@{event_type.split('@')[1]}"
         self.handlers[event_type].append(listener)
         logger.debug(f"register_event: registered_streams{self.registered_streams}")
 
