@@ -1,3 +1,8 @@
+## v1.2.7-2 2022-11-23
+### Update
+* Bitfinex: add "receive_timeout=30" parameter in ws_connect(), this is a reliable solution for monitoring the presence
+of a connection
+
 ## v1.2.7-1 2022-11-21
 ### Update
 * Add OKX section in config file

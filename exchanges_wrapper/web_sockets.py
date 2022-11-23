@@ -117,8 +117,7 @@ class EventsDataStream:
                     logger.info(f"WSS handle messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
                     raise aiohttp.ClientOSError(f"Reconnecting OKX user {ch_type} channel")
                 else:
-                    logger.info(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-
+                    logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
             elif self.exchange == 'ftx':
                 if ch_type == 'orderbook' and msg_data.get('type') == 'partial':
                     order_book = ftx.OrderBook(msg_data.get('data', {}), symbol)
@@ -159,11 +158,15 @@ class EventsDataStream:
                             await asyncio.sleep(120)
                             raise aiohttp.ClientOSError
                 # data handling
-                elif 'hb' not in msg_data and isinstance(msg_data, list):
+                elif isinstance(msg_data, list) and len(msg_data) == 2 and msg_data[1] == 'hb':
+                    pass
+                elif isinstance(msg_data, list):
                     if ch_type == 'book' and isinstance(msg_data[1][-1], list):
                         order_book = bfx.OrderBook(msg_data[1], symbol)
                     else:
                         await self._handle_event(msg_data, symbol, ch_type, order_book)
+                else:
+                    logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
             elif self.exchange == 'huobi':
                 # print(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
                 if msg_data.get('tick') or msg_data.get('data'):
@@ -191,7 +194,7 @@ class EventsDataStream:
                       msg_data.get('message') == '系统异常:'):
                     raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} channel")
                 else:
-                    logger.info(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                    logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
 
 class MarketEventsDataStream(EventsDataStream):
@@ -263,7 +266,9 @@ class MarketEventsDataStream(EventsDataStream):
                 finally:
                     _task.cancel()
             elif self.exchange == 'bitfinex':
-                self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
+                self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                                receive_timeout=30,
+                                                                proxy=self.client.proxy)
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
                     request = {'event': 'subscribe', 'channel': ch_type, 'pair': symbol}
@@ -470,7 +475,9 @@ class BfxPrivateEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=15, proxy=self.client.proxy)
+        self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                        receive_timeout=30,
+                                                        proxy=self.client.proxy)
         ts = int(time.time() * 1000)
         data = f"AUTH{ts}"
         request = {
