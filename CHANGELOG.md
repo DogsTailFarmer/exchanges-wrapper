@@ -1,7 +1,8 @@
 ## v1.2.7-3 2022-11-24
 ### Fixed
 * Huobi: incorrect handling for incoming ping for private channel
-* OKX: correction incoming msg timeout and outgoing ping interval for wss
+* OKX: refactoring wss heartbeat
+* Clearing cancel previous wss start() before restart
 
 ## v1.2.7-2 2022-11-23
 ### Update

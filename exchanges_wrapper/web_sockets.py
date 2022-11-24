@@ -82,11 +82,6 @@ class EventsDataStream:
             await asyncio.sleep(interval)
             await self.web_socket.send_json(request)
 
-    async def _heartbeat_okx(self, interval=25):
-        while True:
-            await asyncio.sleep(interval)
-            await self.web_socket.send('ping')
-
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
 
@@ -229,7 +224,7 @@ class MarketEventsDataStream(EventsDataStream):
             request = {}
             if self.exchange == 'okx':
                 self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                                receive_timeout=50,
+                                                                heartbeat=25,
                                                                 proxy=self.client.proxy)
                 if ch_type == 'miniTicker':
                     _ch_type = 'tickers'
@@ -247,11 +242,7 @@ class MarketEventsDataStream(EventsDataStream):
                                     ]
                            }
                 await self.web_socket.send_json(request)
-                _task = asyncio.ensure_future(self._heartbeat_okx())
-                try:
-                    await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
-                finally:
-                    _task.cancel()
+                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
             elif self.exchange == 'ftx':
                 self.web_socket = await self.session.ws_connect(self.endpoint,
                                                                 receive_timeout=30,
@@ -537,7 +528,9 @@ class OkxPrivateEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=50, proxy=self.client.proxy)
+        self.web_socket = await self.session.ws_connect(self.endpoint,
+                                                        heartbeat=25,
+                                                        proxy=self.client.proxy)
         ts = int(time.time())
         signature_payload = f"{ts}GET/users/self/verify"
         signature = generate_signature(self.exchange, self.client.api_secret, signature_payload)
@@ -561,11 +554,7 @@ class OkxPrivateEventsDataStream(EventsDataStream):
                             ]
                    }
         await self.web_socket.send_json(request)
-        _task = asyncio.ensure_future(self._heartbeat_okx())
-        try:
-            await self._handle_messages(self.web_socket)
-        finally:
-            _task.cancel()
+        await self._handle_messages(self.web_socket)
 
     async def _handle_event(self, msg_data, *args):
         self.try_count = 0
