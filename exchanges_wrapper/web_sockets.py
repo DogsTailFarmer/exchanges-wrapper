@@ -40,6 +40,7 @@ class EventsDataStream:
         self.try_count = 0
 
     async def start(self):
+        _task = None
         try:
             await self.start_wss()
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
@@ -47,10 +48,13 @@ class EventsDataStream:
             delay = random.randint(1, 10) * self.try_count
             logger.error(f"WSS start({self.exchange}): {ex}, restart try count: {self.try_count}, delay: {delay}s")
             await asyncio.sleep(delay)
-            asyncio.ensure_future(self.start())
+            _task = asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start() other exception: {ex}")
             logger.debug(traceback.format_exc())
+        finally:
+            if _task:
+                _task.cancel()
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass
@@ -101,7 +105,6 @@ class EventsDataStream:
             elif msg.type is aiohttp.WSMsgType.ERROR:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
             msg_data = json.loads(gzip.decompress(msg.data) if msg.type is aiohttp.WSMsgType.BINARY else msg.data)
-            # logger.info(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
             if self.exchange == 'binance':
                 await self._handle_event(msg_data)
             elif self.exchange == 'okx':
@@ -168,16 +171,7 @@ class EventsDataStream:
                 else:
                     logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
             elif self.exchange == 'huobi':
-                # print(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-                if msg_data.get('tick') or msg_data.get('data'):
-                    if ch_type == 'ticker':
-                        _price = msg_data.get('tick', {}).get('lastPrice', None)
-                        if price != _price:
-                            price = _price
-                            await self._handle_event(msg_data, symbol, ch_type)
-                    else:
-                        await self._handle_event(msg_data, symbol, ch_type)
-                elif msg_data.get('ping'):
+                if msg_data.get('ping'):
                     await self.web_socket.send_json({"pong": msg_data.get('ping')})
                 elif msg_data.get('action') == 'ping':
                     pong = {
@@ -187,6 +181,14 @@ class EventsDataStream:
                         }
                     }
                     await self.web_socket.send_json(pong)
+                elif msg_data.get('tick') or msg_data.get('data'):
+                    if ch_type == 'ticker':
+                        _price = msg_data.get('tick', {}).get('lastPrice', None)
+                        if price != _price:
+                            price = _price
+                            await self._handle_event(msg_data, symbol, ch_type)
+                    else:
+                        await self._handle_event(msg_data, symbol, ch_type)
                 elif msg_data.get('action') == 'req' and msg_data.get('code') == 200 and msg_data.get('ch') == 'auth':
                     return
                 elif (msg_data.get('action') == 'sub' and
@@ -227,7 +229,7 @@ class MarketEventsDataStream(EventsDataStream):
             request = {}
             if self.exchange == 'okx':
                 self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                                receive_timeout=29,
+                                                                receive_timeout=50,
                                                                 proxy=self.client.proxy)
                 if ch_type == 'miniTicker':
                     _ch_type = 'tickers'
@@ -370,7 +372,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
 
     async def start_wss(self):
         self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                        receive_timeout=60,
+                                                        receive_timeout=30,
                                                         proxy=self.client.proxy,
                                                         autoping=False)
         ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
@@ -535,7 +537,7 @@ class OkxPrivateEventsDataStream(EventsDataStream):
             await self.web_socket.close()
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=29, proxy=self.client.proxy)
+        self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=50, proxy=self.client.proxy)
         ts = int(time.time())
         signature_payload = f"{ts}GET/users/self/verify"
         signature = generate_signature(self.exchange, self.client.api_secret, signature_payload)
