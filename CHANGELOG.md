@@ -1,3 +1,7 @@
+## v1.2.7-4 2022-11-25
+### Fixed
+* Clearing cancel previous wss start() before restart from 1.2.7-3 was a bad idea. It's kill himself. Rollback.
+
 ## v1.2.7-3 2022-11-24
 ### Fixed
 * Huobi: incorrect handling for incoming ping for private channel

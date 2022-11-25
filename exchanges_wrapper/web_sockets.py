@@ -40,21 +40,17 @@ class EventsDataStream:
         self.try_count = 0
 
     async def start(self):
-        _task = None
         try:
             await self.start_wss()
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
             self.try_count += 1
-            delay = random.randint(1, 10) * self.try_count
+            delay = random.randint(2, 10) * self.try_count
             logger.error(f"WSS start({self.exchange}): {ex}, restart try count: {self.try_count}, delay: {delay}s")
             await asyncio.sleep(delay)
-            _task = asyncio.ensure_future(self.start())
+            asyncio.ensure_future(self.start())
         except Exception as ex:
             logger.error(f"WSS start() other exception: {ex}")
             logger.debug(traceback.format_exc())
-        finally:
-            if _task:
-                _task.cancel()
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass
