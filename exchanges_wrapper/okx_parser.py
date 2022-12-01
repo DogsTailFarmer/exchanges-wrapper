@@ -22,62 +22,63 @@ def exchange_info(server_time: int, trading_symbol: [], tickers: []) -> {}:
         symbols_price[pair.get('instId').replace('-', '')] = Decimal(pair.get('last'))
     for market in trading_symbol:
         _symbol = market.get("instId").replace('-', '')
-        _base_asset = market.get("baseCcy")
-        _quote_asset = market.get("quoteCcy")
-        _base_asset_precision = len(market.get('lotSz')) - 2
-        # Filters var
-        _tick_size = market.get('tickSz')
-        _min_qty = market.get('minSz')
-        _max_qty = market.get('maxLmtSz')
-        _step_size = market.get('lotSz')
-        _min_notional = str(Decimal(_min_qty) * symbols_price.get(_symbol))
-        _price_filter = {
-            "filterType": "PRICE_FILTER",
-            "minPrice": str(_tick_size),
-            "maxPrice": "100000.00000000",
-            "tickSize": str(_tick_size)
-        }
-        _lot_size = {
-            "filterType": "LOT_SIZE",
-            "minQty": str(_min_qty),
-            "maxQty": str(_max_qty),
-            "stepSize": str(_step_size)
-        }
-        _min_notional = {
-            "filterType": "MIN_NOTIONAL",
-            "minNotional": str(_min_notional),
-            "applyToMarket": True,
-            "avgPriceMins": 0
-        }
-        _percent_price = {
-            "filterType": "PERCENT_PRICE",
-            "multiplierUp": "5",
-            "multiplierDown": "0.2",
-            "avgPriceMins": 5
-        }
+        if symbols_price.get(_symbol):
+            _base_asset = market.get("baseCcy")
+            _quote_asset = market.get("quoteCcy")
+            _base_asset_precision = len(market.get('lotSz')) - 2
+            # Filters var
+            _tick_size = market.get('tickSz')
+            _min_qty = market.get('minSz')
+            _max_qty = market.get('maxLmtSz')
+            _step_size = market.get('lotSz')
+            _min_notional = str(Decimal(_min_qty) * symbols_price.get(_symbol))
+            _price_filter = {
+                "filterType": "PRICE_FILTER",
+                "minPrice": str(_tick_size),
+                "maxPrice": "100000.00000000",
+                "tickSize": str(_tick_size)
+            }
+            _lot_size = {
+                "filterType": "LOT_SIZE",
+                "minQty": str(_min_qty),
+                "maxQty": str(_max_qty),
+                "stepSize": str(_step_size)
+            }
+            _min_notional = {
+                "filterType": "MIN_NOTIONAL",
+                "minNotional": str(_min_notional),
+                "applyToMarket": True,
+                "avgPriceMins": 0
+            }
+            _percent_price = {
+                "filterType": "PERCENT_PRICE",
+                "multiplierUp": "5",
+                "multiplierDown": "0.2",
+                "avgPriceMins": 5
+            }
 
-        symbol = {
-            "symbol": _symbol,
-            "status": "TRADING",
-            "baseAsset": _base_asset,
-            "baseAssetPrecision": _base_asset_precision,
-            "quoteAsset": _quote_asset,
-            "quotePrecision": _base_asset_precision,
-            "quoteAssetPrecision": _base_asset_precision,
-            "baseCommissionPrecision": 8,
-            "quoteCommissionPrecision": 8,
-            "orderTypes": ["LIMIT", "MARKET"],
-            "icebergAllowed": False,
-            "ocoAllowed": False,
-            "quoteOrderQtyMarketAllowed": False,
-            "allowTrailingStop": False,
-            "cancelReplaceAllowed": False,
-            "isSpotTradingAllowed": True,
-            "isMarginTradingAllowed": False,
-            "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
-            "permissions": ["SPOT"],
-        }
-        symbols.append(symbol)
+            symbol = {
+                "symbol": _symbol,
+                "status": "TRADING",
+                "baseAsset": _base_asset,
+                "baseAssetPrecision": _base_asset_precision,
+                "quoteAsset": _quote_asset,
+                "quotePrecision": _base_asset_precision,
+                "quoteAssetPrecision": _base_asset_precision,
+                "baseCommissionPrecision": 8,
+                "quoteCommissionPrecision": 8,
+                "orderTypes": ["LIMIT", "MARKET"],
+                "icebergAllowed": False,
+                "ocoAllowed": False,
+                "quoteOrderQtyMarketAllowed": False,
+                "allowTrailingStop": False,
+                "cancelReplaceAllowed": False,
+                "isSpotTradingAllowed": True,
+                "isMarginTradingAllowed": False,
+                "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
+                "permissions": ["SPOT"],
+            }
+            symbols.append(symbol)
 
     _binance_res = {
         "timezone": "UTC",

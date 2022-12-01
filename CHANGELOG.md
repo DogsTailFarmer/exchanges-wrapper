@@ -1,3 +1,8 @@
+## v1.2.7-5 2022-xx-xx
+### Update
+* FetchOpenOrders() add handler for errors.QueryCanceled, in case RateLimitReached was raised elsewhere
+* Some minor improvements
+
 ## v1.2.7-4 2022-11-25
 ### Fixed
 * Clearing cancel previous wss start() before restart from 1.2.7-3 was a bad idea. It's kill himself. Rollback.

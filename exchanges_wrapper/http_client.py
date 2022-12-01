@@ -41,7 +41,8 @@ class HttpClient:
             raise ExchangeError(f"An issue occurred on exchange's side: {response.status}: {response.url}:"
                                 f" {response.reason}")
         if response.status == 429:
-            self.rate_limit_reached = True if self.exchange in ('binance', 'okx') else None
+            logger.error(f"handle_errors RateLimitReached:response.url: {response.url}")
+            self.rate_limit_reached = True if self.exchange in ('binance', 'okx') else False
             raise RateLimitReached(RateLimitReached.message)
         payload = await response.json()
         if self.exchange == 'binance' and payload and "code" in payload:

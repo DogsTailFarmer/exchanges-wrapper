@@ -173,7 +173,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             if time.time() - Martin.rate_limit_reached_time > 30:
                 client.http.rate_limit_reached = False
                 Martin.rate_limit_reached_time = None
-                logger.info("ResetRateLimit error clear, trying one else time")
+                logger.info("RateLimit error clear, trying one else time")
                 _success = True
         else:
             if client.http.rate_limit_reached:
@@ -192,7 +192,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             res = await client.fetch_open_orders(symbol=request.symbol, receive_window=None)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
-        except errors.RateLimitReached as ex:
+        except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
             logger.warning(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
             _context.set_details(f"{ex}")
