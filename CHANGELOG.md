@@ -1,4 +1,4 @@
-## v1.2.7-5 2022-xx-xx
+## v1.2.7-5 2022-12-04
 ### Update
 * FetchOpenOrders() add handler for errors.QueryCanceled, in case RateLimitReached was raised elsewhere
 * Some minor improvements
