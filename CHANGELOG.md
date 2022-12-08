@@ -1,3 +1,10 @@
+## v1.2.7-6 2022-12-08
+### Fixed
+* Bitfinex: handling canceled TP order after it partially filled
+
+### Update
+* Binance: REST API: filter type "PERCENT_PRICE" to "PERCENT_PRICE_BY_SIDE"
+
 ## v1.2.7-5 2022-12-04
 ### Update
 * FetchOpenOrders() add handler for errors.QueryCanceled, in case RateLimitReached was raised elsewhere

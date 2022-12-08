@@ -314,7 +314,14 @@ class Martin(api_pb2_grpc.MartinServicer):
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.PriceFilter()
                 new_filter = json_format.ParseDict(_filter, new_filter_template)
                 filters.price_filter.CopyFrom(new_filter)
-            elif _filter.get('filterType') == 'PERCENT_PRICE':
+            elif 'PERCENT_PRICE' in _filter.get('filterType'):
+                if _filter.get('filterType') == 'PERCENT_PRICE_BY_SIDE':
+                    _filter['multiplierUp'] = _filter['bidMultiplierUp']
+                    _filter['multiplierDown'] = _filter['bidMultiplierDown']
+                    _filter.pop('bidMultiplierUp')
+                    _filter.pop('bidMultiplierDown')
+                    _filter.pop('askMultiplierUp')
+                    _filter.pop('askMultiplierDown')
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.PercentPrice()
                 new_filter = json_format.ParseDict(_filter, new_filter_template)
                 filters.percent_price.CopyFrom(new_filter)

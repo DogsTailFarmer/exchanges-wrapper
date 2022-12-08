@@ -939,20 +939,20 @@ class Client:
         elif self.exchange == 'bitfinex':
             params = {'id': [order_id]}
             res = await self.http.send_api_call(
-                f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}/hist",
+                f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
                 method="POST",
                 signed=True,
                 **params
             )
-            logger.debug(f"fetch_order.res: {res}")
+            logger.debug(f"fetch_order(active).res: {res}")
             if not res:
                 res = await self.http.send_api_call(
-                    f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
+                    f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}/hist",
                     method="POST",
                     signed=True,
                     **params
                 )
-            logger.debug(f"fetch_order.res: {res}")
+            logger.debug(f"fetch_order(closed).res: {res}")
             if res:
                 binance_res = bfx.order(res[0], response_type=response_type)
         elif self.exchange == 'huobi':
@@ -1056,7 +1056,6 @@ class Client:
                 binance_res = await self.fetch_order(symbol, order_id=res, response_type=True)
                 order_cancelled = bool(binance_res.get('status') == 'CANCELED')
                 await asyncio.sleep(1)
-
         elif self.exchange == 'okx':
             params = {
                 "instId": self.symbol_to_okx(symbol),

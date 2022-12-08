@@ -489,7 +489,7 @@ class BfxPrivateEventsDataStream(EventsDataStream):
             order_id = msg_data[2][0]
             last_event = self.client.active_orders.get(order_id, {}).get('lastEvent', ())
             content = bfx.on_order_update(msg_data[2], last_event)
-            if msg_data[2][13] == 'CANCELED':
+            if 'CANCELED' in msg_data[2][13]:
                 self.client.active_orders.get(order_id, {}).update({'cancelled': True})
         elif msg_data[1] == 'te':
             order_id = msg_data[2][3]
