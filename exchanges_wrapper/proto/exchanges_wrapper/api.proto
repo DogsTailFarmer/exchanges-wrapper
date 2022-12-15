@@ -75,6 +75,7 @@ message CancelOrderResponse{
     string timeInForce = 12;
     string type = 13;
     string side = 14;
+    string selfTradePreventionMode = 15;
 }
 
 message CancelOrderRequest{
@@ -98,6 +99,11 @@ message CreateLimitOrderResponse{
     string timeInForce = 11;
     string type = 12;
     string side = 13;
+    uint64 strategyId = 14;
+    uint64 strategyType = 15;
+    sint64 workingTime = 16;
+    string selfTradePreventionMode = 17;
+
 }
 
 message CreateLimitOrderRequest{
@@ -347,6 +353,8 @@ message FetchExchangeInfoSymbolResponse {
   bool isMarginTradingAllowed = 17;
   Filters filters = 18;
   repeated string permissions = 19;
+  string defaultSelfTradePreventionMode = 20;
+  repeated string allowedSelfTradePreventionModes = 21;
 }
 
 message CancelAllOrdersResponse {
@@ -365,6 +373,7 @@ message CancelAllOrdersResponse {
     string timeInForce = 12;
     string type = 13;
     string side = 14;
+    string selfTradePreventionMode = 15;
   }
   repeated CancelOrder items = 1;
 }
@@ -395,7 +404,9 @@ message FetchOrderResponse {
   uint64 time = 15;
   uint64 updateTime = 16;
   bool isWorking = 17;
-  string origQuoteOrderQty = 18;
+  sint64 workingTime = 18;
+  string origQuoteOrderQty = 19;
+  string selfTradePreventionMode = 20;
 }
 
 message FetchOpenOrdersResponse {
@@ -419,6 +430,8 @@ message FetchOpenOrdersResponse {
     uint64 updateTime = 16;
     bool isWorking = 17;
     string origQuoteOrderQty = 18;
+    sint64 workingTime = 19;
+    string selfTradePreventionMode = 20;
   }
   repeated Order items = 2;
 }

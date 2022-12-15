@@ -1,3 +1,7 @@
+## v1.2.7-7 2022-12-15
+### Fixed
+* DogsTailFarmer/martin-binance#42
+
 ## v1.2.7-6 2022-12-08
 ### Fixed
 * Bitfinex: handling canceled TP order after it partially filled
