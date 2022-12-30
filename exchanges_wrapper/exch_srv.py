@@ -49,6 +49,8 @@ def get_account(_account_name: str) -> ():
             ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
             ws_public_mbr = endpoint.get('ws_public_mbr')
             #
+            exchange = 'binance' if exchange == 'binance_us' else exchange
+            #
             res = (exchange,        # 0
                    sub_account,     # 1
                    test_net,        # 2

@@ -1,6 +1,6 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "1.2.6b0"
+# __version__ = "1.2.8"
 
 [endpoint]
     [endpoint.binance]
@@ -8,6 +8,14 @@
         api_auth = 'https://api.binance.com'
         ws_public = 'wss://stream.binance.com:9443'
         ws_auth = 'wss://stream.binance.com:9443'
+        api_test = 'https://testnet.binance.vision'
+        ws_test = 'wss://testnet.binance.vision/ws'
+
+    [endpoint.binance_us]
+        api_public = 'https://api.binance.us'
+        api_auth = 'https://api.binance.us'
+        ws_public = 'wss://stream.binance.us:9443'
+        ws_auth = 'wss://stream.binance.us:9443'
         api_test = 'https://testnet.binance.vision'
         ws_test = 'wss://testnet.binance.vision/ws'
 
@@ -40,7 +48,7 @@
         api_test = 'https://aws.okx.com'
         ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
 
-# Binance accounts
+# Binance.com accounts
 [[accounts]]
     exchange = 'binance'
     name = 'Demo - Binance'
@@ -51,6 +59,14 @@
 [[accounts]]
     exchange = 'binance'
     name = 'BinanceSub1'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    test_net = false
+
+# Binance.us accounts
+[[accounts]]
+    exchange = 'binance_us'
+    name = 'Binance US'
     api_key = '*********** Place API key there ************'
     api_secret = '*********** Place secret API key there ************'
     test_net = false

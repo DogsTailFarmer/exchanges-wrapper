@@ -1,3 +1,7 @@
+## v1.2.8 - 2022-12-xx
+### Added for new features
+* Add connection to binance.us
+
 ## v1.2.7-7 2022-12-15
 ### Fixed
 * DogsTailFarmer/martin-binance#42
