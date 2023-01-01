@@ -1,4 +1,4 @@
-## v1.2.8 - 2022-12-xx
+## v1.2.8 - 2023-01-01
 ### Added for new features
 * Add connection to binance.us
 
