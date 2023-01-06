@@ -192,7 +192,6 @@ class Client:
             self.data_streams[_trade_id] |= {market_data_stream}
             start_list.append(market_data_stream.start())
         else:
-            _endpoint = self.endpoint_ws_public
             for channel in _events:
                 market_data_stream = MarketEventsDataStream(self,
                                                             self.endpoint_ws_public,
