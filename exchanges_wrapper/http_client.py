@@ -61,8 +61,6 @@ class HttpClient:
                 raise HTTPError(f"Malformed request: {payload}")
         if self.exchange in ('binance', 'bitfinex'):
             return payload
-        elif self.exchange == 'ftx' and payload and payload.get('success'):
-            return payload.get('result')
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
             return payload.get('data', payload.get('tick'))
         elif self.exchange == 'okx' and payload and payload.get('code') == '0':
@@ -154,50 +152,6 @@ class ClientBFX(HttpClient):
                                                                           signature_payload)
             query_kwargs["headers"]["bfx-nonce"] = str(ts)
 
-        # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
-        async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
-            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
-            return await self.handle_errors(response)
-
-
-class ClientFTX(HttpClient):
-
-    async def send_api_call(self,
-                            path,
-                            method="GET",
-                            signed=False,
-                            send_api_key=None,
-                            endpoint=None,
-                            timeout=None,
-                            **kwargs):
-        if self.rate_limit_reached:
-            raise QueryCanceled(QueryCanceled.message)
-        content = str()
-        _params = json.dumps(kwargs) if method == 'POST' else None
-        url = f'{endpoint or self.endpoint}/{path}'
-        query_kwargs = {"headers": {"Accept": AJ}}
-        query_kwargs["headers"]["FTX-KEY"] = self.api_key
-        if self.sub_account:
-            query_kwargs["headers"]["FTX-SUBACCOUNT"] = self.sub_account
-        content += urlencode(kwargs, safe='/')
-        if content and method == 'GET':
-            url += f'?{content}'
-        if signed and self.exchange != 'huobi':
-            ts = int(time.time() * 1000)
-            query_kwargs["headers"]["Content-Type"] = AJ
-            if method == 'POST':
-                query_kwargs.update({'data': _params})
-                content = f"{_params}"
-            signature_payload = f'{ts}{method}/api/{path}'
-            if content:
-                if method == 'POST':
-                    signature_payload += f'{content}'
-                else:
-                    signature_payload += f'?{content}'
-            query_kwargs["headers"]["FTX-SIGN"] = generate_signature(self.exchange,
-                                                                     self.api_secret,
-                                                                     signature_payload)
-            query_kwargs["headers"]["FTX-TS"] = str(ts)
         # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
         async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
             # print(f"send_api_call.response: url: {response.url}, status: {response.status}")

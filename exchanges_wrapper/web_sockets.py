@@ -16,7 +16,6 @@ import gzip
 from datetime import datetime
 from urllib.parse import urlencode, urlparse
 
-import exchanges_wrapper.ftx_parser as ftx
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
@@ -72,12 +71,6 @@ class EventsDataStream:
                 await asyncio.sleep(60)
                 raise aiohttp.ClientOSError
 
-    async def _heartbeat_ftx(self, interval=15):
-        request = {"op": "ping"}
-        while True:
-            await asyncio.sleep(interval)
-            await self.web_socket.send_json(request)
-
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
 
@@ -112,17 +105,6 @@ class EventsDataStream:
                     raise aiohttp.ClientOSError(f"Reconnecting OKX user {ch_type} channel")
                 else:
                     logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-            elif self.exchange == 'ftx':
-                if ch_type == 'orderbook' and msg_data.get('type') == 'partial':
-                    order_book = ftx.OrderBook(msg_data.get('data', {}), symbol)
-                elif msg_data.get('type') == 'update':
-                    if ch_type == 'ticker':
-                        _price = msg_data.get('data', {}).get('last', None)
-                        if price != _price:
-                            price = _price
-                            await self._handle_event(msg_data, symbol, ch_type, order_book)
-                    else:
-                        await self._handle_event(msg_data, symbol, ch_type, order_book)
             elif self.exchange == 'bitfinex':
                 # info and error handling
                 if isinstance(msg_data, dict):
@@ -239,21 +221,6 @@ class MarketEventsDataStream(EventsDataStream):
                            }
                 await self.web_socket.send_json(request)
                 await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
-            elif self.exchange == 'ftx':
-                self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                                receive_timeout=30,
-                                                                proxy=self.client.proxy)
-                if ch_type == 'miniTicker':
-                    ch_type = 'ticker'
-                elif ch_type == 'depth5':
-                    ch_type = 'orderbook'
-                request = {'op': 'subscribe', 'channel': ch_type, 'market': symbol}
-                await self.web_socket.send_json(request)
-                _task = asyncio.ensure_future(self._heartbeat_ftx())
-                try:
-                    await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
-                finally:
-                    _task.cancel()
             elif self.exchange == 'bitfinex':
                 self.web_socket = await self.session.ws_connect(self.endpoint,
                                                                 receive_timeout=30,
@@ -304,18 +271,6 @@ class MarketEventsDataStream(EventsDataStream):
             elif ch_type == 'book' and isinstance(order_book, bfx.OrderBook):
                 order_book.update_book(content[1])
                 content = order_book.get_book()
-        elif self.exchange == 'ftx':
-            if ch_type == 'orderbook' and isinstance(order_book, ftx.OrderBook):
-                if content['data']['checksum'] == order_book.update_book(content['data']):
-                    content = order_book.get_book()
-                else:
-                    logger.warning("For orderbook WSS lost the current state, restarting the stream")
-                    await asyncio.sleep(1)
-                    raise aiohttp.ClientOSError
-            elif ch_type == 'ticker':
-                content = ftx.stream_convert(content, symbol, ch_type)
-            else:
-                return
         elif self.exchange == 'huobi':
             if ch_type == 'ticker':
                 content = hbp.ticker(content, symbol)
@@ -404,53 +359,6 @@ class HbpPrivateEventsDataStream(EventsDataStream):
                 content = hbp.on_order_update(data)
         if content:
             logger.debug(f"HbpPrivateEventsDataStream._handle_event.content: {content}")
-            await self.client.events.wrap_event(content).fire(self.trade_id)
-
-
-class FtxPrivateEventsDataStream(EventsDataStream):
-    def __init__(self, client, endpoint, user_agent, exchange, trade_id, sub_account=None):
-        super().__init__(client, endpoint, user_agent, exchange, trade_id)
-        self.sub_account = sub_account
-
-    async def stop(self):
-        """
-        Stop data stream
-        """
-        if self.web_socket:
-            await self.web_socket.close()
-
-    async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint, proxy=self.client.proxy, receive_timeout=30)
-        ts = int(time.time() * 1000)
-        data = f"{ts}websocket_login"
-        request = {
-            "op": "login",
-            "args": {
-                 "key": self.client.api_key,
-                 "sign": generate_signature(self.exchange, self.client.api_secret, data),
-                 "time": ts
-             }
-        }
-        if self.sub_account:
-            request['args']['subaccount'] = self.sub_account
-        await self.web_socket.send_json(request)
-        request = {'op': 'subscribe', 'channel': 'fills'}
-        await self.web_socket.send_json(request)
-        request = {'op': 'subscribe', 'channel': 'orders'}
-        await self.web_socket.send_json(request)
-        _task = asyncio.ensure_future(self._heartbeat_ftx())
-        try:
-            await self._handle_messages(self.web_socket)
-        finally:
-            _task.cancel()
-
-    async def _handle_event(self, msg_data, *args):
-        self.try_count = 0
-        content = None
-        if msg_data.get('channel') in ('fills', 'orders'):
-            content = ftx.stream_convert(msg_data)
-        if content:
-            logger.debug(f"FtxPrivateEventsDataStream._handle_event.content: {content}")
             await self.client.events.wrap_event(content).fire(self.trade_id)
 
 

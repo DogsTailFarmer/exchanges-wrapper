@@ -1,3 +1,7 @@
+## v1.2.9 - 2023-01-08
+### Update
+* Removing FTX smell
+
 ## v1.2.8 - 2023-01-01
 ### Added for new features
 * Add connection to binance.us

@@ -17,7 +17,7 @@ import grpc
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
 #
-from exchanges_wrapper import events, errors, ftx_parser as ftx, api_pb2, api_pb2_grpc
+from exchanges_wrapper import events, errors, api_pb2, api_pb2_grpc
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent
@@ -387,8 +387,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.FetchFundingWalletResponse()
         response_balance = api_pb2.FetchFundingWalletResponse.Balances()
         res = []
-        if (client.exchange in ('bitfinex', 'okx') or
-                (open_client.real_market and client.exchange in ('binance', 'ftx'))):
+        if client.exchange in ('bitfinex', 'okx') or (open_client.real_market and client.exchange == 'binance'):
             try:
                 res = await client.fetch_funding_wallet(asset=request.asset,
                                                         need_btc_valuation=request.need_btc_valuation,
@@ -529,8 +528,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         client.stream_queue[request.trade_id] |= {_queue}
         if client.exchange == 'okx':
             _symbol = client.symbol_to_okx(request.symbol)
-        elif client.exchange == 'ftx':
-            _symbol = client.symbol_to_ftx(request.symbol)
         elif client.exchange == 'bitfinex':
             _symbol = client.symbol_to_bfx(request.symbol)
         else:
@@ -562,8 +559,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         client.stream_queue[request.trade_id] |= {_queue}
         if client.exchange == 'okx':
             _symbol = client.symbol_to_okx(request.symbol)
-        elif client.exchange == 'ftx':
-            _symbol = client.symbol_to_ftx(request.symbol)
         elif client.exchange == 'bitfinex':
             _symbol = client.symbol_to_bfx(request.symbol)
         else:
@@ -593,36 +588,16 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
         client.stream_queue[request.trade_id] |= {_queue}
-        if client.exchange in ('binance', 'bitfinex', 'huobi', 'okx'):
-            client.events.register_user_event(functools.partial(
-                event_handler, _queue, client, request.trade_id, 'outboundAccountPosition'),
-                'outboundAccountPosition')
-        balances_prev = []
-        assets = [request.base_asset, request.quote_asset]
+        client.events.register_user_event(functools.partial(
+            event_handler, _queue, client, request.trade_id, 'outboundAccountPosition'),
+            'outboundAccountPosition')
         while True:
-            try:
-                _event = await asyncio.wait_for(_queue.get(), timeout=HEARTBEAT * 3)
-            except asyncio.TimeoutError:
-                _event = None
+            _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnFundsUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
-            if client.exchange == 'ftx':
-                try:
-                    account_information = await client.fetch_account_information(receive_window=None)
-                except Exception as _ex:  # skipcq: PYL-W0703
-                    logger.warning(f"OnFundsUpdate: for {open_client.name}"
-                                   f" {request.base_asset}/{request.quote_asset}: {_ex}")
-                else:
-                    balances = account_information.get('balances', {})
-                    assets_balances = list(filter(lambda item: item['asset'] in assets, balances))
-                    if assets_balances and assets_balances != balances_prev:
-                        # logger.info(f"OnFundsUpdate.assets_balances: {assets_balances}")
-                        content = ftx.on_funds_update(assets_balances)
-                        balances_prev = assets_balances.copy()
-                        _event = client.events.wrap_event(content)
-            if isinstance(_event, events.OutboundAccountPositionWrapper):
+            else:
                 logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
                 yield response
@@ -646,7 +621,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}:{request.symbol}")
                 return
-            if client.exchange in ('bitfinex', 'huobi', 'ftx'):
+            if client.exchange in ('bitfinex', 'huobi'):
                 try:
                     balance = await client.fetch_ledgers(request.symbol)
                 except Exception as _ex:

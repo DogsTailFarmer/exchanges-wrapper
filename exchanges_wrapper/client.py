@@ -12,17 +12,15 @@ import logging
 import time
 from collections import defaultdict
 
-from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientFTX, ClientHBP, ClientOKX
+from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX
 from exchanges_wrapper.errors import ExchangePyError, RateLimitReached
 from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             MarketEventsDataStream,\
-                                            FtxPrivateEventsDataStream,\
                                             BfxPrivateEventsDataStream,\
                                             HbpPrivateEventsDataStream,\
                                             OkxPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
-import exchanges_wrapper.ftx_parser as ftx
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
@@ -83,8 +81,6 @@ class Client:
             self.http = ClientBinance(**client_init_params)
         elif exchange == 'bitfinex':
             self.http = ClientBFX(**client_init_params)
-        elif exchange == 'ftx':
-            self.http = ClientFTX(**client_init_params)
         elif exchange == 'huobi':
             self.http = ClientHBP(**client_init_params)
         elif exchange == 'okx':
@@ -149,13 +145,6 @@ class Client:
                                                     self.user_agent,
                                                     self.exchange,
                                                     _trade_id)
-        elif self.exchange == 'ftx':
-            user_data_stream = FtxPrivateEventsDataStream(self,
-                                                          self.endpoint_ws_auth,
-                                                          self.user_agent,
-                                                          self.exchange,
-                                                          _trade_id,
-                                                          self.sub_account)
         elif self.exchange == 'bitfinex':
             user_data_stream = BfxPrivateEventsDataStream(self,
                                                           self.endpoint_ws_auth,
@@ -212,10 +201,6 @@ class Client:
     def assert_symbol_exists(self, symbol):
         if self.loaded and symbol not in self.symbols:
             raise ExchangePyError(f"Symbol {symbol} is not valid according to the loaded exchange infos.")
-
-    def symbol_to_ftx(self, symbol) -> str:
-        symbol_info = self.symbols.get(symbol)
-        return f"{symbol_info.get('baseAsset')}/{symbol_info.get('quoteAsset')}"
 
     def symbol_to_bfx(self, symbol) -> str:
         symbol_info = self.symbols.get(symbol)
@@ -308,12 +293,6 @@ class Client:
                 "/api/v3/exchangeInfo",
                 send_api_key=False
             )
-        elif self.exchange == 'ftx':
-            res = await self.http.send_api_call(
-                "markets",
-                send_api_key=False
-            )
-            binance_res = ftx.exchange_info(res)
         elif self.exchange == 'bitfinex':
             symbols_details = await self.http.send_api_call(
                 "v1/symbols_details",
@@ -353,8 +332,6 @@ class Client:
         valid_limits = []
         if self.exchange == 'binance':
             valid_limits = [5, 10, 20, 50, 100, 500, 1000, 5000]
-        elif self.exchange == 'ftx':
-            valid_limits = [5, 10, 20, 50, 100]
         elif self.exchange == 'bitfinex':
             valid_limits = [1, 25, 100]
         elif self.exchange == 'huobi':
@@ -369,14 +346,6 @@ class Client:
                     params={"symbol": symbol, "limit": limit},
                     send_api_key=False,
                 )
-            elif self.exchange == 'ftx':
-                params = {'depth': limit}
-                res = await self.http.send_api_call(
-                    f"markets/{self.symbol_to_ftx(symbol)}/orderbook",
-                    send_api_key=False,
-                    **params,
-                )
-                binance_res = ftx.order_book(res)
             elif self.exchange == 'bitfinex':
                 params = {'len': limit}
                 res = await self.http.send_api_call(
@@ -453,21 +422,6 @@ class Client:
                         del self.ledgers_id[0]
                     binance_res = hbp.on_balance_update(res_i)
                     return binance_res
-        elif self.exchange == 'ftx':
-            params = {'start_time': time.time() - 60,
-                      'end_time': time.time()}
-            res = await self.http.send_api_call("wallet/deposits", signed=True, **params)
-            res_w = await self.http.send_api_call("wallet/withdrawals", signed=True, **params)
-            for _w in res_w:
-                _w['size'] = -1 * _w.get('size')
-                res.append(_w)
-            for _res in res:
-                if _res.get('coin') in symbol and _res.get('id') not in self.ledgers_id:
-                    self.ledgers_id.append(_res.get('id'))
-                    if len(self.ledgers_id) > limit:
-                        del self.ledgers_id[0]
-                    binance_res = ftx.on_balance_update(_res)
-                    return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
     async def fetch_recent_trades_list(self, symbol, limit=500):
@@ -528,9 +482,7 @@ class Client:
     async def fetch_klines(self, symbol, interval, start_time=None, end_time=None, limit=500):
         self.assert_symbol(symbol)
         interval = str(self.enum_to_value(interval))
-        if self.exchange == 'ftx':
-            interval = ftx.interval(interval)
-        elif self.exchange == 'huobi':
+        if self.exchange == 'huobi':
             interval = hbp.interval(interval)
         elif self.exchange == 'okx':
             interval = okx.interval(interval)
@@ -554,19 +506,6 @@ class Client:
             binance_res = await self.http.send_api_call(
                 "/api/v3/klines", params=params, signed=False
             )
-        elif self.exchange == 'ftx':
-            end_time = int(time.time())
-            start_time = end_time - interval * limit - 1
-            params = {
-                'resolution': interval,
-                'start_time': start_time,
-                'end_time': end_time}
-            res = await self.http.send_api_call(
-                f"markets/{self.symbol_to_ftx(symbol)}/candles",
-                send_api_key=False,
-                **params,
-            )
-            binance_res = ftx.klines(res, interval)
         elif self.exchange == 'bitfinex':
             params = {'limit': limit, 'sort': -1}
             if start_time:
@@ -625,20 +564,6 @@ class Client:
                 signed=False,
                 send_api_key=False,
             )
-        elif self.exchange == 'ftx' and symbol:
-            resolution = 60 * 60 * 24
-            end_time = int(time.time())
-            start_time = end_time - resolution
-            params = {
-                'resolution': resolution,
-                'start_time': start_time,
-                'end_time': end_time}
-            res = await self.http.send_api_call(
-                f"markets/{self.symbol_to_ftx(symbol)}/candles",
-                send_api_key=False,
-                **params,
-            )
-            binance_res = ftx.ticker_price_change_statistics(res, symbol, end_time)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/ticker/{self.symbol_to_bfx(symbol)}",
@@ -676,12 +601,6 @@ class Client:
                 signed=False,
                 send_api_key=False,
             )
-        elif self.exchange == 'ftx':
-            res = await self.http.send_api_call(
-                f"markets/{self.symbol_to_ftx(symbol)}" if symbol else "markets",
-                send_api_key=False,
-            )
-            binance_res = ftx.symbol_price_ticker(res, symbol)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/ticker/{self.symbol_to_bfx(symbol)}",
@@ -786,35 +705,6 @@ class Client:
                 params["recvWindow"] = receive_window
             route = "/api/v3/order/test" if test else "/api/v3/order"
             binance_res = await self.http.send_api_call(route, "POST", data=params, signed=True)
-        elif self.exchange == 'ftx':
-            params = {
-                "market": self.symbol_to_ftx(symbol),
-                "side": side.lower(),
-                "price": float(price),
-                "type": order_type.lower(),
-                "size": float(quantity),
-                "clientId": None
-            }
-            count = 0
-            res = {}
-            while count < 10:
-                try:
-                    res = await self.http.send_api_call(
-                        "orders",
-                        method="POST",
-                        signed=True,
-                        **params,
-                    )
-                    break
-                except RateLimitReached:
-                    count += 1
-                    logger.debug(f"RateLimitReached for {self.symbol_to_ftx(symbol)}, count {count}, try one else")
-                    await asyncio.sleep(random.uniform(0.1, 0.3) * count)
-            # logger.debug(f"create_order.res: {res}")
-            binance_res = ftx.order(res, response_type=False)
-            if binance_res.get('status') != 'NEW':
-                order_id = binance_res.get('orderId')
-                binance_res = await self.fetch_order(symbol, order_id, receive_window)
         elif self.exchange == 'bitfinex':
             params = {
                 "type": "EXCHANGE LIMIT",
@@ -931,12 +821,6 @@ class Client:
                 params=params,
                 signed=True,
             )
-        elif self.exchange == 'ftx':
-            res = await self.http.send_api_call(
-                f"orders/{order_id}",
-                signed=True,
-             )
-            binance_res = ftx.order(res, response_type=response_type)
         elif self.exchange == 'bitfinex':
             params = {'id': [order_id]}
             res = await self.http.send_api_call(
@@ -1000,28 +884,6 @@ class Client:
                 params=params,
                 signed=True,
             )
-        elif self.exchange == 'ftx':
-            if not order_id:
-                raise ValueError(
-                    "This query requires an order_id on FTX"
-                )
-            await self.http.send_api_call(
-                f"orders/{order_id}",
-                method="DELETE",
-                signed=True,
-             )
-            order_cancelled = False
-            timeout = STATUS_TIMEOUT
-            while not order_cancelled and timeout:
-                timeout -= 1
-                binance_res = await self.fetch_order(symbol,
-                                                     order_id,
-                                                     origin_client_order_id,
-                                                     receive_window,
-                                                     response_type=True,
-                                                     )
-                order_cancelled = bool(binance_res.get('status') == 'CANCELED')
-                await asyncio.sleep(1)
         elif self.exchange == 'bitfinex':
             if not order_id:
                 raise ValueError(
@@ -1097,19 +959,6 @@ class Client:
                 params=params,
                 signed=True,
             )
-        elif self.exchange == 'ftx':
-            params = {'market': self.symbol_to_ftx(symbol)}
-            # Get list of open orders
-            res_orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window, response_type=True)
-            if res_orders:
-                # Delete it
-                await self.http.send_api_call(
-                    "orders",
-                    method="DELETE",
-                    signed=True,
-                    **params
-                )
-            binance_res = res_orders
         elif self.exchange == 'bitfinex':
             orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window)
             orders_id = []
@@ -1181,14 +1030,6 @@ class Client:
                 params=params,
                 signed=True
             )
-        elif self.exchange == 'ftx':
-            params = {'market': self.symbol_to_ftx(symbol)}
-            res = await self.http.send_api_call(
-                "orders",
-                signed=True,
-                **params,
-            )
-            binance_res = ftx.orders(res)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
@@ -1423,11 +1264,6 @@ class Client:
                 params=params,
                 signed=True,
             )
-        elif self.exchange == 'ftx':
-            res = await self.http.send_api_call(
-                "wallet/balances",
-                signed=True)
-            binance_res = ftx.account_information(res)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 "v2/auth/r/wallets",
@@ -1463,13 +1299,6 @@ class Client:
                 params=params,
                 signed=True,
             )
-        elif self.exchange == 'ftx':
-            res = await self.http.send_api_call(
-                "wallet/all_balances",
-                signed=True,
-             )
-            if res and res.get('success'):
-                binance_res = ftx.fetch_funding_wallet(res.get('result').get('main', []))
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 "v2/auth/r/wallets",
@@ -1524,18 +1353,6 @@ class Client:
                 params=params,
                 signed=True,
             )
-        elif self.exchange == 'ftx':
-            params = {'market': self.symbol_to_ftx(symbol)}
-            if start_time:
-                params["startTime"] = int(start_time / 1000)
-            if order_id:
-                params["orderId"] = order_id
-            res = await self.http.send_api_call(
-                "fills",
-                signed=True,
-                **params,
-            )
-            binance_res = ftx.account_trade_list(res[-limit:])
         elif self.exchange == 'bitfinex':
             params = {'limit': limit, 'sort': -1}
             if start_time:
@@ -1586,7 +1403,7 @@ class Client:
     ):
         self.assert_symbol(symbol)
         binance_res = []
-        if self.exchange in ('binance', 'ftx'):
+        if self.exchange == 'binance':
             binance_res = await self.fetch_account_trade_list(symbol=symbol, order_id=order_id)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
@@ -1603,7 +1420,6 @@ class Client:
                       'instId': self.symbol_to_okx(symbol),
                       'ordId': str(order_id),
                       }
-
             res = await self.http.send_api_call("/api/v5/trade/fills", signed=True, **params)
             binance_res = okx.order_trade_list(res)
         logger.debug(f"fetch_order_trade_list.binance_res: {binance_res}")

@@ -45,9 +45,7 @@ class Events:
     def register_event(self, listener, event_type, exchange, trade_id):
         logger.info(f"register: event_type: {event_type}, exchange: {exchange}")
         self.registered_streams[exchange][trade_id] |= {event_type}
-        if exchange == 'ftx':
-            event_type = f"{event_type.split('@')[0].replace('/', '').lower()}@{event_type.split('@')[1]}"
-        elif exchange == 'bitfinex':
+        if exchange == 'bitfinex':
             event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
         elif exchange == 'okx':
             event_type = f"{event_type.split('@')[0].replace('-', '').lower()}@{event_type.split('@')[1]}"

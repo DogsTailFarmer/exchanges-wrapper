@@ -1,6 +1,6 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "1.2.8"
+# __version__ = "1.2.9"
 
 [endpoint]
     [endpoint.binance]
@@ -48,6 +48,9 @@
         api_test = 'https://aws.okx.com'
         ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
 
+# Don't change accounts.exchange field value
+# You can add subaccounts by duplicate records and set name, API and test_net fields
+#
 # Binance.com accounts
 [[accounts]]
     exchange = 'binance'
@@ -71,27 +74,10 @@
     api_secret = '*********** Place secret API key there ************'
     test_net = false
 
-# FTX accounts. For FTX sub_account_name var must be real subaccount name on FTX exchange
-[[accounts]]
-    exchange = 'ftx'
-    name = 'FTX'
-    # sub_account_name = 'main'
-    api_key = '*********** Place API key there ************'
-    api_secret = '*********** Place secret API key there ************'
-    test_net = false
-
-[[accounts]]
-    exchange = 'ftx'
-    name = 'FTX_sub_01'
-    sub_account_name = 'ftx_01'
-    api_key = '*********** Place API key there ************'
-    api_secret = '*********** Place secret API key there ************'
-    test_net = false
-
 # Bitfinex accounts
 [[accounts]]
     exchange = 'bitfinex'
-    name = 'Bitfinex - demo'
+    name = 'Demo - Bitfinex'
     api_key = '*********** Place API key there ************'
     api_secret = '*********** Place secret API key there ************'
     test_net = true
@@ -103,10 +89,10 @@
     api_secret = '*********** Place secret API key there ************'
     test_net = false
 
-# Huobi acconts
+# Huobi accounts
 [[accounts]]
     exchange = 'huobi'
-    name = 'HuobiSub4'
+    name = 'Huobi'
     api_key = '*********** Place API key there ************'
     api_secret = '*********** Place secret API key there ************'
     test_net = false
