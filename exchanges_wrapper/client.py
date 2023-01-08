@@ -7,13 +7,12 @@ from typing import Union
 import decimal
 import math
 import asyncio
-import random
 import logging
 import time
 from collections import defaultdict
 
 from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX
-from exchanges_wrapper.errors import ExchangePyError, RateLimitReached
+from exchanges_wrapper.errors import ExchangePyError
 from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             MarketEventsDataStream,\
                                             BfxPrivateEventsDataStream,\
