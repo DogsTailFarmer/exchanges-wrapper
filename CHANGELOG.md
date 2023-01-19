@@ -1,3 +1,7 @@
+## v1.2.9-1 - 2023-01-23
+### Update
+* Additional check for order status if its can't place during timeout period for avoid place duplicate order
+
 ## v1.2.9 - 2023-01-08
 ### Update
 * Removing FTX smell

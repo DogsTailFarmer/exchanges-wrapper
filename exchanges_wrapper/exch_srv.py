@@ -598,7 +598,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 logger.info(f"OnFundsUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             else:
-                logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
+                # logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
                 yield response
 
@@ -724,6 +724,12 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
+            if not res and client.exchange in ('binance', 'huobi', 'okx'):
+                res = await client.fetch_order(symbol=request.symbol,
+                                               order_id=None,
+                                               origin_client_order_id=request.new_client_order_id,
+                                               receive_window=None,
+                                               response_type=False)
             json_format.ParseDict(res, response)
             logger.debug(f"CreateLimitOrder: created: {res.get('orderId')}")
         return response

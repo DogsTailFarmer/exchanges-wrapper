@@ -796,7 +796,7 @@ class Client:
         response_type=None,
     ):
         self.assert_symbol(symbol)
-        if self.exchange == 'binance':
+        if self.exchange in ('binance', 'huobi', 'okx'):
             if not order_id and not origin_client_order_id:
                 raise ValueError(
                     "This query requires an order_id or an origin_client_order_id"
@@ -811,15 +811,29 @@ class Client:
             params = {"symbol": symbol}
             if order_id:
                 params["orderId"] = order_id
-            if origin_client_order_id:
-                params["originClientOrderId"] = origin_client_order_id
+            else:
+                params["origClientOrderId"] = origin_client_order_id
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = await self.http.send_api_call(
+            res = await self.http.send_api_call(
                 "/api/v3/order",
                 params=params,
                 signed=True,
             )
+            binance_res = {
+                "symbol": res.get('symbol'),
+                "orderId": res.get('orderId'),
+                "orderListId": res.get('orderListId'),
+                "clientOrderId": res.get('clientOrderId'),
+                "price": res.get('price'),
+                "origQty": res.get('origQty'),
+                "executedQty": res.get('executedQty'),
+                "cummulativeQuoteQty": res.get('cummulativeQuoteQty'),
+                "status": res.get('status'),
+                "timeInForce": res.get('timeInForce'),
+                "type": res.get('type'),
+                "side": res.get('side'),
+            }
         elif self.exchange == 'bitfinex':
             params = {'id': [order_id]}
             res = await self.http.send_api_call(
@@ -828,7 +842,6 @@ class Client:
                 signed=True,
                 **params
             )
-            logger.debug(f"fetch_order(active).res: {res}")
             if not res:
                 res = await self.http.send_api_call(
                     f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}/hist",
@@ -840,7 +853,11 @@ class Client:
             if res:
                 binance_res = bfx.order(res[0], response_type=response_type)
         elif self.exchange == 'huobi':
-            res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
+            if origin_client_order_id:
+                params = {'clientOrderId': str(origin_client_order_id)}
+                res = await self.http.send_api_call(f"/v1/order/orders/getClientOrder", signed=True, **params)
+            else:
+                res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
             binance_res = hbp.order(res, response_type=response_type)
         elif self.exchange == 'okx':
             params = {'instId': self.symbol_to_okx(symbol),
