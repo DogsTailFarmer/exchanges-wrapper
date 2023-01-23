@@ -855,7 +855,7 @@ class Client:
         elif self.exchange == 'huobi':
             if origin_client_order_id:
                 params = {'clientOrderId': str(origin_client_order_id)}
-                res = await self.http.send_api_call(f"/v1/order/orders/getClientOrder", signed=True, **params)
+                res = await self.http.send_api_call("/v1/order/orders/getClientOrder", signed=True, **params)
             else:
                 res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
             binance_res = hbp.order(res, response_type=response_type)
