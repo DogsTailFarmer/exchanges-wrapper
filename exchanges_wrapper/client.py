@@ -1,6 +1,3 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
-
 import aiohttp
 from enum import Enum
 from typing import Union

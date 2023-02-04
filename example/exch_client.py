@@ -1,4 +1,4 @@
-#!/usr/bin/python3.8
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Client example for exchanges-wrapper, examples of use of server methods are given

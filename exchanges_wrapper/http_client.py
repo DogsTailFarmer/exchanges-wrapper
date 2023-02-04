@@ -1,6 +1,3 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
-
 import json
 from urllib.parse import urlencode, urlparse
 from exchanges_wrapper import __version__

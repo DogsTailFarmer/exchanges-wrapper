@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
 """
 Parser for convert Huobi REST API/WSS response to Binance like result
 """

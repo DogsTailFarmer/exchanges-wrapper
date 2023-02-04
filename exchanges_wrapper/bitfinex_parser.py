@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
 """
 Parser for convert Bitfinex REST API/WSS response to Binance like result
 """

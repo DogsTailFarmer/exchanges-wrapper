@@ -1,10 +1,10 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-REST API and WebSocket asyncio wrapper with grpc powered multiplexer server for crypto exchanges
- (Binance, FTX, Bitfinex,)
-Utilizes one connection for many accounts and trading pairs.
-For SPOT market only
+REST API and WebSocket asyncio wrapper with grpc powered multiplexer server
+ for crypto exchanges (Binance, Bitfinex, OKX, Huobi,)
+ Utilizes one connection for many accounts and trading pairs.
+ For SPOT market only
 """
 __authors__ = ["Th0rgal", "Jerry Fedorenko"]
 __license__ = "MIT"
@@ -12,7 +12,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "1.2.9-1"
+__version__ = "1.2.9-2"
 
 from pathlib import Path
 import shutil

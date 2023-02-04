@@ -1,6 +1,3 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
-
 # Enum definitions of the exchanges_wrapper REST API
 # see: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#enum-definitions
 

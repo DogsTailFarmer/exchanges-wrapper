@@ -1,3 +1,7 @@
+## v1.2.9-2 - 2023-01-xx
+### Update
+* Remove unnecessary shebang
+
 ## v1.2.9-1 - 2023-01-23
 ### Update
 * Additional check for order status if its can't place during timeout period for avoid place duplicate order
