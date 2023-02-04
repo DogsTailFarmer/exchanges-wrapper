@@ -19,7 +19,7 @@
 ***
 
 ## exchanges-wrapper vs binance.py
-The main difference is the development of the project for trading with many exchanges, including DeFi platforms shortly.
+The main difference is the development of the project for trading with many exchanges.
 
 Next is adding a new module ```exchanges_wrapper/exch_srv.py``` as a multiplexer layer, providing simultaneous async interaction for many accounts
 and many trading pairs through one connection. It's powered by [gRPC](https://grpc.io/about/)
