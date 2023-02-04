@@ -20,6 +20,7 @@ from exchanges_wrapper.events import Events
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
+from exchanges_wrapper.c_structures import order as binance_order_transform
 
 logger = logging.getLogger('exch_srv_logger')
 
@@ -817,20 +818,7 @@ class Client:
                 params=params,
                 signed=True,
             )
-            binance_res = {
-                "symbol": res.get('symbol'),
-                "orderId": res.get('orderId'),
-                "orderListId": res.get('orderListId'),
-                "clientOrderId": res.get('clientOrderId'),
-                "price": res.get('price'),
-                "origQty": res.get('origQty'),
-                "executedQty": res.get('executedQty'),
-                "cummulativeQuoteQty": res.get('cummulativeQuoteQty'),
-                "status": res.get('status'),
-                "timeInForce": res.get('timeInForce'),
-                "type": res.get('type'),
-                "side": res.get('side'),
-            }
+            binance_res = binance_order_transform(res, response_type=response_type)
         elif self.exchange == 'bitfinex':
             params = {'id': [order_id]}
             res = await self.http.send_api_call(
@@ -846,7 +834,6 @@ class Client:
                     signed=True,
                     **params
                 )
-            logger.debug(f"fetch_order(closed).res: {res}")
             if res:
                 binance_res = bfx.order(res[0], response_type=response_type)
         elif self.exchange == 'huobi':

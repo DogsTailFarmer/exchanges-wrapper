@@ -80,3 +80,61 @@ def generate_signature(exchange, api_secret, data):
     else:
         sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
     return sig
+
+
+def order(res: {}, response_type=None) -> {}:
+    if response_type:
+        binance_order = {
+            "symbol": res.get('symbol'),
+            "origClientOrderId": res.get('origClientOrderId'),
+            "orderId": res.get('orderId'),
+            "orderListId": res.get('orderListId'),
+            "clientOrderId": res.get('clientOrderId'),
+            "transactTime": res.get('time'),
+            "price": res.get('price'),
+            "origQty": res.get('origQty'),
+            "executedQty": res.get('executedQty'),
+            "cummulativeQuoteQty": res.get('cummulativeQuoteQty'),
+            "status": res.get('status'),
+            "timeInForce": res.get('timeInForce'),
+            "type": res.get('type'),
+            "side": res.get('side'),
+        }
+    elif response_type is None:
+        binance_order = {
+            "symbol": res.get('symbol'),
+            "orderId": res.get('orderId'),
+            "orderListId": res.get('orderListId'),
+            "clientOrderId": res.get('clientOrderId'),
+            "price": res.get('price'),
+            "origQty": res.get('origQty'),
+            "executedQty": res.get('executedQty'),
+            "cummulativeQuoteQty": res.get('cummulativeQuoteQty'),
+            "status": res.get('status'),
+            "timeInForce": res.get('timeInForce'),
+            "type": res.get('type'),
+            "side": res.get('side'),
+            "stopPrice": res.get('stopPrice'),
+            "icebergQty": res.get('icebergQty'),
+            "time": res.get('time'),
+            "updateTime": res.get('updateTime'),
+            "isWorking": res.get('isWorking'),
+            "origQuoteOrderQty": res.get('origQuoteOrderQty'),
+        }
+    else:
+        binance_order = {
+            "symbol": res.get('symbol'),
+            "orderId": res.get('orderId'),
+            "orderListId": res.get('orderListId'),
+            "clientOrderId": res.get('clientOrderId'),
+            "price": res.get('price'),
+            "origQty": res.get('origQty'),
+            "executedQty": res.get('executedQty'),
+            "cummulativeQuoteQty": res.get('cummulativeQuoteQty'),
+            "status": res.get('status'),
+            "timeInForce": res.get('timeInForce'),
+            "type": res.get('type'),
+            "side": res.get('side'),
+        }
+    # print(f"order.binance_order: {binance_order}")
+    return binance_order
