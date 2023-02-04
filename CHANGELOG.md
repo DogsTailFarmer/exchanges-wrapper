@@ -1,4 +1,7 @@
-## v1.2.9-2 - 2023-01-xx
+## v1.2.9-2 - 2023-02-04
+### Fixed
+* Fix DogsTailFarmer/martin-binance#50
+
 ### Update
 * Remove unnecessary shebang
 
