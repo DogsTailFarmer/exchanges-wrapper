@@ -134,6 +134,11 @@ class MartinStub(object):
                 request_serializer=exchanges__wrapper_dot_api__pb2.FetchFundingWalletRequest.SerializeToString,
                 response_deserializer=exchanges__wrapper_dot_api__pb2.FetchFundingWalletResponse.FromString,
                 )
+        self.TransferToMaster = channel.unary_unary(
+                '/martin.Martin/TransferToMaster',
+                request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
+                response_deserializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
+                )
 
 
 class MartinServicer(object):
@@ -283,6 +288,12 @@ class MartinServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def TransferToMaster(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MartinServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -405,6 +416,11 @@ def add_MartinServicer_to_server(servicer, server):
                     servicer.FetchFundingWallet,
                     request_deserializer=exchanges__wrapper_dot_api__pb2.FetchFundingWalletRequest.FromString,
                     response_serializer=exchanges__wrapper_dot_api__pb2.FetchFundingWalletResponse.SerializeToString,
+            ),
+            'TransferToMaster': grpc.unary_unary_rpc_method_handler(
+                    servicer.TransferToMaster,
+                    request_deserializer=exchanges__wrapper_dot_api__pb2.MarketRequest.FromString,
+                    response_serializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -821,5 +837,22 @@ class Martin(object):
         return grpc.experimental.unary_unary(request, target, '/martin.Martin/FetchFundingWallet',
             exchanges__wrapper_dot_api__pb2.FetchFundingWalletRequest.SerializeToString,
             exchanges__wrapper_dot_api__pb2.FetchFundingWalletResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def TransferToMaster(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/martin.Martin/TransferToMaster',
+            exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
+            exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

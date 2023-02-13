@@ -196,7 +196,7 @@ class Client:
 
     def assert_symbol_exists(self, symbol):
         if self.loaded and symbol not in self.symbols:
-            raise ExchangePyError(f"Symbol {symbol} is not valid according to the loaded exchange infos.")
+            raise ExchangePyError(f"Symbol {symbol} is not valid according to the loaded exchange infos")
 
     def symbol_to_bfx(self, symbol) -> str:
         symbol_info = self.symbols.get(symbol)
@@ -1312,6 +1312,21 @@ class Client:
                 params = {'ccy': self.symbol_to_okx(asset)}
             res = await self.http.send_api_call("/api/v5/asset/balances", signed=True, **params)
             binance_res = okx.funding_wallet(res)
+        return binance_res
+
+    # https://binance-docs.github.io/apidocs/spot/en/#transfer-to-master-for-sub-account
+    async def transfer_to_master(self, symbol, quantity, receive_window=None):
+        binance_res = {}
+        if self.exchange == 'binance':
+            params = {"symbol": symbol, "amount": quantity}
+            if receive_window:
+                params["recvWindow"] = receive_window
+            binance_res = await self.http.send_api_call(
+                "/sapi/v1/sub-account/transfer/subToMaster",
+                "POST",
+                data=params,
+                signed=True
+            )
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-trade-list-user_data

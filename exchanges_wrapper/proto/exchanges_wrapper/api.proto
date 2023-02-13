@@ -34,6 +34,7 @@ service Martin {
   rpc ResetRateLimit (OpenClientConnectionId) returns (SimpleResponse) {}
   rpc OnKlinesUpdate(FetchKlinesRequest) returns (stream OnKlinesUpdateResponse) {}
   rpc FetchFundingWallet(FetchFundingWalletRequest) returns (FetchFundingWalletResponse) {}
+  rpc TransferToMaster(MarketRequest) returns (SimpleResponse) {}
 }
 
 message OnBalanceUpdateResponse {
@@ -163,6 +164,7 @@ message OnFundsUpdateRequest {
 
 message SimpleResponse {
   bool success = 1;
+  string result = 2;
 }
 
 message OnTickerUpdateResponse {
@@ -440,6 +442,7 @@ message MarketRequest {
   int64 client_id = 1;
   string trade_id = 2;
   string symbol = 3;
+  string amount = 4;
 }
 
 message StartStreamRequest {

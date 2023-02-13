@@ -155,11 +155,12 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
                               _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
-        client = OpenClient.get_client(request.client_id).client
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
         try:
             res = await client.fetch_server_time()
         except Exception as ex:
-            logger.error(f"FetchServerTime for {client.open_client.name} exception: {ex}")
+            logger.error(f"FetchServerTime for {open_client.name} exception: {ex}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
@@ -759,6 +760,29 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
             json_format.ParseDict(res, response)
+        return response
+
+    async def TransferToMaster(self, request: api_pb2.MarketRequest,
+                               _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+        response = api_pb2.SimpleResponse()
+        response.success = False
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
+        try:
+            res = await client.transfer_to_master(symbol=request.symbol, quantity=request.amount)
+        except errors.HTTPError as ex:
+            logger.error(f"TransferToMaster for {open_client.name}: {request.symbol} exception: {ex}")
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+        except Exception as ex:
+            logger.error(f"TransferToMaster for {open_client.name}: {request.symbol} exception: {ex}")
+            logger.debug(f"TransferToMaster for {open_client.name}: {request.symbol} error: {traceback.format_exc()}")
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.UNKNOWN)
+        else:
+            if res and res.get("txnId"):
+                response.success = True
+            response.result = json.dumps(res)
         return response
 
     async def StartStream(self, request: api_pb2.StartStreamRequest,

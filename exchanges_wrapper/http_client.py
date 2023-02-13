@@ -1,5 +1,8 @@
 import json
 from urllib.parse import urlencode, urlparse
+
+import aiohttp
+
 from exchanges_wrapper import __version__
 import logging
 import time
@@ -41,13 +44,16 @@ class HttpClient:
             logger.error(f"handle_errors RateLimitReached:response.url: {response.url}")
             self.rate_limit_reached = self.exchange in ('binance', 'okx')
             raise RateLimitReached(RateLimitReached.message)
-        payload = await response.json()
+        try:
+            payload = await response.json()
+        except aiohttp.ContentTypeError:
+            payload = None
         if self.exchange == 'binance' and payload and "code" in payload:
             # as defined here: https://github.com/binance/binance-spot-api-docs/blob/
             # master/errors.md#error-codes-for-binance-2019-09-25
             raise ExchangeError(payload["msg"])
         if response.status >= 400:
-            logger.debug(f"handle_errors.response.status >= 400: {payload}")
+            logger.debug(f"handle_errors.response: {response.text}")
             if response.status == 400 and payload and payload.get("error", str()) == "ERR_RATE_LIMIT":
                 raise RateLimitReached(RateLimitReached.message)
             elif response.status == 403 and self.exchange != 'okx':
@@ -55,7 +61,7 @@ class HttpClient:
             elif response.status == 418:
                 raise IPAddressBanned(IPAddressBanned.message)
             else:
-                raise HTTPError(f"Malformed request: {payload}")
+                raise HTTPError(f"Malformed request: status: {response.status}, reason: {response.reason}")
         if self.exchange in ('binance', 'bitfinex'):
             return payload
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
@@ -63,7 +69,7 @@ class HttpClient:
         elif self.exchange == 'okx' and payload and payload.get('code') == '0':
             return payload.get('data', [])
         else:
-            raise HTTPError(f"API request failed: {payload}")
+            raise HTTPError(f"API request failed: {response.status}:{response.reason}:{payload}")
 
     async def send_api_call(self,
                             path,
