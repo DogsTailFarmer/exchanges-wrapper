@@ -2,6 +2,9 @@
 ### Added for new features
 * Add method TransferToMaster()
 
+### Update
+* Up requirements to last versions
+
 ## v1.2.9-2 - 2023-02-04
 ### Fixed
 * Fix DogsTailFarmer/martin-binance#50
