@@ -1324,7 +1324,7 @@ class Client:
             binance_res = await self.http.send_api_call(
                 "/sapi/v1/sub-account/transfer/subToMaster",
                 "POST",
-                data=params,
+                params=params,
                 signed=True
             )
         return binance_res
