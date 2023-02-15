@@ -1,4 +1,4 @@
-aiohttp==3.8.4
+aiohttp==3.8.1
 grpcio==1.51.1
 grpcio-tools==1.51.1
 toml==0.10.2

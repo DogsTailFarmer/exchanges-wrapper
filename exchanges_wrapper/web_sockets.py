@@ -1,5 +1,3 @@
-# __version__ = "1.2.6b4"
-
 from exchanges_wrapper import __version__
 
 import aiohttp
@@ -20,6 +18,8 @@ import exchanges_wrapper.okx_parser as okx
 from exchanges_wrapper.c_structures import generate_signature
 
 logger = logging.getLogger('exch_srv_logger')
+
+BUFFER_LIMIT = 50
 
 
 class EventsDataStream:
@@ -75,6 +75,8 @@ class EventsDataStream:
     async def _handle_messages(self, web_socket, symbol=None, ch_type=str()):
         order_book = None
         price = None
+        stream_buffer = []
+
         while True:
             msg = await web_socket.receive()
             # logger.info(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg.type: {msg.type}")
@@ -87,87 +89,93 @@ class EventsDataStream:
             elif msg.type is aiohttp.WSMsgType.ERROR:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
             msg_data = json.loads(gzip.decompress(msg.data) if msg.type is aiohttp.WSMsgType.BINARY else msg.data)
-            if self.exchange == 'binance':
-                await self._handle_event(msg_data)
-            elif self.exchange == 'okx':
-                if (not ch_type and
-                        msg_data.get('arg', {}).get('channel') in ('account', 'orders', 'balance_and_position')
-                        and msg_data.get('data')):
+
+            if not stream_buffer.count(msg_data):
+                stream_buffer.append(msg_data)
+                if len(stream_buffer) > BUFFER_LIMIT:
+                    stream_buffer.pop(0)
+
+                if self.exchange == 'binance':
                     await self._handle_event(msg_data)
-                elif ch_type and msg_data.get('data'):
-                    await self._handle_event(msg_data.get('data')[0], symbol, ch_type)
-                elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
-                    return
-                elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
-                    logger.info(f"WSS handle messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-                    raise aiohttp.ClientOSError(f"Reconnecting OKX user {ch_type} channel")
-                else:
-                    logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-            elif self.exchange == 'bitfinex':
-                # info and error handling
-                if isinstance(msg_data, dict):
-                    if msg_data.get('event') == 'subscribed':
-                        chan_id = msg_data.get('chanId')
-                        logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
-                    elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
-                        chan_id = msg_data.get('chanId')
-                        logger.info(f"bitfinex, user stream chan_id: {chan_id}")
-                    elif 'code' in msg_data:
-                        code = msg_data.get('code')
-                        if code == 10300:
-                            raise aiohttp.ClientOSError('WSS Subscription failed (generic)')
-                        elif code == 10301:
-                            logger.error('WSS Already subscribed')
-                            break
-                        elif code == 10302:
-                            logger.error(f"WSS Unknown channel {ch_type}")
-                            break
-                        elif code == 10305:
-                            logger.error('WSS Reached limit of open channels')
-                            break
-                        elif code == 20051:
-                            raise aiohttp.ClientOSError('WSS reconnection request received from exchange')
-                        elif code == 20060:
-                            logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
-                            await asyncio.sleep(120)
-                            raise aiohttp.ClientOSError
-                # data handling
-                elif isinstance(msg_data, list) and len(msg_data) == 2 and msg_data[1] == 'hb':
-                    pass
-                elif isinstance(msg_data, list):
-                    if ch_type == 'book' and isinstance(msg_data[1][-1], list):
-                        order_book = bfx.OrderBook(msg_data[1], symbol)
+                elif self.exchange == 'okx':
+                    if (not ch_type and
+                            msg_data.get('arg', {}).get('channel') in ('account', 'orders', 'balance_and_position')
+                            and msg_data.get('data')):
+                        await self._handle_event(msg_data)
+                    elif ch_type and msg_data.get('data'):
+                        await self._handle_event(msg_data.get('data')[0], symbol, ch_type)
+                    elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
+                        return
+                    elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
+                        logger.info(f"WSS handle messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                        raise aiohttp.ClientOSError(f"Reconnecting OKX user {ch_type} channel")
                     else:
-                        await self._handle_event(msg_data, symbol, ch_type, order_book)
-                else:
-                    logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-            elif self.exchange == 'huobi':
-                if msg_data.get('ping'):
-                    await self.web_socket.send_json({"pong": msg_data.get('ping')})
-                elif msg_data.get('action') == 'ping':
-                    pong = {
-                        "action": "pong",
-                        "data": {
-                              "ts": msg_data.get('data').get('ts')
+                        logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                elif self.exchange == 'bitfinex':
+                    # info and error handling
+                    if isinstance(msg_data, dict):
+                        if msg_data.get('event') == 'subscribed':
+                            chan_id = msg_data.get('chanId')
+                            logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
+                        elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
+                            chan_id = msg_data.get('chanId')
+                            logger.info(f"bitfinex, user stream chan_id: {chan_id}")
+                        elif 'code' in msg_data:
+                            code = msg_data.get('code')
+                            if code == 10300:
+                                raise aiohttp.ClientOSError('WSS Subscription failed (generic)')
+                            elif code == 10301:
+                                logger.error('WSS Already subscribed')
+                                break
+                            elif code == 10302:
+                                logger.error(f"WSS Unknown channel {ch_type}")
+                                break
+                            elif code == 10305:
+                                logger.error('WSS Reached limit of open channels')
+                                break
+                            elif code == 20051:
+                                raise aiohttp.ClientOSError('WSS reconnection request received from exchange')
+                            elif code == 20060:
+                                logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
+                                await asyncio.sleep(120)
+                                raise aiohttp.ClientOSError
+                    # data handling
+                    elif isinstance(msg_data, list) and len(msg_data) == 2 and msg_data[1] == 'hb':
+                        pass
+                    elif isinstance(msg_data, list):
+                        if ch_type == 'book' and isinstance(msg_data[1][-1], list):
+                            order_book = bfx.OrderBook(msg_data[1], symbol)
+                        else:
+                            await self._handle_event(msg_data, symbol, ch_type, order_book)
+                    else:
+                        logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                elif self.exchange == 'huobi':
+                    if msg_data.get('ping'):
+                        await self.web_socket.send_json({"pong": msg_data.get('ping')})
+                    elif msg_data.get('action') == 'ping':
+                        pong = {
+                            "action": "pong",
+                            "data": {
+                                  "ts": msg_data.get('data').get('ts')
+                            }
                         }
-                    }
-                    await self.web_socket.send_json(pong)
-                elif msg_data.get('tick') or msg_data.get('data'):
-                    if ch_type == 'ticker':
-                        _price = msg_data.get('tick', {}).get('lastPrice', None)
-                        if price != _price:
-                            price = _price
+                        await self.web_socket.send_json(pong)
+                    elif msg_data.get('tick') or msg_data.get('data'):
+                        if ch_type == 'ticker':
+                            _price = msg_data.get('tick', {}).get('lastPrice', None)
+                            if price != _price:
+                                price = _price
+                                await self._handle_event(msg_data, symbol, ch_type)
+                        else:
                             await self._handle_event(msg_data, symbol, ch_type)
+                    elif msg_data.get('action') == 'req' and msg_data.get('code') == 200 and msg_data.get('ch') == 'auth':
+                        return
+                    elif (msg_data.get('action') == 'sub' and
+                          msg_data.get('code') == 500 and
+                          msg_data.get('message') == '系统异常:'):
+                        raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} channel")
                     else:
-                        await self._handle_event(msg_data, symbol, ch_type)
-                elif msg_data.get('action') == 'req' and msg_data.get('code') == 200 and msg_data.get('ch') == 'auth':
-                    return
-                elif (msg_data.get('action') == 'sub' and
-                      msg_data.get('code') == 500 and
-                      msg_data.get('message') == '系统异常:'):
-                    raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} channel")
-                else:
-                    logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                        logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
 
 class MarketEventsDataStream(EventsDataStream):

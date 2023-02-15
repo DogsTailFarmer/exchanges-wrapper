@@ -1318,7 +1318,7 @@ class Client:
     async def transfer_to_master(self, symbol, quantity, receive_window=None):
         binance_res = {}
         if self.exchange == 'binance':
-            params = {"symbol": symbol, "amount": quantity}
+            params = {"asset": symbol, "amount": quantity}
             if receive_window:
                 params["recvWindow"] = receive_window
             binance_res = await self.http.send_api_call(
