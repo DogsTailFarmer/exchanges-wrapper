@@ -18,8 +18,8 @@ requires-python = ">=3.8"
 
 dependencies = [
     "aiohttp==3.8.1",
-    "grpcio==1.51.1",
-    "grpcio-tools==1.51.1",
+    "grpcio==1.48.1",
+    "grpcio-tools==1.48.1",
     "toml==0.10.2",
     "idna==3.4"
 ]

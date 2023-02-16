@@ -55,7 +55,7 @@ class EventsDataStream:
     async def stop(self):
         pass  # meant to be overridden in a subclass
 
-    async def upstream_bitfinex(self, request, symbol=None, ch_type=str()):
+    async def upstream_bitfinex(self, request, symbol=None, ch_type=str(), private_events=True):
         await self.web_socket.send_json(request)
         msg = await self.web_socket.receive_json()
         if msg.get('event') == 'info':
@@ -63,7 +63,7 @@ class EventsDataStream:
                 logger.warning('Change WSS version detected')
             if msg.get('platform') and msg.get('platform').get('status'):
                 logger.debug(f"BfxPrivateEventsDataStream.msg: {msg}")
-                await self._handle_messages(self.web_socket, symbol, ch_type)
+                await self._handle_messages(self.web_socket, symbol, ch_type, private_events=private_events)
             else:
                 logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
                 await asyncio.sleep(60)
@@ -72,7 +72,7 @@ class EventsDataStream:
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
 
-    async def _handle_messages(self, web_socket, symbol=None, ch_type=str()):
+    async def _handle_messages(self, web_socket, symbol=None, ch_type=str(), private_events=True):
         order_book = None
         price = None
         stream_buffer = []
@@ -90,10 +90,11 @@ class EventsDataStream:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
             msg_data = json.loads(gzip.decompress(msg.data) if msg.type is aiohttp.WSMsgType.BINARY else msg.data)
 
-            if not stream_buffer.count(msg_data):
-                stream_buffer.append(msg_data)
-                if len(stream_buffer) > BUFFER_LIMIT:
-                    stream_buffer.pop(0)
+            if not private_events or (private_events and not stream_buffer.count(msg_data)):
+                if private_events:
+                    stream_buffer.append(msg_data)
+                    if len(stream_buffer) > BUFFER_LIMIT:
+                        stream_buffer.pop(0)
 
                 if self.exchange == 'binance':
                     await self._handle_event(msg_data)
@@ -201,7 +202,7 @@ class MarketEventsDataStream(EventsDataStream):
             self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
                                                             proxy=self.client.proxy)
             logger.info(f"Combined events stream started: {combined_streams}")
-            await self._handle_messages(self.web_socket)
+            await self._handle_messages(self.web_socket, private_events=False)
         else:
             symbol = self.channel.split('@')[0]
             ch_type = self.channel.split('@')[1]
@@ -226,7 +227,7 @@ class MarketEventsDataStream(EventsDataStream):
                                     ]
                            }
                 await self.web_socket.send_json(request)
-                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
+                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type, private_events=False)
             elif self.exchange == 'bitfinex':
                 self.web_socket = await self.session.ws_connect(self.endpoint,
                                                                 receive_timeout=30,
@@ -241,7 +242,7 @@ class MarketEventsDataStream(EventsDataStream):
                 elif ch_type == 'depth5':
                     ch_type = 'book'
                     request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', }
-                await self.upstream_bitfinex(request, symbol, ch_type)
+                await self.upstream_bitfinex(request, symbol, ch_type, private_events=False)
             elif self.exchange == 'huobi':
                 self.web_socket = await self.session.ws_connect(self.endpoint,
                                                                 receive_timeout=20,
@@ -256,7 +257,7 @@ class MarketEventsDataStream(EventsDataStream):
                 elif ch_type == 'depth5':
                     request = {'sub': f"market.{symbol}.depth.step0"}
                 await self.web_socket.send_json(request)
-                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
+                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type, private_events=False)
 
     async def _handle_event(self, content, symbol=None, ch_type=str(), order_book=None):
         # logger.info(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
