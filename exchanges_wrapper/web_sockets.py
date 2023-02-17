@@ -19,8 +19,6 @@ from exchanges_wrapper.c_structures import generate_signature
 
 logger = logging.getLogger('exch_srv_logger')
 
-BUFFER_LIMIT = 50
-
 
 class EventsDataStream:
     def __init__(self, client, endpoint, user_agent, exchange, trade_id):
@@ -53,9 +51,13 @@ class EventsDataStream:
         pass  # meant to be overridden in a subclass
 
     async def stop(self):
-        pass  # meant to be overridden in a subclass
+        """
+        Stop data stream
+        """
+        if self.web_socket:
+            await self.web_socket.close()
 
-    async def upstream_bitfinex(self, request, symbol=None, ch_type=str(), private_events=True):
+    async def upstream_bitfinex(self, request, symbol=None, ch_type=str()):
         await self.web_socket.send_json(request)
         msg = await self.web_socket.receive_json()
         if msg.get('event') == 'info':
@@ -63,7 +65,7 @@ class EventsDataStream:
                 logger.warning('Change WSS version detected')
             if msg.get('platform') and msg.get('platform').get('status'):
                 logger.debug(f"BfxPrivateEventsDataStream.msg: {msg}")
-                await self._handle_messages(self.web_socket, symbol, ch_type, private_events=private_events)
+                await self._handle_messages(self.web_socket, symbol, ch_type)
             else:
                 logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
                 await asyncio.sleep(60)
@@ -72,11 +74,9 @@ class EventsDataStream:
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
 
-    async def _handle_messages(self, web_socket, symbol=None, ch_type=str(), private_events=True):
+    async def _handle_messages(self, web_socket, symbol=None, ch_type=str()):
         order_book = None
         price = None
-        stream_buffer = []
-
         while True:
             msg = await web_socket.receive()
             # logger.info(f"_handle_messages: symbol: {symbol}, ch_type: {ch_type}, msg.type: {msg.type}")
@@ -89,94 +89,87 @@ class EventsDataStream:
             elif msg.type is aiohttp.WSMsgType.ERROR:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
             msg_data = json.loads(gzip.decompress(msg.data) if msg.type is aiohttp.WSMsgType.BINARY else msg.data)
-
-            if not private_events or (private_events and not stream_buffer.count(msg_data)):
-                if private_events:
-                    stream_buffer.append(msg_data)
-                    if len(stream_buffer) > BUFFER_LIMIT:
-                        stream_buffer.pop(0)
-
-                if self.exchange == 'binance':
+            if self.exchange == 'binance':
+                await self._handle_event(msg_data)
+            elif self.exchange == 'okx':
+                if (not ch_type and
+                        msg_data.get('arg', {}).get('channel') in ('account', 'orders', 'balance_and_position')
+                        and msg_data.get('data')):
                     await self._handle_event(msg_data)
-                elif self.exchange == 'okx':
-                    if (not ch_type and
-                            msg_data.get('arg', {}).get('channel') in ('account', 'orders', 'balance_and_position')
-                            and msg_data.get('data')):
-                        await self._handle_event(msg_data)
-                    elif ch_type and msg_data.get('data'):
-                        await self._handle_event(msg_data.get('data')[0], symbol, ch_type)
-                    elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
-                        return
-                    elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
-                        logger.info(f"WSS handle messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-                        raise aiohttp.ClientOSError(f"Reconnecting OKX user {ch_type} channel")
+                elif ch_type and msg_data.get('data'):
+                    await self._handle_event(msg_data.get('data')[0], symbol, ch_type)
+                elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
+                    return
+                elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
+                    logger.info(f"WSS handle messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                    raise aiohttp.ClientOSError(f"Reconnecting OKX user {ch_type} channel")
+                else:
+                    logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+            elif self.exchange == 'bitfinex':
+                # info and error handling
+                if isinstance(msg_data, dict):
+                    if msg_data.get('event') == 'subscribed':
+                        chan_id = msg_data.get('chanId')
+                        logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
+                    elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
+                        chan_id = msg_data.get('chanId')
+                        logger.info(f"bitfinex, user stream chan_id: {chan_id}")
+                    elif 'code' in msg_data:
+                        code = msg_data.get('code')
+                        if code == 10300:
+                            raise aiohttp.ClientOSError('WSS Subscription failed (generic)')
+                        elif code == 10301:
+                            logger.error('WSS Already subscribed')
+                            break
+                        elif code == 10302:
+                            logger.error(f"WSS Unknown channel {ch_type}")
+                            break
+                        elif code == 10305:
+                            logger.error('WSS Reached limit of open channels')
+                            break
+                        elif code == 20051:
+                            raise aiohttp.ClientOSError('WSS reconnection request received from exchange')
+                        elif code == 20060:
+                            logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
+                            await asyncio.sleep(120)
+                            raise aiohttp.ClientOSError
+                # data handling
+                elif isinstance(msg_data, list) and len(msg_data) == 2 and msg_data[1] == 'hb':
+                    pass
+                elif isinstance(msg_data, list):
+                    if ch_type == 'book' and isinstance(msg_data[1][-1], list):
+                        order_book = bfx.OrderBook(msg_data[1], symbol)
                     else:
-                        logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-                elif self.exchange == 'bitfinex':
-                    # info and error handling
-                    if isinstance(msg_data, dict):
-                        if msg_data.get('event') == 'subscribed':
-                            chan_id = msg_data.get('chanId')
-                            logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
-                        elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
-                            chan_id = msg_data.get('chanId')
-                            logger.info(f"bitfinex, user stream chan_id: {chan_id}")
-                        elif 'code' in msg_data:
-                            code = msg_data.get('code')
-                            if code == 10300:
-                                raise aiohttp.ClientOSError('WSS Subscription failed (generic)')
-                            elif code == 10301:
-                                logger.error('WSS Already subscribed')
-                                break
-                            elif code == 10302:
-                                logger.error(f"WSS Unknown channel {ch_type}")
-                                break
-                            elif code == 10305:
-                                logger.error('WSS Reached limit of open channels')
-                                break
-                            elif code == 20051:
-                                raise aiohttp.ClientOSError('WSS reconnection request received from exchange')
-                            elif code == 20060:
-                                logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
-                                await asyncio.sleep(120)
-                                raise aiohttp.ClientOSError
-                    # data handling
-                    elif isinstance(msg_data, list) and len(msg_data) == 2 and msg_data[1] == 'hb':
-                        pass
-                    elif isinstance(msg_data, list):
-                        if ch_type == 'book' and isinstance(msg_data[1][-1], list):
-                            order_book = bfx.OrderBook(msg_data[1], symbol)
-                        else:
-                            await self._handle_event(msg_data, symbol, ch_type, order_book)
-                    else:
-                        logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-                elif self.exchange == 'huobi':
-                    if msg_data.get('ping'):
-                        await self.web_socket.send_json({"pong": msg_data.get('ping')})
-                    elif msg_data.get('action') == 'ping':
-                        pong = {
-                            "action": "pong",
-                            "data": {
-                                  "ts": msg_data.get('data').get('ts')
-                            }
+                        await self._handle_event(msg_data, symbol, ch_type, order_book)
+                else:
+                    logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+            elif self.exchange == 'huobi':
+                if msg_data.get('ping'):
+                    await self.web_socket.send_json({"pong": msg_data.get('ping')})
+                elif msg_data.get('action') == 'ping':
+                    pong = {
+                        "action": "pong",
+                        "data": {
+                              "ts": msg_data.get('data').get('ts')
                         }
-                        await self.web_socket.send_json(pong)
-                    elif msg_data.get('tick') or msg_data.get('data'):
-                        if ch_type == 'ticker':
-                            _price = msg_data.get('tick', {}).get('lastPrice', None)
-                            if price != _price:
-                                price = _price
-                                await self._handle_event(msg_data, symbol, ch_type)
-                        else:
+                    }
+                    await self.web_socket.send_json(pong)
+                elif msg_data.get('tick') or msg_data.get('data'):
+                    if ch_type == 'ticker':
+                        _price = msg_data.get('tick', {}).get('lastPrice', None)
+                        if price != _price:
+                            price = _price
                             await self._handle_event(msg_data, symbol, ch_type)
-                    elif msg_data.get('action') == 'req' and msg_data.get('code') == 200 and msg_data.get('ch') == 'auth':
-                        return
-                    elif (msg_data.get('action') == 'sub' and
-                          msg_data.get('code') == 500 and
-                          msg_data.get('message') == '系统异常:'):
-                        raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} channel")
                     else:
-                        logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                        await self._handle_event(msg_data, symbol, ch_type)
+                elif msg_data.get('action') == 'req' and msg_data.get('code') == 200 and msg_data.get('ch') == 'auth':
+                    return
+                elif (msg_data.get('action') == 'sub' and
+                      msg_data.get('code') == 500 and
+                      msg_data.get('message') == '系统异常:'):
+                    raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} channel")
+                else:
+                    logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
 
 class MarketEventsDataStream(EventsDataStream):
@@ -186,14 +179,6 @@ class MarketEventsDataStream(EventsDataStream):
         self.channel = channel
         self.candles_max_time = None
 
-    async def stop(self):
-        """
-        Stop market data stream
-        """
-        logger.info(f"Market WSS stop for {self.exchange}:{self.trade_id}:{self.channel}")
-        if self.web_socket:
-            await self.web_socket.close()
-
     async def start_wss(self):
         logger.info(f"Start market WSS {self.channel if self.channel else ''} for {self.exchange}")
         registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
@@ -202,7 +187,7 @@ class MarketEventsDataStream(EventsDataStream):
             self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
                                                             proxy=self.client.proxy)
             logger.info(f"Combined events stream started: {combined_streams}")
-            await self._handle_messages(self.web_socket, private_events=False)
+            await self._handle_messages(self.web_socket)
         else:
             symbol = self.channel.split('@')[0]
             ch_type = self.channel.split('@')[1]
@@ -227,7 +212,7 @@ class MarketEventsDataStream(EventsDataStream):
                                     ]
                            }
                 await self.web_socket.send_json(request)
-                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type, private_events=False)
+                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
             elif self.exchange == 'bitfinex':
                 self.web_socket = await self.session.ws_connect(self.endpoint,
                                                                 receive_timeout=30,
@@ -242,7 +227,7 @@ class MarketEventsDataStream(EventsDataStream):
                 elif ch_type == 'depth5':
                     ch_type = 'book'
                     request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', }
-                await self.upstream_bitfinex(request, symbol, ch_type, private_events=False)
+                await self.upstream_bitfinex(request, symbol, ch_type)
             elif self.exchange == 'huobi':
                 self.web_socket = await self.session.ws_connect(self.endpoint,
                                                                 receive_timeout=20,
@@ -257,7 +242,7 @@ class MarketEventsDataStream(EventsDataStream):
                 elif ch_type == 'depth5':
                     request = {'sub': f"market.{symbol}.depth.step0"}
                 await self.web_socket.send_json(request)
-                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type, private_events=False)
+                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
 
     async def _handle_event(self, content, symbol=None, ch_type=str(), order_book=None):
         # logger.info(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
@@ -312,13 +297,6 @@ class HbpPrivateEventsDataStream(EventsDataStream):
         super().__init__(client, endpoint, user_agent, exchange, trade_id)
         self.symbol = symbol
 
-    async def stop(self):
-        """
-        Stop data stream
-        """
-        if self.web_socket:
-            await self.web_socket.close()
-
     async def start_wss(self):
         self.web_socket = await self.session.ws_connect(self.endpoint,
                                                         receive_timeout=30,
@@ -370,13 +348,6 @@ class HbpPrivateEventsDataStream(EventsDataStream):
 
 
 class BfxPrivateEventsDataStream(EventsDataStream):
-
-    async def stop(self):
-        """
-        Stop data stream
-        """
-        if self.web_socket:
-            await self.web_socket.close()
 
     async def start_wss(self):
         self.web_socket = await self.session.ws_connect(self.endpoint,
@@ -430,13 +401,6 @@ class OkxPrivateEventsDataStream(EventsDataStream):
     def __init__(self, client, endpoint, user_agent, exchange, trade_id, symbol):
         super().__init__(client, endpoint, user_agent, exchange, trade_id)
         self.symbol = symbol
-
-    async def stop(self):
-        """
-        Stop data stream
-        """
-        if self.web_socket:
-            await self.web_socket.close()
 
     async def start_wss(self):
         self.web_socket = await self.session.ws_connect(self.endpoint,
@@ -494,14 +458,6 @@ class UserEventsDataStream(EventsDataStream):
         while True:
             await asyncio.sleep(interval)
             await self.client.keep_alive_listen_key(listen_key)
-
-    async def stop(self):
-        """
-        Stop user data stream
-        """
-        # logger.info(f"UserEventsDataStream.stop: handlers: {self.client.events.handlers}")
-        if self.web_socket:
-            await self.web_socket.close()
 
     async def start_wss(self):
         listen_key = (await self.client.create_listen_key())["listenKey"]

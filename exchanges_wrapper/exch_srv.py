@@ -796,8 +796,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _market_stream_count = sum(len(k) for k in ([list(i.get(request.trade_id, []))
                                                          for i in list(client.events.registered_streams.values())]))
         logger.info(f"Start WS streams for {open_client.name}")
-        asyncio.create_task(open_client.client.start_market_events_listener(request.trade_id))
-        asyncio.create_task(open_client.client.start_user_events_listener(request.trade_id, request.symbol))
+        asyncio.create_task(client.start_market_events_listener(request.trade_id))
+        asyncio.create_task(client.start_user_events_listener(request.trade_id, request.symbol))
         response.success = True
         return response
 
