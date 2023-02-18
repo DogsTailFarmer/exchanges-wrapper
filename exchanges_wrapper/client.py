@@ -780,7 +780,7 @@ class Client:
             if res[0].get('sCode') == '0':
                 binance_res = await self.fetch_order(symbol, order_id=res[0].get('ordId'), response_type=False)
             else:
-                raise UserWarning(res[0].get('sMsg'))
+                raise UserWarning(f"Code: {res[0].get('sCode')}: {res[0].get('sMsg')}")
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-order-user_data
@@ -1327,6 +1327,87 @@ class Client:
                 params=params,
                 signed=True
             )
+        elif self.exchange == 'bitfinex':
+            pass
+            '''
+            params = {
+                "type": "EXCHANGE LIMIT",
+                "symbol": self.symbol_to_bfx(symbol),
+                "price": price,
+                "amount": str((float(quantity) * (1 if side == 'BUY' else -1))),
+                "meta": {"aff_code": "v_4az2nCP"}
+            }
+
+            res = await self.http.send_api_call(
+                "v2/auth/w/transfer",
+                method="POST",
+                signed=True,
+                **params,
+            )
+            logger.debug(f"create_order.res: {res}")
+
+            if res and isinstance(res, list) and res[6] == 'SUCCESS':
+                order_id = res[4][0][0]
+                ahead_ws = self.wss_buffer.pop(order_id, [])
+                logger.debug(f"create_order.ahead_ws: {ahead_ws}")
+                binance_res = bfx.order(res[4][0], response_type=False, wss_te=ahead_ws)
+                self.active_orders.update(
+                    {order_id:
+                        {'filledTime': int(),
+                         'origQty': quantity,
+                         'executedQty': "0",
+                         'lastEvent': (),
+                         'cancelled': False
+                         }
+                     }
+                )
+            '''
+        elif self.exchange == 'huobi':
+            pass
+            '''
+            params = {
+                'account-id': str(self.hbp_account_id),
+                'symbol': symbol.lower(),
+                'type': f"{side.lower()}-{order_type.lower()}",
+                'amount': quantity,
+                'price': price,
+                'source': "spot-api"
+            }
+            if new_client_order_id:
+                params["client-order-id"] = str(new_client_order_id)
+            count = 0
+            res = None
+            while count < STATUS_TIMEOUT:
+                res = await self.http.send_api_call(
+                    "v1/order/orders/place",
+                    method="POST",
+                    signed=True,
+                    timeout=STATUS_TIMEOUT,
+                    **params,
+                )
+                if res:
+                    break
+                else:
+                    count += 1
+                    logger.debug(f"RateLimitReached for {symbol}, count {count}, try one else")
+            if res:
+                binance_res = await self.fetch_order(symbol, order_id=res, response_type=False)
+            '''
+        elif self.exchange == 'okx':
+            params = {
+                "ccy": symbol,
+                "amt": quantity,
+                "from": '18',
+                "to": '18',
+                "type": '3'
+            }
+            res = await self.http.send_api_call(
+                "/api/v5/asset/transfer",
+                method="POST",
+                signed=True,
+                **params,
+            )
+            binance_res = {"txnId": res[0].get("transId")}
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-trade-list-user_data
