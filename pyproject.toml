@@ -21,7 +21,8 @@ dependencies = [
     "grpcio==1.48.1",
     "grpcio-tools==1.48.1",
     "toml==0.10.2",
-    "idna==3.4"
+    "idna==3.4",
+    "pyotp==2.8.0"
 ]
 
 [tool.flit.module]
