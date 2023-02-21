@@ -8,6 +8,8 @@ import logging
 import time
 from collections import defaultdict
 
+import pyotp
+
 from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX
 from exchanges_wrapper.errors import ExchangePyError
 from exchanges_wrapper.web_sockets import UserEventsDataStream,\
@@ -44,6 +46,8 @@ class Client:
         endpoint_ws_auth,
         ws_public_mbr=None,
         passphrase=None,
+        master_email=None,
+        two_fa=None,
         user_agent=None,
         proxy=str()
     ):
@@ -58,6 +62,8 @@ class Client:
         self.endpoint_api_auth = endpoint_api_auth
         self.endpoint_ws_auth = endpoint_ws_auth
         self.ws_public_mbr = ws_public_mbr
+        self.master_email = master_email
+        self.two_fa = two_fa
         #
         self.session = aiohttp.ClientSession()
         client_init_params = {
@@ -1328,40 +1334,26 @@ class Client:
                 signed=True
             )
         elif self.exchange == 'bitfinex':
-            pass
-            '''
+            if self.master_email is None or self.two_fa is None:
+                raise ValueError("This query requires master_email and 2FA")
+            totp = pyotp.TOTP(self.two_fa)
             params = {
-                "type": "EXCHANGE LIMIT",
-                "symbol": self.symbol_to_bfx(symbol),
-                "price": price,
-                "amount": str((float(quantity) * (1 if side == 'BUY' else -1))),
-                "meta": {"aff_code": "v_4az2nCP"}
+                "from": "exchange",
+                "to": "exchange",
+                "currency": symbol,
+                "amount": quantity,
+                "email_dst": self.master_email,
+                "tfaToken": {"method": "otp", "token": totp.now()}
             }
-
             res = await self.http.send_api_call(
                 "v2/auth/w/transfer",
                 method="POST",
                 signed=True,
                 **params,
             )
-            logger.debug(f"create_order.res: {res}")
-
+            logger.debug(f"transfer_to_master.res: {res}")
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
-                order_id = res[4][0][0]
-                ahead_ws = self.wss_buffer.pop(order_id, [])
-                logger.debug(f"create_order.ahead_ws: {ahead_ws}")
-                binance_res = bfx.order(res[4][0], response_type=False, wss_te=ahead_ws)
-                self.active_orders.update(
-                    {order_id:
-                        {'filledTime': int(),
-                         'origQty': quantity,
-                         'executedQty': "0",
-                         'lastEvent': (),
-                         'cancelled': False
-                         }
-                     }
-                )
-            '''
+                binance_res = {"txnId": res[0]}
         elif self.exchange == 'huobi':
             pass
             '''

@@ -130,14 +130,12 @@ class ClientBFX(HttpClient):
         if self.rate_limit_reached:
             raise QueryCanceled(QueryCanceled.message)
         _endpoint = endpoint or self.endpoint
-        content = str()
         bfx_post = self.exchange == 'bitfinex' and ((method == 'POST' and kwargs) or "params" in kwargs)
         _params = json.dumps(kwargs) if bfx_post else None
         url = f'{_endpoint}/{path}'
         query_kwargs = {"headers": {"Accept": AJ}}
-        content += urlencode(kwargs, safe='/')
-        if content and not bfx_post:
-            url += f'?{content}'
+        if kwargs and not bfx_post:
+            url += f"?{urlencode(kwargs, safe='/')}"
         if bfx_post and "params" in kwargs:
             query_kwargs.update({'data': _params})
         if signed:
@@ -154,7 +152,6 @@ class ClientBFX(HttpClient):
                                                                           self.api_secret,
                                                                           signature_payload)
             query_kwargs["headers"]["bfx-nonce"] = str(ts)
-
         # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
         async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
             # print(f"send_api_call.response: url: {response.url}, status: {response.status}")

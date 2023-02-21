@@ -36,10 +36,12 @@ def get_account(_account_name: str) -> ():
             exchange = account['exchange']
             sub_account = account.get('sub_account_name')
             test_net = account['test_net']
+            master_email = account.get('master_email')
             #
             api_key = account['api_key']
             api_secret = account['api_secret']
             passphrase = account.get('passphrase')
+            two_fa = account.get('two_fa')
             #
             endpoint = config['endpoint'][exchange]
             #
@@ -61,7 +63,10 @@ def get_account(_account_name: str) -> ():
                    api_auth,        # 7
                    ws_auth,         # 8
                    ws_public_mbr,   # 9
-                   passphrase)      # 10
+                   passphrase,      # 10
+                   master_email,    # 11
+                   two_fa,          # 12
+                   )
             break
     return res
 
@@ -86,6 +91,8 @@ class OpenClient:
                 account[8],     # ws_auth
                 account[9],     # ws_public_mbr
                 account[10],    # passphrase
+                account[11],    # master_email
+                account[12],    # two_fa
             )
             self.on_order_update_queues = {}
             OpenClient.open_clients.append(self)
