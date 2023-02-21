@@ -44,10 +44,11 @@ class Client:
         endpoint_ws_public,
         endpoint_api_auth,
         endpoint_ws_auth,
-        ws_public_mbr=None,
-        passphrase=None,
-        master_email=None,
-        two_fa=None,
+        ws_public_mbr,
+        passphrase,
+        master_email,
+        master_name,
+        two_fa,
         user_agent=None,
         proxy=str()
     ):
@@ -63,6 +64,7 @@ class Client:
         self.endpoint_ws_auth = endpoint_ws_auth
         self.ws_public_mbr = ws_public_mbr
         self.master_email = master_email
+        self.master_name = master_name
         self.two_fa = two_fa
         #
         self.session = aiohttp.ClientSession()
@@ -101,6 +103,9 @@ class Client:
         self.wss_buffer = {}
         self.stream_queue = defaultdict(set)
         self.hbp_account_id = None
+        self.hbp_uid = None
+        self.hbp_main_account_id = None
+        self.hbp_main_uid = None
         self.ledgers_id = []
 
     async def load(self):
@@ -317,6 +322,7 @@ class Client:
                     if account.get('type') == 'spot':
                         self.hbp_account_id = account.get('id')
                         break
+                self.hbp_uid = await self.http.send_api_call("v2/user/uid", signed=True)
             binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbols)
         elif self.exchange == 'okx':
             params = {'instType': 'SPOT'}
@@ -1355,36 +1361,23 @@ class Client:
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
                 binance_res = {"txnId": res[0]}
         elif self.exchange == 'huobi':
-            pass
-            '''
             params = {
-                'account-id': str(self.hbp_account_id),
-                'symbol': symbol.lower(),
-                'type': f"{side.lower()}-{order_type.lower()}",
-                'amount': quantity,
-                'price': price,
-                'source': "spot-api"
+                'from-user': self.hbp_uid,
+                'from-account-type': "spot",
+                'from-account': self.hbp_account_id,
+                'to-user': self.hbp_main_uid,
+                'to-account-type': "spot",
+                'to-account': self.hbp_main_account_id,
+                'currency': symbol.lower(),
+                'amount': quantity
             }
-            if new_client_order_id:
-                params["client-order-id"] = str(new_client_order_id)
-            count = 0
-            res = None
-            while count < STATUS_TIMEOUT:
-                res = await self.http.send_api_call(
-                    "v1/order/orders/place",
-                    method="POST",
-                    signed=True,
-                    timeout=STATUS_TIMEOUT,
-                    **params,
-                )
-                if res:
-                    break
-                else:
-                    count += 1
-                    logger.debug(f"RateLimitReached for {symbol}, count {count}, try one else")
-            if res:
-                binance_res = await self.fetch_order(symbol, order_id=res, response_type=False)
-            '''
+            res = await self.http.send_api_call(
+                "v1/account/transfer",
+                method="POST",
+                signed=True,
+                **params,
+            )
+            binance_res = {"txnId": res.get("transact-id")}
         elif self.exchange == 'okx':
             params = {
                 "ccy": symbol,

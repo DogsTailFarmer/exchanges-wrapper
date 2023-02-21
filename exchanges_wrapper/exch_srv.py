@@ -37,6 +37,7 @@ def get_account(_account_name: str) -> ():
             sub_account = account.get('sub_account_name')
             test_net = account['test_net']
             master_email = account.get('master_email')
+            master_name = account.get('master_name')
             #
             api_key = account['api_key']
             api_secret = account['api_secret']
@@ -65,7 +66,8 @@ def get_account(_account_name: str) -> ():
                    ws_public_mbr,   # 9
                    passphrase,      # 10
                    master_email,    # 11
-                   two_fa,          # 12
+                   master_name,     # 12
+                   two_fa,          # 13
                    )
             break
     return res
@@ -79,21 +81,7 @@ class OpenClient:
         if account:
             self.name = _account_name
             self.real_market = not account[2]
-            self.client = Client(
-                account[0],     # exchange
-                account[1],     # sub_account
-                account[2],     # test_net
-                account[3],     # api_key
-                account[4],     # api_secret
-                account[5],     # api_public
-                account[6],     # ws_public
-                account[7],     # api_auth
-                account[8],     # ws_auth
-                account[9],     # ws_public_mbr
-                account[10],    # passphrase
-                account[11],    # master_email
-                account[12],    # two_fa
-            )
+            self.client = Client(*account)
             self.on_order_update_queues = {}
             OpenClient.open_clients.append(self)
         else:
@@ -135,6 +123,14 @@ class Martin(api_pb2_grpc.MartinServicer):
             try:
                 open_client = OpenClient(request.account_name)
                 client_id = id(open_client)
+                if open_client.client.master_name == 'Huobi':
+                    # For HuobiPro get master account uid and account_id
+                    main_account = get_account(open_client.client.master_name)
+                    main_client = Client(*main_account)
+                    await main_client.fetch_exchange_info()
+                    open_client.client.hbp_main_uid = main_client.hbp_uid
+                    open_client.client.hbp_main_account_id = main_client.hbp_account_id
+                    await main_client.close()
             except UserWarning:
                 _context.set_details(f"Account {request.account_name} not registered into"
                                      f" {WORK_PATH}/config/exch_srv_cfg.toml")

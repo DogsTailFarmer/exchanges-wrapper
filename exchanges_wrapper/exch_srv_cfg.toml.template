@@ -1,7 +1,8 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "1.2.9"
+# __version__ = "1.2.10"
 
+# region endpoint
 [endpoint]
     [endpoint.binance]
         api_public = 'https://api.binance.com'
@@ -47,11 +48,9 @@
         ws_auth = 'wss://wsaws.okx.com:8443/ws/v5/private'
         api_test = 'https://aws.okx.com'
         ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
+# endregion
 
-# Don't change accounts.exchange field value
-# You can add subaccounts by duplicate records and set name, API and test_net fields
-#
-# Binance.com accounts
+# region Binance.com accounts
 [[accounts]]
     exchange = 'binance'
     name = 'Demo - Binance'
@@ -73,23 +72,31 @@
     api_key = '*********** Place API key there ************'
     api_secret = '*********** Place secret API key there ************'
     test_net = false
+# endregion
 
-# Bitfinex accounts
+# region Bitfinex accounts
+# Set up a sub-account two-fa (2FA) key and master_email (Main account EMail)
+# for transfer funds from sub-account to master account
 [[accounts]]
     exchange = 'bitfinex'
     name = 'Demo - Bitfinex'
+    two_fa = '*********** Place 2FA key there ************'
     api_key = '*********** Place API key there ************'
     api_secret = '*********** Place secret API key there ************'
+    master_email = '*********** Place Main account EMail ************'
     test_net = true
 
 [[accounts]]
     exchange = 'bitfinex'
     name = 'Bitfinex'
+    two_fa = ''
     api_key = '*********** Place API key there ************'
     api_secret = '*********** Place secret API key there ************'
+    master_email = ''
     test_net = false
+# endregion
 
-# Huobi accounts
+# region Huobi acconts
 [[accounts]]
     exchange = 'huobi'
     name = 'Huobi'
@@ -97,7 +104,16 @@
     api_secret = '*********** Place secret API key there ************'
     test_net = false
 
-# OKX
+[[accounts]]
+    exchange = 'huobi'
+    name = 'HuobiSub1'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    test_net = false
+    master_name = 'Huobi'
+# endregion
+
+# region OKX
 [[accounts]]
     exchange = 'okx'
     name = 'Demo - OKX'
@@ -105,3 +121,4 @@
     api_secret = '*********** Place secret API key there ************'
     passphrase = '*********** Place API password there ************'
     test_net = true
+# endregion
