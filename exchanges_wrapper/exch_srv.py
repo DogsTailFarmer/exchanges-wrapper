@@ -134,7 +134,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                         logger.info(f"The values for main Huobi account were received and set:"
                                     f" UID: {main_client.hbp_uid} and account ID: {main_client.hbp_account_id}")
                     else:
-                        logger.warning(f"No account IDs were received for the Huobi master account")
+                        logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
             except UserWarning:
                 _context.set_details(f"Account {request.account_name} not registered into"
