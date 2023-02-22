@@ -127,6 +127,22 @@ async def on_order_update(_stub, _client_id, _symbol, trade_id):
               f"client_order_id: {event.client_order_id}")
 
 
+async def on_balance_update(_stub, _client_id, _symbol, trade_id):
+    """
+    Get data when asset transferred or withdrawal from account
+    :param _stub:
+    :param _client_id:
+    :param _symbol:
+    :param trade_id:
+    :return:
+    """
+    async for res in _stub.OnBalanceUpdate(api_pb2.MarketRequest(
+            trade_id=trade_id,
+            client_id=_client_id,
+            symbol=_symbol)):
+        print(res.balance)
+
+
 async def fetch_open_orders(_stub, _client_id, _symbol):
     """
     Get all open orders on a symbol.
@@ -306,6 +322,35 @@ async def fetch_account_trade_list(_stub, _client_id, _symbol, _limit, _start_ti
     print(f"fetch_account_trade_list.trades: {trades}")
 
 
+# noinspection PyUnresolvedReferences
+async def transfer2master(_stub, symbol: str, amount: str):
+    """
+    Send request to transfer asset from subaccount to main account
+    Binance, OKX: not additional settings needed
+    Bitfinex: for subaccount setting 2FA method, set WITHDRAWAL permission for API key,
+     in config for subaccount set 2FA key and master account EMail
+    Huobi: in config for subaccount set master_name for Main account
+    :param _stub:
+    :param symbol:
+    :param amount:
+    :return:
+    """
+    try:
+        res = await _stub.TransferToMaster(api_pb2.MarketRequest, symbol=symbol, amount=amount)
+    except asyncio.CancelledError:
+        pass  # Task cancellation should not be logged as an error
+    except grpc.RpcError as ex:
+        status_code = ex.code()
+        print(f"Exception transfer {symbol} to main account: {status_code.name}, {ex.details()}")
+    except Exception as _ex:
+        print(f"Exception transfer {symbol} to main account: {_ex}")
+    else:
+        if res.success:
+            print(f"Sent {amount} {symbol} to main account")
+        else:
+            print(f"Not sent {amount} {symbol} to main account\n,{res.result}")
+
+
 # Server exception handling example for methods where it's realized
 # noinspection PyUnresolvedReferences
 async def create_limit_order(_stub, _client_id, _symbol, _id: int, buy: bool, amount: str, price: str):
@@ -314,7 +359,7 @@ async def create_limit_order(_stub, _client_id, _symbol, _id: int, buy: bool, am
     :param _stub:
     :param _client_id:
     :param _symbol:
-    :param _id: A unique id among open orders. Automatically generated if not sent.
+    :param _id: A unique id among open orders. Automatically generated if not sent
     :param buy: True id BUY_side else False
     :param amount: Base asset quantity
     :param price:

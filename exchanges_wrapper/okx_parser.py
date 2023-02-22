@@ -600,6 +600,3 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
         "Q": "0.0"
     }
     return msg_binance
-
-
-

@@ -1,9 +1,21 @@
-## v1.2.10 - 2023-02-xx
+## v1.2.10 - 2023-02-22
 ### Added for new features
 * Add method TransferToMaster()
+    """
+    Send request to transfer asset from subaccount to main account
+    Binance, OKX: not additional settings needed
+    Bitfinex: for subaccount setting 2FA method, set WITHDRAWAL permission for API key,
+     in config for subaccount set 2FA key and master account EMail
+    Huobi: in config for subaccount set master_name for Main account
+    :param _stub: 
+    :param symbol: 
+    :param amount: 
+    :return: 
+    """
 
 ### Update
-* Up requirements to last versions
+* Up requirements aiohttp to 3.8.4
+* Some minor improvements
 
 ## v1.2.9-2 - 2023-02-04
 ### Fixed
