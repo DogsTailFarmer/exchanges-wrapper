@@ -2,8 +2,6 @@ import json
 from urllib.parse import urlencode, urlparse
 
 import aiohttp
-
-from exchanges_wrapper import __version__
 import logging
 import time
 from datetime import datetime
@@ -28,7 +26,6 @@ class HttpClient:
         self.api_secret = kwargs.get('api_secret')
         self.passphrase = kwargs.get('passphrase')
         self.endpoint = kwargs.get('endpoint')
-        self.user_agent = kwargs.get('user_agent') or f"exchanges-wrapper, {__version__}"
         self.proxy = kwargs.get('proxy')
         self.session = kwargs.get('session')
         self.exchange = kwargs.get('exchange')
@@ -96,12 +93,11 @@ class ClientBinance(HttpClient):
             raise QueryCanceled(QueryCanceled.message)
         _endpoint = endpoint or self.endpoint
         url = f'{_endpoint}{path}'
-        query_kwargs = dict({"headers": {"User-Agent": self.user_agent}}, **kwargs)
+        query_kwargs = dict({"headers": {"Content-Type": AJ}}, **kwargs)
         if send_api_key:
             query_kwargs["headers"]["X-MBX-APIKEY"] = self.api_key
         if signed:
             content = str()
-            query_kwargs["headers"]["Content-Type"] = AJ
             location = "params" if "params" in kwargs else "data"
             query_kwargs[location]["timestamp"] = str(int(time.time() * 1000))
             if "params" in kwargs:

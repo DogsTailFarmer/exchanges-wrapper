@@ -7,7 +7,6 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
-
 import pyotp
 
 from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX
@@ -49,7 +48,6 @@ class Client:
         master_email,
         master_name,
         two_fa,
-        user_agent=None,
         proxy=str()
     ):
         self.exchange = exchange
@@ -73,7 +71,6 @@ class Client:
             'api_secret': api_secret,
             'passphrase': passphrase,
             'endpoint': endpoint_api_auth,
-            'user_agent': user_agent,
             'proxy': proxy,
             'session': self.session,
             'exchange': exchange,
@@ -92,7 +89,6 @@ class Client:
         else:
             raise UserWarning(f"Exchange {exchange} not yet connected")
 
-        self.user_agent = user_agent
         self.proxy = proxy
         self.loaded = False
         self.symbols = {}
@@ -147,28 +143,14 @@ class Client:
 
         user_data_stream = None
         if self.exchange == 'binance':
-            user_data_stream = UserEventsDataStream(self,
-                                                    self.endpoint_ws_auth,
-                                                    self.user_agent,
-                                                    self.exchange,
-                                                    _trade_id)
+            user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'bitfinex':
-            user_data_stream = BfxPrivateEventsDataStream(self,
-                                                          self.endpoint_ws_auth,
-                                                          self.user_agent,
-                                                          self.exchange,
-                                                          _trade_id)
+            user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'huobi':
-            user_data_stream = HbpPrivateEventsDataStream(self,
-                                                          self.endpoint_ws_auth,
-                                                          self.user_agent,
-                                                          self.exchange,
-                                                          _trade_id,
-                                                          symbol)
+            user_data_stream = HbpPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id, symbol)
         elif self.exchange == 'okx':
             user_data_stream = OkxPrivateEventsDataStream(self,
                                                           self.endpoint_ws_auth,
-                                                          self.user_agent,
                                                           self.exchange,
                                                           _trade_id,
                                                           self.symbol_to_okx(symbol))
@@ -180,20 +162,14 @@ class Client:
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
         start_list = []
         if self.exchange == 'binance':
-            market_data_stream = MarketEventsDataStream(self,
-                                                        self.endpoint_ws_public,
-                                                        self.user_agent,
-                                                        self.exchange,
-                                                        _trade_id)
+            market_data_stream = MarketEventsDataStream(self, self.endpoint_ws_public, self.exchange, _trade_id)
             self.data_streams[_trade_id] |= {market_data_stream}
             start_list.append(market_data_stream.start())
         else:
             for channel in _events:
                 market_data_stream = MarketEventsDataStream(self,
                                                             self.endpoint_ws_public,
-                                                            self.user_agent,
-                                                            self.exchange,
-                                                            _trade_id,
+                                                            self.exchange, _trade_id,
                                                             channel)
                 self.data_streams[_trade_id] |= {market_data_stream}
                 start_list.append(market_data_stream.start())

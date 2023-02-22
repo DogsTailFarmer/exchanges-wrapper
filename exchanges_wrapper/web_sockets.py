@@ -1,5 +1,3 @@
-from exchanges_wrapper import __version__
-
 import aiohttp
 import asyncio
 import json
@@ -21,14 +19,10 @@ logger = logging.getLogger('exch_srv_logger')
 
 
 class EventsDataStream:
-    def __init__(self, client, endpoint, user_agent, exchange, trade_id):
+    def __init__(self, client, endpoint, exchange, trade_id):
         self.client = client
         self.session = client.session
         self.endpoint = endpoint
-        if user_agent:
-            self.user_agent = user_agent
-        else:
-            self.user_agent = f"exchanges-wrapper, {__version__}"
         self.exchange = exchange
         self.trade_id = trade_id
         self.web_socket = None
@@ -174,8 +168,8 @@ class EventsDataStream:
 
 class MarketEventsDataStream(EventsDataStream):
 
-    def __init__(self, client, endpoint, user_agent, exchange, trade_id, channel=None):
-        super().__init__(client, endpoint, user_agent, exchange, trade_id)
+    def __init__(self, client, endpoint, exchange, trade_id, channel=None):
+        super().__init__(client, endpoint, exchange, trade_id)
         self.channel = channel
         self.candles_max_time = None
 
@@ -293,8 +287,8 @@ class MarketEventsDataStream(EventsDataStream):
 
 
 class HbpPrivateEventsDataStream(EventsDataStream):
-    def __init__(self, client, endpoint, user_agent, exchange, trade_id, symbol):
-        super().__init__(client, endpoint, user_agent, exchange, trade_id)
+    def __init__(self, client, endpoint, exchange, trade_id, symbol):
+        super().__init__(client, endpoint, exchange, trade_id)
         self.symbol = symbol
 
     async def start_wss(self):
@@ -398,8 +392,8 @@ class BfxPrivateEventsDataStream(EventsDataStream):
 
 
 class OkxPrivateEventsDataStream(EventsDataStream):
-    def __init__(self, client, endpoint, user_agent, exchange, trade_id, symbol):
-        super().__init__(client, endpoint, user_agent, exchange, trade_id)
+    def __init__(self, client, endpoint, exchange, trade_id, symbol):
+        super().__init__(client, endpoint, exchange, trade_id)
         self.symbol = symbol
 
     async def start_wss(self):

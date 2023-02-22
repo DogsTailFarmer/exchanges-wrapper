@@ -128,8 +128,13 @@ class Martin(api_pb2_grpc.MartinServicer):
                     main_account = get_account(open_client.client.master_name)
                     main_client = Client(*main_account)
                     await main_client.fetch_exchange_info()
-                    open_client.client.hbp_main_uid = main_client.hbp_uid
-                    open_client.client.hbp_main_account_id = main_client.hbp_account_id
+                    if main_client.hbp_uid and main_client.hbp_account_id:
+                        open_client.client.hbp_main_uid = main_client.hbp_uid
+                        open_client.client.hbp_main_account_id = main_client.hbp_account_id
+                        logger.info(f"The values for main Huobi account were received and set:"
+                                    f" UID: {main_client.hbp_uid} and account ID: {main_client.hbp_account_id}")
+                    else:
+                        logger.warning(f"No account IDs were received for the Huobi master account")
                     await main_client.close()
             except UserWarning:
                 _context.set_details(f"Account {request.account_name} not registered into"
