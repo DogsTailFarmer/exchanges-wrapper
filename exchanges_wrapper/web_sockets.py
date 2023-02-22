@@ -178,8 +178,7 @@ class MarketEventsDataStream(EventsDataStream):
         registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
         if self.exchange == 'binance':
             combined_streams = "/".join(registered_streams)
-            self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
-                                                            proxy=self.client.proxy)
+            self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}")
             logger.info(f"Combined events stream started: {combined_streams}")
             await self._handle_messages(self.web_socket)
         else:
@@ -187,9 +186,7 @@ class MarketEventsDataStream(EventsDataStream):
             ch_type = self.channel.split('@')[1]
             request = {}
             if self.exchange == 'okx':
-                self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                                heartbeat=25,
-                                                                proxy=self.client.proxy)
+                self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=25)
                 if ch_type == 'miniTicker':
                     _ch_type = 'tickers'
                 elif 'kline_' in ch_type:
@@ -208,9 +205,7 @@ class MarketEventsDataStream(EventsDataStream):
                 await self.web_socket.send_json(request)
                 await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
             elif self.exchange == 'bitfinex':
-                self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                                receive_timeout=30,
-                                                                proxy=self.client.proxy)
+                self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=30)
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
                     request = {'event': 'subscribe', 'channel': ch_type, 'pair': symbol}
@@ -223,10 +218,7 @@ class MarketEventsDataStream(EventsDataStream):
                     request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', }
                 await self.upstream_bitfinex(request, symbol, ch_type)
             elif self.exchange == 'huobi':
-                self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                                receive_timeout=20,
-                                                                proxy=self.client.proxy,
-                                                                autoping=False)
+                self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=20, autoping=False)
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
                     request = {'sub': f"market.{symbol}.{ch_type}"}
@@ -292,10 +284,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
         self.symbol = symbol
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                        receive_timeout=30,
-                                                        proxy=self.client.proxy,
-                                                        autoping=False)
+        self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=30, autoping=False)
         ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
         _params = {
                 "accessKey": self.client.api_key,
@@ -344,9 +333,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
 class BfxPrivateEventsDataStream(EventsDataStream):
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                        receive_timeout=30,
-                                                        proxy=self.client.proxy)
+        self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=30)
         ts = int(time.time() * 1000)
         data = f"AUTH{ts}"
         request = {
@@ -397,9 +384,7 @@ class OkxPrivateEventsDataStream(EventsDataStream):
         self.symbol = symbol
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint,
-                                                        heartbeat=25,
-                                                        proxy=self.client.proxy)
+        self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=25)
         ts = int(time.time())
         signature_payload = f"{ts}GET/users/self/verify"
         signature = generate_signature(self.exchange, self.client.api_secret, signature_payload)
@@ -455,9 +440,7 @@ class UserEventsDataStream(EventsDataStream):
 
     async def start_wss(self):
         listen_key = (await self.client.create_listen_key())["listenKey"]
-        self.web_socket = await self.session.ws_connect(f"{self.endpoint}/ws/{listen_key}",
-                                                        heartbeat=15,
-                                                        proxy=self.client.proxy)
+        self.web_socket = await self.session.ws_connect(f"{self.endpoint}/ws/{listen_key}", heartbeat=15)
         _task = asyncio.ensure_future(self._heartbeat(listen_key))
         try:
             await self._handle_messages(self.web_socket)

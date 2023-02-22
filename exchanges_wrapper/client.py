@@ -47,8 +47,7 @@ class Client:
         passphrase,
         master_email,
         master_name,
-        two_fa,
-        proxy=str()
+        two_fa
     ):
         self.exchange = exchange
         self.sub_account = sub_account
@@ -71,7 +70,6 @@ class Client:
             'api_secret': api_secret,
             'passphrase': passphrase,
             'endpoint': endpoint_api_auth,
-            'proxy': proxy,
             'session': self.session,
             'exchange': exchange,
             'sub_account': sub_account,
@@ -88,8 +86,7 @@ class Client:
             self.http = ClientOKX(**client_init_params)
         else:
             raise UserWarning(f"Exchange {exchange} not yet connected")
-
-        self.proxy = proxy
+        #
         self.loaded = False
         self.symbols = {}
         self.highest_precision = None

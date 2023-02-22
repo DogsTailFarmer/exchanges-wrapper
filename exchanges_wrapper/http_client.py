@@ -26,7 +26,6 @@ class HttpClient:
         self.api_secret = kwargs.get('api_secret')
         self.passphrase = kwargs.get('passphrase')
         self.endpoint = kwargs.get('endpoint')
-        self.proxy = kwargs.get('proxy')
         self.session = kwargs.get('session')
         self.exchange = kwargs.get('exchange')
         self.sub_account = kwargs.get('sub_account')
@@ -105,8 +104,6 @@ class ClientBinance(HttpClient):
             if "data" in kwargs:
                 content += urlencode(kwargs["data"])
             query_kwargs[location]["signature"] = generate_signature(self.exchange, self.api_secret, content)
-            if self.proxy:
-                query_kwargs["proxy"] = self.proxy
         # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
         async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
             # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
