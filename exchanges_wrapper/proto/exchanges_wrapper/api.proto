@@ -35,6 +35,7 @@ service Martin {
   rpc OnKlinesUpdate(FetchKlinesRequest) returns (stream OnKlinesUpdateResponse) {}
   rpc FetchFundingWallet(FetchFundingWalletRequest) returns (FetchFundingWalletResponse) {}
   rpc TransferToMaster(MarketRequest) returns (SimpleResponse) {}
+  rpc CheckStream (MarketRequest) returns (SimpleResponse) {}
 }
 
 message OnBalanceUpdateResponse {
@@ -451,6 +452,7 @@ message StartStreamRequest {
   string symbol = 3;
   int32 market_stream_count = 4;
   int32 user_stream_count = 5;
+  bool update_max_queue_size = 6;
 }
 
 message OpenClientConnectionRequest {

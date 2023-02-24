@@ -795,6 +795,10 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def StartStream(self, request: api_pb2.StartStreamRequest,
                           _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+        if request.update_max_queue_size:
+            global MAX_QUEUE_SIZE
+            MAX_QUEUE_SIZE += int(MAX_QUEUE_SIZE / 10)
+            logger.info(f"MAX_QUEUE_SIZE was updated: new value is {MAX_QUEUE_SIZE}")
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         response = api_pb2.SimpleResponse()
@@ -816,24 +820,34 @@ class Martin(api_pb2_grpc.MartinServicer):
         logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
         response = api_pb2.SimpleResponse()
         await stop_stream(client, request.trade_id)
-        [await _queue.put(request.trade_id) for _queue in client.stream_queue.get(request.trade_id, [])]
-        not_empty = True
-        while not_empty:
-            await asyncio.sleep(HEARTBEAT)
-            not_empty = False
-            for q in client.stream_queue.get(request.trade_id, []):
-                if isinstance(q, asyncio.Queue) and not q.empty():
-                    not_empty = True
-                    break
         open_client.on_order_update_queues.pop(request.trade_id, None)
-        client.stream_queue.pop(request.trade_id, None)
         response.success = True
+        return response
+
+    async def CheckStream(self, request: api_pb2.MarketRequest,
+                          _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
+        response = api_pb2.SimpleResponse()
+        response.success = True if client.data_streams.get(request.trade_id) else False
+        logger.debug(f"CheckStream request for {request.symbol} on {client.exchange} passed: {response.success}")
         return response
 
 
 async def stop_stream(client, trade_id):
     await client.stop_events_listener(trade_id)
     client.events.unregister(client.exchange, trade_id)
+    [await _queue.put(trade_id) for _queue in client.stream_queue.get(trade_id, [])]
+    not_empty = True
+    while not_empty:
+        await asyncio.sleep(HEARTBEAT)
+        not_empty = False
+        for q in client.stream_queue.get(trade_id, set()):
+            print(q.empty())
+            if isinstance(q, asyncio.Queue) and not q.empty():
+                not_empty = True
+                break
+    client.stream_queue.pop(trade_id, None)
     gc.collect(generation=2)
 
 
@@ -843,6 +857,7 @@ async def event_handler(_queue, client, trade_id, _event_type, event):
         _queue.put_nowait(_event())
     except asyncio.QueueFull:
         logger.warning(f"For {_event_type} asyncio queue full and wold be closed")
+        client.stream_queue.get(trade_id, set()).discard(_queue)
         await stop_stream(client, trade_id)
 
 

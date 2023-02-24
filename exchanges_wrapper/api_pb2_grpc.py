@@ -139,6 +139,11 @@ class MartinStub(object):
                 request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
                 response_deserializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
                 )
+        self.CheckStream = channel.unary_unary(
+                '/martin.Martin/CheckStream',
+                request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
+                response_deserializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
+                )
 
 
 class MartinServicer(object):
@@ -294,6 +299,12 @@ class MartinServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def CheckStream(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MartinServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -419,6 +430,11 @@ def add_MartinServicer_to_server(servicer, server):
             ),
             'TransferToMaster': grpc.unary_unary_rpc_method_handler(
                     servicer.TransferToMaster,
+                    request_deserializer=exchanges__wrapper_dot_api__pb2.MarketRequest.FromString,
+                    response_serializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.SerializeToString,
+            ),
+            'CheckStream': grpc.unary_unary_rpc_method_handler(
+                    servicer.CheckStream,
                     request_deserializer=exchanges__wrapper_dot_api__pb2.MarketRequest.FromString,
                     response_serializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.SerializeToString,
             ),
@@ -852,6 +868,23 @@ class Martin(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/martin.Martin/TransferToMaster',
+            exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
+            exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def CheckStream(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/martin.Martin/CheckStream',
             exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
             exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
             options, channel_credentials,
