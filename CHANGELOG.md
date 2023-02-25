@@ -1,3 +1,7 @@
+## v1.2.10-2 - 2023-02-26
+### Added for new features
+* CheckStream() method which request active WSS for trade_id
+
 ## v1.2.10 - 2023-02-22
 ### Added for new features
 * Add method TransferToMaster():

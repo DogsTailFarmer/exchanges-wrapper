@@ -95,6 +95,7 @@ class Client:
         self.active_orders = {}
         self.wss_buffer = {}
         self.stream_queue = defaultdict(set)
+        self.on_order_update_queues = {}
         self.hbp_account_id = None
         self.hbp_uid = None
         self.hbp_main_account_id = None
@@ -137,7 +138,6 @@ class Client:
 
     async def start_user_events_listener(self, _trade_id, symbol):
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
-
         user_data_stream = None
         if self.exchange == 'binance':
             user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
