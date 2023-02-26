@@ -827,7 +827,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         response = api_pb2.SimpleResponse()
-        response.success = True if client.data_streams.get(request.trade_id) else False
+        response.success = bool(client.data_streams.get(request.trade_id))
         logger.debug(f"CheckStream request for {request.symbol} on {client.exchange} passed: {response.success}")
         return response
 
