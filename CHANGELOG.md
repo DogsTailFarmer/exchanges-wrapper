@@ -1,3 +1,7 @@
+## v1.2.10-3 - 2023-03-01
+### Fix
+* OKX: FetchOpenOrders(): getting orders list for all pair per account instead specific one pair
+
 ## v1.2.10-2 - 2023-02-26
 ### Added for new features
 * CheckStream() method which request active WSS for trade_id

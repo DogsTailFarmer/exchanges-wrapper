@@ -1035,7 +1035,7 @@ class Client:
             # print(f"fetch_open_orders.res: {res}")
             binance_res = hbp.orders(res, response_type=response_type)
         elif self.exchange == 'okx':
-            params = {'instType': 'SPOT'}
+            params = {'instType': 'SPOT', 'instId': self.symbol_to_okx(symbol)}
             res = await self.http.send_api_call(
                 "/api/v5/trade/orders-pending",
                 signed=True,
