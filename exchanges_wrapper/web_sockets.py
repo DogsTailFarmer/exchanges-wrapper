@@ -27,6 +27,7 @@ class EventsDataStream:
         self.trade_id = trade_id
         self.web_socket = None
         self.try_count = 0
+        self.wss_event_buffer = {}
 
     async def start(self):
         try:
@@ -419,9 +420,9 @@ class OkxPrivateEventsDataStream(EventsDataStream):
             content = okx.on_order_update(msg_data.get('data')[0])
         elif msg_data.get('arg', {}).get('channel') == 'balance_and_position':
             _data = msg_data.get('data')[0]
-            content, self.client.wss_buffer = okx.on_balance_update(_data.get('balData', []),
-                                                                    self.client.wss_buffer,
-                                                                    bool(_data.get('eventType') == 'transferred'))
+            content, self.wss_event_buffer = okx.on_balance_update(_data.get('balData', []),
+                                                                   self.wss_event_buffer,
+                                                                   bool(_data.get('eventType') == 'transferred'))
             for i in content:
                 await self.client.events.wrap_event(i).fire(self.trade_id)
             content = None

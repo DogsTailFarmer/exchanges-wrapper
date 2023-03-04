@@ -255,6 +255,13 @@ def ticker_price_change_statistics(res: {}) -> {}:
     return binance_price_ticker
 
 
+def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
+    return {
+        "symbol": symbol,
+        "price": res.get('last')
+    }
+
+
 def ticker(res: {}) -> {}:
     symbol = res.get('instId').replace('-', '')
     msg_binance = {
@@ -508,95 +515,3 @@ def order_trade_list(res: []) -> []:
         }
         binance_trade_list.append(binance_trade)
     return binance_trade_list
-
-###############################################################################
-
-
-def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
-    return {
-        "symbol": symbol,
-        "price": str(res.get('data')[0].get('price'))
-    }
-
-
-def get_symbols(symbols_details: []) -> str:
-    symbols = []
-    res = ",t"
-    for symbol_details in symbols_details:
-        symbol = symbol_details['pair']
-        if 'f0' not in symbol:
-            symbols.append(symbol.upper())
-    return f"t{res.join(symbols)}"
-
-
-def tick_size(precision, _price):
-    x = int(_price)
-    _price = str(_price)
-    if '.' not in _price:
-        _price += ".0"
-    k = len(_price.split('.')[1])
-    x = len(_price.split('.')[0]) if k and x else 0
-    if k + x - precision > 0:
-        k = precision - x
-    elif k + x - precision < 0:
-        k += precision - x - k
-    res = (1 / 10 ** k) if k else 1
-    return res
-
-
-def symbol_name(_pair: str) -> ():
-    if ':' in _pair:
-        pair = _pair.replace(':', '').upper()
-        base_asset = _pair.split(':')[0].upper()
-        quote_asset = _pair.split(':')[1].upper()
-    else:
-        pair = _pair.upper()
-        base_asset = _pair[0:3].upper()
-        quote_asset = _pair[3:].upper()
-    return pair, base_asset, quote_asset
-
-
-def on_order_trade(res: [], executed_qty: str) -> {}:
-    # print(f"on_order_trade.res: {res}")
-    side = 'BUY' if res[4] > 0 else 'SELL'
-    #
-    status = 'PARTIALLY_FILLED'
-    #
-    last_executed_quantity = str(abs(res[4]))
-    last_executed_price = str(res[5])
-    last_quote_asset = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
-    msg_binance = {
-        "e": "executionReport",
-        "E": res[2],
-        "s": res[1][1:].replace(':', ''),
-        "c": str(res[11]),
-        "S": side,
-        "o": "LIMIT",
-        "f": "GTC",
-        "q": "0.0",
-        "p": str(res[7]),
-        "P": "0.00000000",
-        "F": "0.00000000",
-        "g": -1,
-        "C": "NEW",
-        "x": "TRADE",
-        "X": status,
-        "r": "NONE",
-        "i": res[3],
-        "l": last_executed_quantity,
-        "z": executed_qty,
-        "L": last_executed_price,
-        "n": str(res[9]),
-        "N": res[10],
-        "T": res[2],
-        "t": res[0],
-        "I": 123456789,
-        "w": True,
-        "m": bool(res[8] == 1),
-        "M": False,
-        "O": res[2],
-        "Z": "0.0",
-        "Y": last_quote_asset,
-        "Q": "0.0"
-    }
-    return msg_binance

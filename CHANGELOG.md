@@ -1,3 +1,8 @@
+## v1.2.10-4 - 2023-03-04
+### Fix
+* OKX: intersection wss streams for several trades on one client (same account). WSS buffer moved from
+client instance to EventsDataStream instance
+
 ## v1.2.10-3 - 2023-03-01
 ### Fix
 * OKX: FetchOpenOrders(): getting orders list for all pair per account instead specific one pair

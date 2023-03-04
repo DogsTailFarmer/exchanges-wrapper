@@ -596,6 +596,10 @@ class Client:
                 **params
             )
             binance_res = hbp.fetch_symbol_price_ticker(res, symbol)
+        elif self.exchange == 'okx':
+            params = {'instId': self.symbol_to_okx(symbol)}
+            res = await self.http.send_api_call("/api/v5/market/ticker", **params)
+            binance_res = okx.fetch_symbol_price_ticker(res[0], symbol)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-order-book-ticker
