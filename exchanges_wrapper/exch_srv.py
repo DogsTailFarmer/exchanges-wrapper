@@ -638,7 +638,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                     if balance:
                         _event = client.events.wrap_event(balance)
             if isinstance(_event, events.BalanceUpdateWrapper):
-                logger.debug(f"OnBalanceUpdate: {_event.event_time}:{_event.asset}:{_event.balance_delta}")
+                logger.debug(f"OnBalanceUpdate: {open_client.name}:{_event.event_time}:"
+                             f"{_event.asset}:{_event.balance_delta}")
                 if _event.asset in request.symbol:
                     balance = {
                         "event_time": _event.event_time,

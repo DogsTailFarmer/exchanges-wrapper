@@ -395,7 +395,7 @@ class Client:
                 **params,
             )
             for res_i in res:
-                time_select = (int(time.time() * 1000) - res_i.get('transactTime')) < 1000 * 60
+                time_select = (int(time.time() * 1000) - res_i.get('transactTime', 0)) < 1000 * 60
                 if (time_select and res_i.get('currency').upper() in symbol and
                         res_i.get('transactId') not in self.ledgers_id):
                     self.ledgers_id.append(res_i.get('transactId'))
