@@ -1,6 +1,7 @@
 import hmac
 import hashlib
 import base64
+from decimal import Decimal
 
 
 class OrderUpdateEvent:
@@ -35,6 +36,10 @@ class OrderUpdateEvent:
         self.quote_asset_transacted = event_data["cummulativeQuoteQty"]
         self.last_quote_asset_transacted = "0.0"
         self.quote_order_quantity = event_data["origQuoteOrderQty"]
+        if self.order_status == 'FILLED':
+            self.last_executed_quantity = self.cumulative_filled_quantity
+            self.last_executed_price = str(Decimal(self.quote_asset_transacted) /
+                                           Decimal(self.cumulative_filled_quantity))
 
 
 class OrderTradesEvent:

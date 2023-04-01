@@ -1,3 +1,7 @@
+## v1.2.10-5 - 2023-04-xx
+### Update
+* Minor improvements
+
 ## v1.2.10-4 - 2023-03-04
 ### Fix
 * OKX: intersection wss streams for several trades on one client (same account). WSS buffer moved from
