@@ -1,4 +1,4 @@
-## v1.2.10-5 - 2023-04-xx
+## v1.2.10-5 - 2023-04-05
 ### Update
 * Minor improvements
 
