@@ -335,6 +335,16 @@ message FetchExchangeInfoSymbolResponse {
       string maxPosition = 2;
     }
     optional MaxPosition max_position = 10;
+
+    message Notional {
+      string filterType = 1;
+      string minNotional = 2;
+      bool applyMinToMarket = 3;
+      string maxNotional = 4;
+      bool applyMaxToMarket = 5;
+      uint32 avgPriceMins = 6;
+    }
+    optional Notional notional = 11;
 }
 
   string symbol = 1;

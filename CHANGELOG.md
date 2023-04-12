@@ -1,3 +1,7 @@
+## v1.2.10-6-HotFix - 2023-04-12
+### Fix
+* Binance: REST API update for endpoint: GET /api/v3/exchangeInfo was changed MIN_NOTIONAL filter
+
 ## v1.2.10-5 - 2023-04-05
 ### Update
 * Minor improvements

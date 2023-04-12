@@ -322,8 +322,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         for _filter in filters_res:
             if _filter.get('filterType') == 'PRICE_FILTER':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.PriceFilter()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.price_filter.CopyFrom(new_filter)
+                filters.price_filter.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
             elif 'PERCENT_PRICE' in _filter.get('filterType'):
                 if _filter.get('filterType') == 'PERCENT_PRICE_BY_SIDE':
                     _filter['multiplierUp'] = _filter['bidMultiplierUp']
@@ -333,36 +332,31 @@ class Martin(api_pb2_grpc.MartinServicer):
                     _filter.pop('askMultiplierUp')
                     _filter.pop('askMultiplierDown')
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.PercentPrice()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.percent_price.CopyFrom(new_filter)
+                filters.percent_price.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
             elif _filter.get('filterType') == 'LOT_SIZE':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.LotSize()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.lot_size.CopyFrom(new_filter)
+                filters.lot_size.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
             elif _filter.get('filterType') == 'MIN_NOTIONAL':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MinNotional()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.min_notional.CopyFrom(new_filter)
+                filters.min_notional.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+            elif _filter.get('filterType') == 'NOTIONAL':
+                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.Notional()
+                filters.notional.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
             elif _filter.get('filterType') == 'ICEBERG_PARTS':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.IcebergParts()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.iceberg_parts.CopyFrom(new_filter)
+                filters.iceberg_parts.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
             elif _filter.get('filterType') == 'MARKET_LOT_SIZE':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MarketLotSize()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.market_lot_size.CopyFrom(new_filter)
+                filters.market_lot_size.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
             elif _filter.get('filterType') == 'MAX_NUM_ORDERS':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxNumOrders()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.max_num_orders.CopyFrom(new_filter)
+                filters.max_num_orders.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
             elif _filter.get('filterType') == 'MAX_NUM_ICEBERG_ORDERS':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxNumIcebergOrders()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.max_num_iceberg_orders.CopyFrom(new_filter)
+                filters.max_num_iceberg_orders.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
             elif _filter.get('filterType') == 'MAX_POSITION':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxPosition()
-                new_filter = json_format.ParseDict(_filter, new_filter_template)
-                filters.max_position.CopyFrom(new_filter)
+                filters.max_position.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
         return response
 
     async def FetchAccountInformation(self, request: api_pb2.OpenClientConnectionId,
