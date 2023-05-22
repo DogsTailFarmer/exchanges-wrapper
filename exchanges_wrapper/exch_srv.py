@@ -657,6 +657,9 @@ class Martin(api_pb2_grpc.MartinServicer):
             'executionReport')
         while True:
             _event = await _queue.get()
+
+            print(f"OnOrderUpdate._event: {vars(_event)}")
+
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnOrderUpdate: Stop user stream for {open_client.name}: {request.symbol}")

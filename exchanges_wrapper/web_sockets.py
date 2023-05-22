@@ -200,6 +200,7 @@ class MarketEventsDataStream(EventsDataStream):
 
                 request = {"op": 'subscribe',
                            "args": [{"channel": _ch_type,
+                                     "instType": 'SPOT',
                                      "instId": symbol}
                                     ]
                            }
