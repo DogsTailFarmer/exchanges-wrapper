@@ -102,7 +102,7 @@ class MartinStub(object):
         self.OnOrderUpdate = channel.unary_stream(
                 '/martin.Martin/OnOrderUpdate',
                 request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
-                response_deserializer=exchanges__wrapper_dot_api__pb2.OnOrderUpdateResponse.FromString,
+                response_deserializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
                 )
         self.CreateLimitOrder = channel.unary_unary(
                 '/martin.Martin/CreateLimitOrder',
@@ -396,7 +396,7 @@ def add_MartinServicer_to_server(servicer, server):
             'OnOrderUpdate': grpc.unary_stream_rpc_method_handler(
                     servicer.OnOrderUpdate,
                     request_deserializer=exchanges__wrapper_dot_api__pb2.MarketRequest.FromString,
-                    response_serializer=exchanges__wrapper_dot_api__pb2.OnOrderUpdateResponse.SerializeToString,
+                    response_serializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.SerializeToString,
             ),
             'CreateLimitOrder': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateLimitOrder,
@@ -750,7 +750,7 @@ class Martin(object):
             metadata=None):
         return grpc.experimental.unary_stream(request, target, '/martin.Martin/OnOrderUpdate',
             exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
-            exchanges__wrapper_dot_api__pb2.OnOrderUpdateResponse.FromString,
+            exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

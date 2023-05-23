@@ -645,8 +645,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                     yield response
 
     async def OnOrderUpdate(self, request: api_pb2.MarketRequest,
-                            _context: grpc.aio.ServicerContext) -> api_pb2.OnOrderUpdateResponse:
-        response = api_pb2.OnOrderUpdateResponse()
+                            _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+        response = api_pb2.SimpleResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -657,45 +657,16 @@ class Martin(api_pb2_grpc.MartinServicer):
             'executionReport')
         while True:
             _event = await _queue.get()
-
-            print(f"OnOrderUpdate._event: {vars(_event)}")
-
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnOrderUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             else:
                 # logger.info(f"OnOrderUpdate:{_event.symbol}:{int(_event.order_id)}:{_event.order_status}")
-                response.symbol = _event.symbol
-                response.client_order_id = _event.client_order_id
-                response.side = _event.side
-                response.order_type = _event.order_type
-                response.time_in_force = _event.time_in_force
-                response.order_quantity = _event.order_quantity
-                response.order_price = _event.order_price
-                response.stop_price = _event.stop_price
-                response.iceberg_quantity = _event.iceberg_quantity
-                response.order_list_id = int(_event.order_list_id)
-                response.original_client_id = _event.original_client_id
-                response.execution_type = _event.execution_type
-                response.order_status = _event.order_status
-                response.order_reject_reason = _event.order_reject_reason
-                response.order_id = int(_event.order_id)
-                response.last_executed_quantity = _event.last_executed_quantity
-                response.cumulative_filled_quantity = _event.cumulative_filled_quantity
-                response.last_executed_price = _event.last_executed_price
-                response.commission_amount = _event.commission_amount
-                response.commission_asset = _event.commission_asset or str()
-                response.transaction_time = int(_event.transaction_time)
-                response.trade_id = int(_event.trade_id)
-                response.ignore_a = _event.ignore_a
-                response.in_order_book = _event.in_order_book
-                response.is_maker_side = bool(_event.is_maker_side)
-                response.ignore_b = _event.ignore_b
-                response.order_creation_time = int(_event.order_creation_time)
-                response.quote_asset_transacted = _event.quote_asset_transacted
-                response.last_quote_asset_transacted = _event.last_quote_asset_transacted
-                response.quote_order_quantity = _event.quote_order_quantity
+                event = vars(_event)
+                event.pop('handlers')
+                response.success = True
+                response.result = json.dumps(str(event))
                 yield response
 
     async def CreateLimitOrder(self, request: api_pb2.CreateLimitOrderRequest,

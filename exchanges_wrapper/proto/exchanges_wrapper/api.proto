@@ -27,7 +27,7 @@ service Martin {
   rpc StartStream (StartStreamRequest) returns (SimpleResponse) {}
   rpc OnFundsUpdate (OnFundsUpdateRequest) returns (stream OnFundsUpdateResponse) {}
   rpc OnBalanceUpdate (MarketRequest) returns (stream OnBalanceUpdateResponse) {}
-  rpc OnOrderUpdate (MarketRequest) returns (stream OnOrderUpdateResponse) {}
+  rpc OnOrderUpdate (MarketRequest) returns (stream SimpleResponse) {}
   rpc CreateLimitOrder (CreateLimitOrderRequest) returns (CreateLimitOrderResponse) {}
   rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {}
   rpc FetchOrder (FetchOrderRequest) returns (FetchOrderResponse) {}
