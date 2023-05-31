@@ -662,9 +662,9 @@ class Martin(api_pb2_grpc.MartinServicer):
                 logger.info(f"OnOrderUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             else:
-                # logger.info(f"OnOrderUpdate:{_event.symbol}:{int(_event.order_id)}:{_event.order_status}")
                 event = vars(_event)
-                event.pop('handlers')
+                # logger.info(f"OnOrderUpdate: {event}")
+                event.pop('handlers', None)
                 response.success = True
                 response.result = json.dumps(str(event))
                 yield response
