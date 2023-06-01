@@ -280,13 +280,10 @@ class Martin(api_pb2_grpc.MartinServicer):
         return response
 
     async def CancelAllOrders(self, request: api_pb2.MarketRequest,
-                              _context: grpc.aio.ServicerContext) -> api_pb2.CancelAllOrdersResponse:
+                              _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse():
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        # message list
-        response = api_pb2.CancelAllOrdersResponse()
-        # Nested dict
-        response_order = api_pb2.CancelAllOrdersResponse.CancelOrder()
+        response = api_pb2.SimpleResponse()
         try:
             res = await client.cancel_all_orders(symbol=request.symbol, receive_window=None)
             # logger.info(f"CancelAllOrders: {res}")
@@ -297,9 +294,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            for order in res:
-                cancel_order = json_format.ParseDict(order, response_order)
-                response.items.append(cancel_order)
+            response.success = True
+            response.result = json.dumps(str(res))
         return response
 
     async def FetchExchangeInfoSymbol(self, request: api_pb2.MarketRequest,

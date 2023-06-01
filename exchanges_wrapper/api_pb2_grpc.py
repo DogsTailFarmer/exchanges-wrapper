@@ -32,7 +32,7 @@ class MartinStub(object):
         self.CancelAllOrders = channel.unary_unary(
                 '/martin.Martin/CancelAllOrders',
                 request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
-                response_deserializer=exchanges__wrapper_dot_api__pb2.FetchOpenOrdersResponse.FromString,
+                response_deserializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
                 )
         self.FetchExchangeInfoSymbol = channel.unary_unary(
                 '/martin.Martin/FetchExchangeInfoSymbol',
@@ -326,7 +326,7 @@ def add_MartinServicer_to_server(servicer, server):
             'CancelAllOrders': grpc.unary_unary_rpc_method_handler(
                     servicer.CancelAllOrders,
                     request_deserializer=exchanges__wrapper_dot_api__pb2.MarketRequest.FromString,
-                    response_serializer=exchanges__wrapper_dot_api__pb2.FetchOpenOrdersResponse.SerializeToString,
+                    response_serializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.SerializeToString,
             ),
             'FetchExchangeInfoSymbol': grpc.unary_unary_rpc_method_handler(
                     servicer.FetchExchangeInfoSymbol,
@@ -512,7 +512,7 @@ class Martin(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/martin.Martin/CancelAllOrders',
             exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
-            exchanges__wrapper_dot_api__pb2.FetchOpenOrdersResponse.FromString,
+            exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

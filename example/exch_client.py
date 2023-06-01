@@ -7,6 +7,7 @@ Client example for exchanges-wrapper, examples of use of server methods are give
 import asyncio
 import toml
 import uuid
+import simplejson as json
 # noinspection PyPackageRequirements
 import grpc
 # noinspection PyPackageRequirements
@@ -118,13 +119,7 @@ async def on_order_update(_stub, _client_id, _symbol, trade_id):
             trade_id=trade_id,
             client_id=_client_id,
             symbol=_symbol)):
-        print(f"on_order_update: {event.symbol}\n"
-              f"order_id: {event.order_id}\n"
-              f"order_status: {event.order_status}\n"
-              f"cumulative_filled_quantity: {event.cumulative_filled_quantity}\n"
-              f"quote_order_quantity: {event.quote_order_quantity}\n"
-              f"quote_asset_transacted: {event.quote_asset_transacted}\n"
-              f"client_order_id: {event.client_order_id}")
+        print(eval(json.loads(event.result)))
 
 
 async def on_balance_update(_stub, _client_id, _symbol, trade_id):
@@ -196,7 +191,7 @@ async def cancel_all_orders(_stub, _client_id, _symbol):
     res = await _stub.CancelAllOrders(api_pb2.MarketRequest(
         client_id=_client_id,
         symbol=_symbol))
-    result = json_format.MessageToDict(res)
+    result = eval(json.loads(res.result))
     print(f"cancel_all_orders.result: {result}")
 
 

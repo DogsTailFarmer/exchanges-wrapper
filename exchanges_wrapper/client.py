@@ -947,21 +947,22 @@ class Client:
                 signed=True,
             )
         elif self.exchange == 'bitfinex':
-            orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window)
-            orders_id = []
-            for order in orders:
-                orders_id.append(order.get('orderId'))
-            params = {'id': orders_id}
+            params = {'all': 1}
             res = await self.http.send_api_call(
                 "v2/auth/w/order/cancel/multi",
                 method="POST",
                 signed=True,
                 **params,
             )
+            active_orders = 1
+            while active_orders:
+                active_orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window)
+                if active_orders:
+                    await asyncio.sleep(STATUS_TIMEOUT / 10)
             if res and res[6] == 'SUCCESS':
-                binance_res = bfx.orders(res[4], response_type=True)
+                res = res[4]
+                binance_res = bfx.orders(res, response_type=True, cancelled=True)
         elif self.exchange == 'huobi':
-            orders_canceled = []
             orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window, response_type=True)
             orders_id = []
             for order in orders:
@@ -973,11 +974,11 @@ class Client:
                 signed=True,
                 **params,
             )
-            ids_canceled = res.get('success')
+            orders_id = res.get('success', [])
             for order in orders:
-                if str(order.get('orderId')) in ids_canceled:
-                    orders_canceled.append(order)
-            binance_res = orders_canceled
+                if str(order.get('orderId')) in orders_id:
+                    order['status'] = 'CANCELED'
+                    binance_res.append(order)
         elif self.exchange == 'okx':
             orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window, response_type=True)
             _symbol = self.symbol_to_okx(symbol)
@@ -987,6 +988,7 @@ class Client:
                 i = 1
                 # 20 is OKX limit fo bulk orders cancel
                 for order in orders:
+                    order['status'] = 'CANCELED'
                     orders_canceled.append(order)
                     params.append({'instId': _symbol, 'ordId': order.get('orderId')})
                     if i >= 20:

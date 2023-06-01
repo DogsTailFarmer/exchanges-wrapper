@@ -13,7 +13,7 @@ service Martin {
   rpc OpenClientConnection (OpenClientConnectionRequest) returns (OpenClientConnectionId) {}
   rpc FetchServerTime (OpenClientConnectionId) returns (FetchServerTimeResponse) {}
   rpc FetchOpenOrders (MarketRequest) returns (FetchOpenOrdersResponse) {}
-  rpc CancelAllOrders (MarketRequest) returns (FetchOpenOrdersResponse) {}
+  rpc CancelAllOrders (MarketRequest) returns (SimpleResponse) {}
   rpc FetchExchangeInfoSymbol (MarketRequest) returns (FetchExchangeInfoSymbolResponse) {}
   rpc FetchAccountInformation (OpenClientConnectionId) returns (FetchAccountBalanceResponse) {}
   rpc FetchOrderBook (MarketRequest) returns (FetchOrderBookResponse) {}
@@ -368,27 +368,6 @@ message FetchExchangeInfoSymbolResponse {
   repeated string permissions = 19;
   string defaultSelfTradePreventionMode = 20;
   repeated string allowedSelfTradePreventionModes = 21;
-}
-
-message CancelAllOrdersResponse {
-  message CancelOrder {
-    string symbol = 1;
-    string origClientOrderId = 2;
-    uint64 orderId = 3;
-    int32 orderListId = 4;
-    string clientOrderId = 5;
-    uint64 transactTime = 6;
-    string price = 7;
-    string origQty = 8;
-    string executedQty = 9;
-    string cummulativeQuoteQty = 10;
-    string status = 11;
-    string timeInForce = 12;
-    string type = 13;
-    string side = 14;
-    string selfTradePreventionMode = 15;
-  }
-  repeated CancelOrder items = 1;
 }
 
 message FetchOrderRequest{

@@ -195,7 +195,7 @@ def account_information(res: []) -> {}:
     return binance_account_info
 
 
-def order(res: [], response_type=None, wss_te=None) -> {}:
+def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
     # print(f"order.order: {res}")
     symbol = res[3][1:].replace(':', '')
     order_id = res[0]
@@ -214,6 +214,8 @@ def order(res: [], response_type=None, wss_te=None) -> {}:
         status = 'PARTIALLY_FILLED'
     elif  Decimal(executed_qty) >= Decimal(orig_qty):
         status = 'FILLED'
+    elif cancelled:
+        status = 'CANCELED'
     else:
         status = 'NEW'
     #
@@ -304,10 +306,10 @@ def order(res: [], response_type=None, wss_te=None) -> {}:
     return binance_order
 
 
-def orders(res: [], response_type=None) -> []:
+def orders(res: [], response_type=None, cancelled=False) -> []:
     binance_orders = []
     for _order in res:
-        i_order = order(_order, response_type=response_type)
+        i_order = order(_order, response_type=response_type, cancelled=cancelled)
         binance_orders.append(i_order)
     return binance_orders
 

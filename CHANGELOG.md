@@ -1,3 +1,12 @@
+## v1.3.0 - 2023-06-01
+### Fix
+* exchanges_wrapper.client.Client.cancel_all_orders() set correct 'status' for cancelled orders
+
+### Update
+* protobuf format for CancelAllOrders() and OnOrderUpdate(). Now simple use ```result = eval(json.loads(res.result))```
+for unpack incoming message. **Not compatible with earlier versions**
+* dependencies
+
 ## v1.2.10-6-HotFix - 2023-04-12
 ### Fix
 * Binance: REST API update for endpoint: GET /api/v3/exchangeInfo was changed MIN_NOTIONAL filter

@@ -18,11 +18,12 @@ requires-python = ">=3.8"
 
 dependencies = [
     "aiohttp==3.8.4",
-    "grpcio==1.48.1",
-    "grpcio-tools==1.48.1",
+    "grpcio==1.54.2",
+    "grpcio-tools==1.54.2",
     "toml==0.10.2",
     "idna==3.4",
-    "pyotp~=2.8.0"
+    "pyotp~=2.8.0",
+    "simplejson==3.19.1"
 ]
 
 [tool.flit.module]
