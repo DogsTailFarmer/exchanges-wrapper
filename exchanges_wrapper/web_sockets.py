@@ -179,7 +179,8 @@ class MarketEventsDataStream(EventsDataStream):
         registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
         if self.exchange == 'binance':
             combined_streams = "/".join(registered_streams)
-            self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}")
+            self.web_socket = await self.session.ws_connect(url=f"{self.endpoint}/stream?streams={combined_streams}",
+                                                            receive_timeout=100)
             logger.info(f"Combined events stream started: {combined_streams}")
             await self._handle_messages(self.web_socket)
         else:
@@ -442,7 +443,7 @@ class UserEventsDataStream(EventsDataStream):
 
     async def start_wss(self):
         listen_key = (await self.client.create_listen_key())["listenKey"]
-        self.web_socket = await self.session.ws_connect(f"{self.endpoint}/ws/{listen_key}", heartbeat=15)
+        self.web_socket = await self.session.ws_connect(url=f"{self.endpoint}/ws/{listen_key}", heartbeat=500)
         _task = asyncio.ensure_future(self._heartbeat(listen_key))
         try:
             await self._handle_messages(self.web_socket)

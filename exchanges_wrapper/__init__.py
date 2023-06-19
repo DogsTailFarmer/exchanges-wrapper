@@ -12,7 +12,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "1.3.0-1"
+__version__ = "1.3.0-3"
 
 from pathlib import Path
 import shutil
@@ -27,7 +27,7 @@ LOG_PATH = Path(WORK_PATH, "exch_srv_log")
 LOG_FILE = Path(LOG_PATH, "exch_srv.log")
 
 if CONFIG_FILE.exists():
-    print(f"Config found at {CONFIG_FILE}")
+    print(f"Server config found at {CONFIG_FILE}")
 else:
     print("Can't find config file! Creating it...")
     CONFIG_PATH.mkdir(parents=True, exist_ok=True)
