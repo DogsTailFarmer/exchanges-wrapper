@@ -1,3 +1,7 @@
+## v1.3.0-2 - 2023-06-19
+### Update
+* Binance: keepalive WSS
+
 ## v1.3.0 - 2023-06-01
 ### Fix
 * exchanges_wrapper.client.Client.cancel_all_orders() set correct 'status' for cancelled orders
