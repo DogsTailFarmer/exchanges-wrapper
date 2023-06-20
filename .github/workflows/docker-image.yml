@@ -20,11 +20,14 @@ jobs:
         username: ${{ github.repository_owner }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract metadata (tags, labels) for Docker
-      id: meta
-      uses: dockerbakery/github-metadata-action@v2.1
+    - name: Docker Metadata action
+      uses: docker/metadata-action@v4.6.0
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            dogstailfarmer/exchanges-wrapper
+          tags: |
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push
       uses: docker/build-push-action@v4
