@@ -26,6 +26,7 @@ jobs:
           images: |
             dogstailfarmer/exchanges-wrapper
           tags: |
+            type=match,pattern=v(.*),group=1
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
