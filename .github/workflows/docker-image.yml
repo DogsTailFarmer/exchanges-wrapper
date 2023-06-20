@@ -2,10 +2,6 @@ name: Docker Image CI
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'New tag name'
-        required: true
   release:
     types: [published]
 
@@ -15,10 +11,7 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-    - run: git tag ${{ github.event.inputs.tag }}
-    
+   
     - name: Login to GHCR
       uses: docker/login-action@v2
       with:
@@ -31,5 +24,4 @@ jobs:
       with:
         context: .
         push: true
-        # tags: ${{ steps.meta.outputs.tags }}
-        tags: ${{ tag }}       
+        tags: dogstailfarmer/exchanges-wrapper:latest
