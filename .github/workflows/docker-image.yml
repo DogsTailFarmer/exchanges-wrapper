@@ -6,11 +6,25 @@ on:
   release:
     types: [published]
 
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag {{version}}:latest
+    - name: Login to image repository
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GHCR_TOKEN }}
+    - name: Get the version
+      id: vars
+      run: echo ::set-output name=tag::$(echo ${GITHUB_REF:10})
+    - name: Build the tagged Docker image
+      run: docker build . --file Dockerfile --tag DogsTailFarmer/exchanges-wrapper:${{steps.vars.outputs.tag}}
+    - name: Push the tagged Docker image
+      run: docker push DogsTailFarmer/exchanges-wrapper:${{steps.vars.outputs.tag}}
+    - name: Build the latest Docker image
+      run: docker build . --file Dockerfile --tag DogsTailFarmer/exchanges-wrapper:latest
+    - name: Push the latest Docker image
+      run: docker push DogsTailFarmer/exchanges-wrapper:latest
