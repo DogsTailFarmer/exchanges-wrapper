@@ -1,3 +1,7 @@
+## v1.3.1 - 2023-06-20
+### Update
+* Optimizing installation and initial settings
+
 ## v1.3.0-2 - 2023-06-19
 ### Update
 * Binance: keepalive WSS
@@ -102,7 +106,7 @@ of a connection
 
 ## v1.2.7 2022-11-21
 ### Added for new features
-OKX exchange
+* OKX exchange
 
 ## v1.2.6-1 2022-11-11
 ### Fixed

@@ -31,3 +31,7 @@ name = "exchanges_wrapper"
 
 [project.urls]
 Source = "https://github.com/DogsTailFarmer/exchanges-wrapper"
+
+[project.scripts]
+exchanges-wrapper-init = "exchanges_wrapper.__init__:init"
+exchanges-wrapper-srv = "exchanges_wrapper.exch_srv:main"

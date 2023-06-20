@@ -25,6 +25,7 @@ from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
 #
 HEARTBEAT = 1  # Sec
 MAX_QUEUE_SIZE = 50
+logger = logging.getLogger('exch_srv_logger')
 
 
 def get_account(_account_name: str) -> ():
@@ -836,8 +837,7 @@ async def serve() -> None:
     await server.wait_for_termination()
 
 
-if __name__ == '__main__':
-    logger = logging.getLogger('exch_srv_logger')
+def main():
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
     #
@@ -861,3 +861,7 @@ if __name__ == '__main__':
     finally:
         loop.run_until_complete(asyncio.sleep(0.250))
         loop.close()
+
+
+if __name__ == '__main__':
+    main()
