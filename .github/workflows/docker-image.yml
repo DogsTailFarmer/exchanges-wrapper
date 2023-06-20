@@ -20,7 +20,7 @@ jobs:
         # list of Docker images to use as base name for tags
         images: |
           name/app
-          ghcr.io/username/app
+          ghcr.io/dogstailfarmer/exchanges-wrapper
         # generate Docker tags based on the following events/attributes
         tags: |
           type=schedule
@@ -47,6 +47,6 @@ jobs:
       uses: docker/build-push-action@v4
       with:
         context: .
-        push: ${{ github.event_name != 'pull_request' }}
+        push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
