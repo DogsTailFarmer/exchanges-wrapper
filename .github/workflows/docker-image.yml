@@ -6,8 +6,13 @@ on:
     types: [published]
 
 env:
+  shell: pwsh
+  run: |
+    "::set-output name=repository::$($env:GITHUB_REPOSITORY.ToLowerInvariant())"
+
+  REPOSITORY: ghcr.io/${{ steps.lower-repo.outputs.repository }}
+  # REPOSITORY: ghcr.io/${{ github.repository }}
   IMAGE_TAG: ${{ github.sha }}
-  REPOSITORY: ghcr.io/${{ github.repository }}
 
 jobs:
   build:
@@ -29,6 +34,6 @@ jobs:
         echo $IMAGE_TAG
         echo $REPOSITORY
 
-        docker build . --file Dockerfile --tag $REPOSITORY:$IMAGE_TAG
+        docker build . --tag $REPOSITORY:$IMAGE_TAG
     #     docker push ghcr.io/dogstailfarmer/exchanges-wrapper:latest
     #     docker push ghcr.io/dogstailfarmer/exchanges-wrapper:latest
