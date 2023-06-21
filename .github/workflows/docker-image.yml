@@ -24,4 +24,4 @@ jobs:
       with:
         context: .
         push: true
-        tags: dogstailfarmer/exchanges-wrapper:latest
+        tags: ghcr.io/dogstailfarmer/exchanges-wrapper:latest
