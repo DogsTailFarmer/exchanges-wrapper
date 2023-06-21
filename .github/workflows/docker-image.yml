@@ -7,7 +7,7 @@ on:
 
 env:
   IMAGE_TAG: ${{ github.sha }}
-  REPOSITORY: ghcr.io/dogstailfarmer/exchanges-wrapper
+  REPOSITORY: ghcr.io/$GITHUB_REPOSITORY
 
 jobs:
   build:
@@ -28,7 +28,7 @@ jobs:
       
         echo $IMAGE_TAG
         echo $REPOSITORY
-      
+
         docker build . --file Dockerfile --tag $REPOSITORY:$IMAGE_TAG
     #     docker push ghcr.io/dogstailfarmer/exchanges-wrapper:latest
     #     docker push ghcr.io/dogstailfarmer/exchanges-wrapper:latest
