@@ -25,6 +25,6 @@ jobs:
 
     - name: Build and push
       run: |
-        docker build --file Dockerfile -tag $REPOSITORY:$IMAGE_TAG .
+        docker build -t $REPOSITORY:$IMAGE_TAG .
     #     docker push ghcr.io/dogstailfarmer/exchanges-wrapper:latest
     #     docker push ghcr.io/dogstailfarmer/exchanges-wrapper:latest
