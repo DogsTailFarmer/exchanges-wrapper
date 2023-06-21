@@ -20,8 +20,6 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build and push
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: true
-        tags: ghcr.io/dogstailfarmer/exchanges-wrapper:latest
+      run: |
+        docker build . --file Dockerfile --tag ghcr.io/dogstailfarmer/exchanges-wrapper:latest
+        docker push ghcr.io/dogstailfarmer/exchanges-wrapper:latest
