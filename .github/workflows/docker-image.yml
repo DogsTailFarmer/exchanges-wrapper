@@ -7,7 +7,7 @@ on:
 
 env:
   IMAGE_TAG: ${{ github.sha }}
-  REPOSITORY: "ghcr.io/${{ GITHUB_REPOSITORY }}"
+  REPOSITORY: ghcr.io/${{ github.repository }}
 
 jobs:
   build:
