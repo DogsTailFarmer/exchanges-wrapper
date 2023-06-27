@@ -4,6 +4,14 @@
 from enum import Enum
 
 
+# https://binance-docs.github.io/apidocs/websocket_api/en/#rate-limits
+class RateLimitInterval(Enum):
+    SECOND = 1
+    MINUTE = 60
+    HOUR = 3600
+    DAY = 86400
+
+
 # Symbol status (status)
 class SymbolStatus(Enum):
     PRE_TRADING = "PRE_TRADING"

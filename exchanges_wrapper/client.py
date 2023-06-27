@@ -18,6 +18,7 @@ from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             OkxPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
+from exchanges_wrapper.user_wss import UserWSSession
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
@@ -101,6 +102,8 @@ class Client:
         self.hbp_main_account_id = None
         self.hbp_main_uid = None
         self.ledgers_id = []
+        self.user_wss_session = UserWSSession(self)
+
 
     async def load(self):
         infos = await self.fetch_exchange_info()
@@ -123,6 +126,9 @@ class Client:
             # load rate limits
             self.rate_limits = infos["rateLimits"]
             self.loaded = True
+
+            await self.user_wss_session.start("wer-wer-qwer-wer-qwer-qwe")
+
         else:
             raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
 
@@ -140,7 +146,9 @@ class Client:
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
         user_data_stream = None
         if self.exchange == 'binance':
-            user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
+            pass
+            # await self.user_wss_session.start(_trade_id)
+            # user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'bitfinex':
             user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'huobi':
@@ -177,6 +185,7 @@ class Client:
         stopped_data_stream = self.data_streams.pop(_trade_id, set())
         for data_stream in stopped_data_stream:
             await data_stream.stop()
+        await self.user_wss_session.stop()
 
     def assert_symbol_exists(self, symbol):
         if self.loaded and symbol not in self.symbols:
