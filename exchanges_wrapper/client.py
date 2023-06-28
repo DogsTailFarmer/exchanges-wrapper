@@ -18,7 +18,7 @@ from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             OkxPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
-from exchanges_wrapper.user_wss import UserWSSession
+from exchanges_wrapper.ws_api_v3 import UserWSSession
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
@@ -48,7 +48,8 @@ class Client:
         passphrase,
         master_email,
         master_name,
-        two_fa
+        two_fa,
+        endpoint_ws_api
     ):
         self.exchange = exchange
         self.sub_account = sub_account
@@ -60,6 +61,7 @@ class Client:
         self.endpoint_ws_public = endpoint_ws_public
         self.endpoint_api_auth = endpoint_api_auth
         self.endpoint_ws_auth = endpoint_ws_auth
+        self.endpoint_ws_api = endpoint_ws_api
         self.ws_public_mbr = ws_public_mbr
         self.master_email = master_email
         self.master_name = master_name
@@ -77,8 +79,15 @@ class Client:
             'test_net': test_net
         }
 
+        self.user_wss_session = None
         if exchange == 'binance':
             self.http = ClientBinance(**client_init_params)
+            self.user_wss_session = UserWSSession(
+                self.api_key,
+                self.api_secret,
+                self.session,
+                self.endpoint_ws_api
+            )
         elif exchange == 'bitfinex':
             self.http = ClientBFX(**client_init_params)
         elif exchange == 'huobi':
@@ -102,7 +111,6 @@ class Client:
         self.hbp_main_account_id = None
         self.hbp_main_uid = None
         self.ledgers_id = []
-        self.user_wss_session = UserWSSession(self.api_key, self.api_secret, self.session)  # Add endpoint
 
 
     async def load(self):
@@ -126,10 +134,6 @@ class Client:
             # load rate limits
             self.rate_limits = infos["rateLimits"]
             self.loaded = True
-
-            await self.user_wss_session.start()
-
-
         else:
             raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
 
@@ -147,9 +151,9 @@ class Client:
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
         user_data_stream = None
         if self.exchange == 'binance':
-            pass
-            # await self.user_wss_session.start(_trade_id)
-            # user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
+            if self.user_wss_session:
+                await self.user_wss_session.start(_trade_id)
+            user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'bitfinex':
             user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'huobi':
@@ -186,7 +190,8 @@ class Client:
         stopped_data_stream = self.data_streams.pop(_trade_id, set())
         for data_stream in stopped_data_stream:
             await data_stream.stop()
-        await self.user_wss_session.stop()
+        if self.user_wss_session:
+            await self.user_wss_session.stop()
 
     def assert_symbol_exists(self, symbol):
         if self.loaded and symbol not in self.symbols:

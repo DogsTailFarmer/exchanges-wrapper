@@ -52,6 +52,7 @@ def get_account(_account_name: str) -> ():
             api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
             ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
             ws_public_mbr = endpoint.get('ws_public_mbr')
+            ws_api = endpoint.get('ws_api_v3_test') if test_net else endpoint.get('ws_api_v3')
             #
             exchange = 'binance' if exchange == 'binance_us' else exchange
             #
@@ -69,6 +70,7 @@ def get_account(_account_name: str) -> ():
                    master_email,    # 11
                    master_name,     # 12
                    two_fa,          # 13
+                   ws_api,          # 14
                    )
             break
     return res
@@ -200,7 +202,16 @@ class Martin(api_pb2_grpc.MartinServicer):
         # Nested dict
         response_order = api_pb2.FetchOpenOrdersResponse.Order()
         try:
-            res = await client.fetch_open_orders(symbol=request.symbol, receive_window=None)
+            if client.user_wss_session and client.user_wss_session.operational_status:
+                params = {
+                    "symbol": request.symbol,
+                    "apiKey": 1,
+                    "signature": 1,
+                    "timestamp": 1
+                }
+                res = await client.user_wss_session.handle_request("openOrders.status", params) or []
+            else:
+                res = await client.fetch_open_orders(symbol=request.symbol, receive_window=None)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
@@ -768,14 +779,12 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         response = api_pb2.SimpleResponse()
         _market_stream_count = 0
-        '''
         while _market_stream_count < request.market_stream_count:
             await asyncio.sleep(HEARTBEAT)
             _market_stream_count = sum(len(k) for k in ([list(i.get(request.trade_id, []))
                                                          for i in list(client.events.registered_streams.values())]))
         logger.info(f"Start WS streams for {open_client.name}")
         asyncio.create_task(client.start_market_events_listener(request.trade_id))
-        '''
         asyncio.create_task(client.start_user_events_listener(request.trade_id, request.symbol))
         response.success = True
         return response

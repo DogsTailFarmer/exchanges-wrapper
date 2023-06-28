@@ -30,7 +30,7 @@ class UserWSSession:
             self, api_key: str,
             api_secret: str,
             session: aiohttp.ClientSession,
-            endpoint="wss://testnet.binance.vision/ws-api/v3"
+            endpoint: str
     ):
         self.api_key = api_key
         self.api_secret = api_secret
@@ -72,7 +72,7 @@ class UserWSSession:
                 self.session_tasks.append(asyncio.ensure_future(self._keepalive()))
                 logger.info(f"UserWSSession started for {self.trade_id}")
 
-                self.session_tasks.append(asyncio.ensure_future(self.test()))
+                # self.session_tasks.append(asyncio.ensure_future(self.test()))
 
     async def _ws_error(self, ex):
         if self.operational_status is not None:
@@ -100,7 +100,7 @@ class UserWSSession:
             return self._handle_msg_error(await asyncio.wait_for(queue.get(), timeout=TIMEOUT))
         else:
             logger.warning(f"UserWSSession operational status is {self.operational_status}")
-            return {}
+            return None
 
     async def test(self, interval=1):
         params = {
