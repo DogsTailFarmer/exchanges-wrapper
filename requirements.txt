@@ -5,3 +5,4 @@ toml==0.10.2
 idna==3.4
 pyotp~=2.8.0
 simplejson==3.19.1
+shortuuid~=1.0.11

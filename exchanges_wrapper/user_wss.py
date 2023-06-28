@@ -1,14 +1,11 @@
 import aiohttp
 import asyncio
-import json
 import random
 import logging
 import time
-from decimal import Decimal
 import traceback
-import gzip
-from datetime import datetime
-from urllib.parse import urlencode, urlparse
+import shortuuid
+
 
 from exchanges_wrapper.errors import (
     RateLimitReached,
@@ -16,7 +13,6 @@ from exchanges_wrapper.errors import (
     WAFLimitViolated,
     IPAddressBanned,
     HTTPError,
-    QueryCanceled,
 )
 
 from exchanges_wrapper.definitions import RateLimitInterval
@@ -30,9 +26,15 @@ logger = logging.getLogger('exch_srv_logger')
 
 
 class UserWSSession:
-    def __init__(self, client, endpoint="wss://testnet.binance.vision/ws-api/v3"):
-        self.client = client
-        self.session = client.session
+    def __init__(
+            self, api_key: str,
+            api_secret: str,
+            session: aiohttp.ClientSession,
+            endpoint="wss://testnet.binance.vision/ws-api/v3"
+    ):
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.session = session
         self.endpoint = endpoint
         self.trade_id = None
         self.web_socket = None
@@ -44,15 +46,9 @@ class UserWSSession:
         self.session_tasks = []
         self.queue = {}
 
-
-    async def start(self, trade_id=None):
+    async def start(self, trade_id=shortuuid.uuid()):
         self.trade_id = trade_id or self.trade_id
-        req_id = f"{self.trade_id}-start"
-        req = {
-            "method": "userDataStream.start",
-            "params": {"apiKey": self.client.api_key}
-        }
-
+        params = {"apiKey": 1}
         try:
             self.web_socket = await self.session.ws_connect(url=f"{self.endpoint}", heartbeat=500)
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
@@ -65,7 +61,7 @@ class UserWSSession:
             self.operational_status = True
             self.order_handling = True
             try:
-                res = await self.handle_request(req_id, req)
+                res = await self.handle_request('userDataStream.start', params)
             except asyncio.TimeoutError:
                 ex = "UserWSSession initiate timeout error"
                 await self._ws_error(ex)
@@ -75,6 +71,7 @@ class UserWSSession:
                 self.session_tasks.append(asyncio.ensure_future(self._heartbeat()))
                 self.session_tasks.append(asyncio.ensure_future(self._keepalive()))
                 logger.info(f"UserWSSession started for {self.trade_id}")
+
                 self.session_tasks.append(asyncio.ensure_future(self.test()))
 
     async def _ws_error(self, ex):
@@ -85,12 +82,20 @@ class UserWSSession:
             await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
 
-    async def handle_request(self, _id, req: {}, signed=False):
+    async def handle_request(self, method: str, params: {} = None):
         if self.operational_status:
+            _id = f"{self.trade_id}-{method.replace('.', '_')}"[-36:]
             queue = self.queue.setdefault(_id, asyncio.Queue())
-            req['id'] = _id
-            if signed:
-                req['params'] = self.add_signature(req.pop('params', {}))
+            req = {'id': _id, "method": method}
+            if params:
+                if params.get('apiKey'):
+                    params['apiKey'] = self.api_key
+                if params.get('timestamp'):
+                    params['timestamp'] = int(time.time() * 1000)
+                if params.pop('signature', None):
+                    payload = '&'.join(f"{key}={value}" for key, value in dict(sorted(params.items())).items())
+                    params['signature'] = generate_signature('binance_ws', self.api_secret, payload)
+                req['params'] = params
             await self._send_request(req)
             return self._handle_msg_error(await asyncio.wait_for(queue.get(), timeout=TIMEOUT))
         else:
@@ -98,16 +103,15 @@ class UserWSSession:
             return {}
 
     async def test(self, interval=1):
-        req_id = f"{self.trade_id}-test"
-        req = {
-            "method": "account.rateLimits.orders",
-            "params": {"apiKey": self.client.api_key,
-                       "timestamp": int(time.time() * 1000)}
+        params = {
+            "apiKey": 1,
+            "signature": 1,
+            "timestamp": 1
         }
         while self.operational_status is not None:
             await asyncio.sleep(interval)
             try:
-                res = await self.handle_request(req_id, req, signed=True)
+                res = await self.handle_request("account.rateLimits.orders", params)
             except Exception as ex:
                 print(f"TEST: {ex}")
             else:
@@ -115,17 +119,12 @@ class UserWSSession:
             break
 
     async def _keepalive(self, interval=10):
-        req_id = f"{self.trade_id}-_keepalive"
-        req = {
-            "method": "ping",
-        }
         while self.operational_status is not None:
             await asyncio.sleep(interval)
-
             if ((not self.operational_status or not self.order_handling)
                     and int(time.time() * 1000) - self.retry_after >= 0):
                 try:
-                    await self.handle_request(req_id, req)
+                    await self.handle_request("ping")
                 except Exception as ex:
                     logger.warning(f"UserWSSession._keepalive: {ex}")
                 else:
@@ -137,17 +136,13 @@ class UserWSSession:
                         logger.info("UserWSSession order limit restriction was cleared")
 
     async def _heartbeat(self, interval=60 * 30):
-        req_id = f"{self.trade_id}-_heartbeat"
-        req = {
-            "method": "userDataStream.ping",
-            "params": {
-                "listenKey": self.listen_key,
-                "apiKey": self.client.api_key
-            }
+        params = {
+            "listenKey": self.listen_key,
+            "apiKey": 1
         }
         while self.operational_status is not None:
             await asyncio.sleep(interval)
-            await self.handle_request(req_id, req)
+            await self.handle_request("userDataStream.ping", params)
 
     async def stop(self):
         """
@@ -161,7 +156,7 @@ class UserWSSession:
             "method": "userDataStream.stop",
             "params": {
                 "listenKey": self.listen_key,
-                "apiKey": self.client.api_key
+                "apiKey": self.api_key
             }
         }
         await self._send_request(req)
@@ -178,9 +173,12 @@ class UserWSSession:
     async def _receive_msg(self):
         while self.operational_status is not None:
             msg = await self.web_socket.receive_json()
-            # print(f"_send_request: {msg}")
             self._handle_rate_limits(msg.pop('rateLimits', []))
-            await self.queue.get(msg.get('id')).put(msg)
+            queue = self.queue.get(msg.get('id'))
+            if queue:
+                await queue.put(msg)
+            else:
+                logger.warning(f"Can't get queue for transporting message: {msg}")
 
     def _handle_msg_error(self, msg):
         if msg.get('status') != 200:
@@ -213,8 +211,3 @@ class UserWSSession:
                     self.operational_status = False
                 elif rl.get('rateLimitType') == 'ORDERS':
                     self.order_handling = False
-
-    def add_signature(self, params: {}):
-        payload = '&'.join(f"{key}={value}" for key, value in dict(sorted(params.items())).items())
-        params['signature'] = generate_signature('binance_ws', self.client.api_secret, payload)
-        return params

@@ -102,7 +102,7 @@ class Client:
         self.hbp_main_account_id = None
         self.hbp_main_uid = None
         self.ledgers_id = []
-        self.user_wss_session = UserWSSession(self)
+        self.user_wss_session = UserWSSession(self.api_key, self.api_secret, self.session)  # Add endpoint
 
 
     async def load(self):
@@ -127,7 +127,8 @@ class Client:
             self.rate_limits = infos["rateLimits"]
             self.loaded = True
 
-            await self.user_wss_session.start("wer-wer-qwer-wer-qwer-qwe")
+            await self.user_wss_session.start()
+
 
         else:
             raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
