@@ -16,7 +16,7 @@
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_exchanges-wrapper" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_exchanges-wrapper&metric=alert_status"/></a>
 <a href="https://pepy.tech/project/exchanges-wrapper" target="_blank"><img alt="Downloads" title="Downloads" src="https://pepy.tech/badge/exchanges-wrapper/month"/></a>
 ***
-From 1.3.2 update exch_srv_cfg.toml (see CHANGELOG for details)
+From 1.3.2 update exch_srv_cfg.toml (see [CHANGELOG](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/CHANGELOG.md#added-for-new-features) for details)
 ***
 
 ## exchanges-wrapper vs binance.py
@@ -45,7 +45,7 @@ Served methods describes into ```example/exch_client.py```
 - Passthrough logging
 - WSS keepalive
 - Reuse session for new client sessions
-- Utilize Websocket API (bidirectional) for the most commonly used methods (Binance ws-api/v3, )
+- Utilizing Websocket API (bidirectional) for the most commonly used methods (Binance ws-api/v3, )
 
 ## Extra exchanges implementation features
 - Binance REST API and WSS are accepted as basic, connection of other exchanges wrapped their API to Binance compatible

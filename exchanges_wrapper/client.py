@@ -33,54 +33,37 @@ def truncate(f, n):
 
 
 class Client:
-    def __init__(
-        self,
-        exchange,
-        sub_account,
-        test_net,
-        api_key,
-        api_secret,
-        endpoint_api_public,
-        endpoint_ws_public,
-        endpoint_api_auth,
-        endpoint_ws_auth,
-        ws_public_mbr,
-        passphrase,
-        master_email,
-        master_name,
-        two_fa,
-        endpoint_ws_api
-    ):
-        self.exchange = exchange
-        self.sub_account = sub_account
-        self.test_net = test_net
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.passphrase = passphrase
-        self.endpoint_api_public = endpoint_api_public
-        self.endpoint_ws_public = endpoint_ws_public
-        self.endpoint_api_auth = endpoint_api_auth
-        self.endpoint_ws_auth = endpoint_ws_auth
-        self.endpoint_ws_api = endpoint_ws_api
-        self.ws_public_mbr = ws_public_mbr
-        self.master_email = master_email
-        self.master_name = master_name
-        self.two_fa = two_fa
+    def __init__(self, *acc):
+        self.exchange = acc[0]
+        self.sub_account = acc[1]
+        self.test_net = acc[2]
+        self.api_key = acc[3]
+        self.api_secret = acc[4]
+        self.passphrase = acc[10]
+        self.endpoint_api_public = acc[5]
+        self.endpoint_ws_public = acc[6]
+        self.endpoint_api_auth = acc[7]
+        self.endpoint_ws_auth = acc[8]
+        self.endpoint_ws_api = acc[14]
+        self.ws_public_mbr = acc[9]
+        self.master_email = acc[11]
+        self.master_name = acc[12]
+        self.two_fa = acc[13]
         #
         self.session = aiohttp.ClientSession()
         client_init_params = {
-            'api_key': api_key,
-            'api_secret': api_secret,
-            'passphrase': passphrase,
-            'endpoint': endpoint_api_auth,
+            'api_key': self.api_key,
+            'api_secret': self.api_secret,
+            'passphrase': self.passphrase,
+            'endpoint': self.endpoint_api_auth,
             'session': self.session,
-            'exchange': exchange,
-            'sub_account': sub_account,
-            'test_net': test_net
+            'exchange': self.exchange,
+            'sub_account': self.sub_account,
+            'test_net': self.test_net
         }
 
         self.user_wss_session = None
-        if exchange == 'binance':
+        if self.exchange == 'binance':
             self.http = ClientBinance(**client_init_params)
             self.user_wss_session = UserWSSession(
                 self.api_key,
@@ -88,14 +71,14 @@ class Client:
                 self.session,
                 self.endpoint_ws_api
             )
-        elif exchange == 'bitfinex':
+        elif self.exchange == 'bitfinex':
             self.http = ClientBFX(**client_init_params)
-        elif exchange == 'huobi':
+        elif self.exchange == 'huobi':
             self.http = ClientHBP(**client_init_params)
-        elif exchange == 'okx':
+        elif self.exchange == 'okx':
             self.http = ClientOKX(**client_init_params)
         else:
-            raise UserWarning(f"Exchange {exchange} not yet connected")
+            raise UserWarning(f"Exchange {self.exchange} not yet connected")
         #
         self.loaded = False
         self.symbols = {}
@@ -111,7 +94,6 @@ class Client:
         self.hbp_main_account_id = None
         self.hbp_main_uid = None
         self.ledgers_id = []
-
 
     async def load(self):
         infos = await self.fetch_exchange_info()

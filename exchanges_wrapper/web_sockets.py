@@ -130,7 +130,7 @@ class EventsDataStream:
                             raise aiohttp.ClientOSError
                 # data handling
                 elif isinstance(msg_data, list) and len(msg_data) == 2 and msg_data[1] == 'hb':
-                    pass
+                    pass  # heartbeat message
                 elif isinstance(msg_data, list):
                     if ch_type == 'book' and isinstance(msg_data[1][-1], list):
                         order_book = bfx.OrderBook(msg_data[1], symbol)
