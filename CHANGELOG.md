@@ -1,3 +1,20 @@
+## v1.3.2 - 2023-06-29
+### Added for new features
+* Binance: ws_api package implemented, last version
+[Websocket API](https://developers.binance.com/docs/binance-trading-api/websocket_api#general-api-information)
+used for the most commonly used methods
+
+In `exch_srv_cfg.toml` added:
+
+```bazaar
+[endpoint]
+    [endpoint.binance]
+        ...
+        ws_api = 'wss://ws-api.binance.com:443/ws-api/v3'
+        ws_api_test = 'wss://testnet.binance.vision/ws-api/v3'
+
+```
+
 ## v1.3.1 - 2023-06-20
 ### Update
 * Optimizing installation and initial settings

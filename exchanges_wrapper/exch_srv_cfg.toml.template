@@ -1,6 +1,6 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "1.2.10"
+# __version__ = "1.3.2"
 
 # region endpoint
 [endpoint]
@@ -11,6 +11,8 @@
         ws_auth = 'wss://stream.binance.com:9443'
         api_test = 'https://testnet.binance.vision'
         ws_test = 'wss://testnet.binance.vision/ws'
+        ws_api = 'wss://ws-api.binance.com:443/ws-api/v3'
+        ws_api_test = 'wss://testnet.binance.vision/ws-api/v3'
 
     [endpoint.binance_us]
         api_public = 'https://api.binance.us'
@@ -19,6 +21,8 @@
         ws_auth = 'wss://stream.binance.us:9443'
         api_test = 'https://testnet.binance.vision'
         ws_test = 'wss://testnet.binance.vision/ws'
+        ws_api = 'wss://ws-api.binance.us:443/ws-api/v3'
+        ws_api_test = 'wss://testnet.binance.vision/ws-api/v3'
 
     [endpoint.ftx]
         api_public = 'https://ftx.com/api'

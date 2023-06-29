@@ -11,7 +11,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = []
-__version__ = "1.0.0b2"
+__version__ = "1.0.0"
 
 import logging
 
