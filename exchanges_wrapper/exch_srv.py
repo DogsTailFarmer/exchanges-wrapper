@@ -202,15 +202,17 @@ class Martin(api_pb2_grpc.MartinServicer):
         # Nested dict
         response_order = api_pb2.FetchOpenOrdersResponse.Order()
         try:
-            if client.user_wss_session and client.user_wss_session.operational_status:
+            res = []
+            ws_status = bool(client.user_wss_session and client.user_wss_session.operational_status)
+            if ws_status:
                 params = {
                     "symbol": request.symbol,
                     "apiKey": 1,
                     "signature": 1,
                     "timestamp": 1
                 }
-                res = await client.user_wss_session.handle_request("openOrders.status", params) or []
-            else:
+                res = await client.user_wss_session.handle_request("openOrders.status", params)
+            if not ws_status or res is None:
                 res = await client.fetch_open_orders(symbol=request.symbol, receive_window=None)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
@@ -297,7 +299,22 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         response = api_pb2.SimpleResponse()
         try:
-            res = await client.cancel_all_orders(symbol=request.symbol, receive_window=None)
+            res = []
+            ws_status = bool(client.user_wss_session and client.user_wss_session.operational_status)
+            ws_status = False
+            if ws_status:
+                params = {
+                    "symbol": request.symbol,
+                    "apiKey": 1,
+                    "signature": 1,
+                    "timestamp": 1
+                }
+                try:
+                    res = await client.user_wss_session.handle_request("openOrders.cancelAll", params)
+                except TimeoutError:
+                    ws_status = False
+            if not ws_status:
+                res = await client.cancel_all_orders(symbol=request.symbol, receive_window=None)
             # logger.info(f"CancelAllOrders: {res}")
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
@@ -516,13 +533,29 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = OpenClient.get_client(request.client_id).client
         response = api_pb2.AccountTradeListResponse()
         response_trade = api_pb2.AccountTradeListResponse.Trade()
-        res = await client.fetch_account_trade_list(
-            symbol=request.symbol,
-            start_time=request.start_time,
-            end_time=None,
-            from_id=None,
-            limit=request.limit,
-            receive_window=None)
+        res = []
+        ws_status = bool(client.user_wss_session and client.user_wss_session.operational_status)
+        if ws_status:
+            params = {
+                "symbol": request.symbol,
+                "startTime": request.start_time,
+                "limit": request.limit,
+                "apiKey": 1,
+                "signature": 1,
+                "timestamp": 1
+            }
+            try:
+                res = await client.user_wss_session.handle_request("myTrades", params)
+            except TimeoutError:
+                ws_status = False
+        if not ws_status:
+            res = await client.fetch_account_trade_list(
+                symbol=request.symbol,
+                start_time=request.start_time,
+                end_time=None,
+                from_id=None,
+                limit=request.limit,
+                receive_window=None)
         # logger.info(f"FetchAccountTradeList: {res}")
         for trade in res:
             trade_order = json_format.ParseDict(trade, response_trade)

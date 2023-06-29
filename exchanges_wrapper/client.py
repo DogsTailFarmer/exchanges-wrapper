@@ -18,7 +18,7 @@ from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             OkxPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
-from exchanges_wrapper.ws_api_v3 import UserWSSession
+from exchanges_wrapper.ws_api_v3.ws_session import UserWSSession
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx

@@ -1,28 +1,13 @@
-import aiohttp
 import asyncio
 import random
-import logging
 import time
-import traceback
+import aiohttp
 import shortuuid
 
-
-from exchanges_wrapper.errors import (
-    RateLimitReached,
-    ExchangeError,
-    WAFLimitViolated,
-    IPAddressBanned,
-    HTTPError,
-)
-
-from exchanges_wrapper.definitions import RateLimitInterval
 from exchanges_wrapper.c_structures import generate_signature
-
-
-TIMEOUT = 10  # s WSS receive timeout
-
-
-logger = logging.getLogger('exch_srv_logger')
+from exchanges_wrapper.definitions import RateLimitInterval
+from exchanges_wrapper.errors import ExchangeError, WAFLimitViolated, IPAddressBanned, RateLimitReached, HTTPError
+from exchanges_wrapper.ws_api_v3 import logger, TIMEOUT
 
 
 class UserWSSession:
@@ -53,19 +38,16 @@ class UserWSSession:
             self.web_socket = await self.session.ws_connect(url=f"{self.endpoint}", heartbeat=500)
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
             await self._ws_error(ex)
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
         except Exception as ex:
             logger.error(f"UserWSSession start() other exception: {ex}")
-            logger.debug(traceback.format_exc())
         else:
             self.session_tasks.append(asyncio.ensure_future(self._receive_msg()))
             self.operational_status = True
             self.order_handling = True
-            try:
-                res = await self.handle_request('userDataStream.start', params)
-            except asyncio.TimeoutError:
-                ex = "UserWSSession initiate timeout error"
-                await self._ws_error(ex)
-            else:
+            res = await self.handle_request('userDataStream.start', params)
+            if res:
                 self.try_count = 0
                 self.listen_key = res.get('listenKey')
                 self.session_tasks.append(asyncio.ensure_future(self._heartbeat()))
@@ -97,7 +79,15 @@ class UserWSSession:
                     params['signature'] = generate_signature('binance_ws', self.api_secret, payload)
                 req['params'] = params
             await self._send_request(req)
-            return self._handle_msg_error(await asyncio.wait_for(queue.get(), timeout=TIMEOUT))
+            try:
+                res = await asyncio.wait_for(queue.get(), timeout=TIMEOUT)
+            except asyncio.TimeoutError:
+                ex = "UserWSSession timeout error"
+                await self._ws_error(ex)
+            except asyncio.CancelledError:
+                pass  # Task cancellation should not be logged as an error
+            else:
+                return self._handle_msg_error(res)
         else:
             logger.warning(f"UserWSSession operational status is {self.operational_status}")
             return None
@@ -125,6 +115,8 @@ class UserWSSession:
                     and int(time.time() * 1000) - self.retry_after >= 0):
                 try:
                     await self.handle_request("ping")
+                except asyncio.CancelledError:
+                    pass  # Task cancellation should not be logged as an error
                 except Exception as ex:
                     logger.warning(f"UserWSSession._keepalive: {ex}")
                 else:
@@ -167,6 +159,10 @@ class UserWSSession:
     async def _send_request(self, req: {}):
             try:
                 await self.web_socket.send_json(req)
+            except asyncio.CancelledError:
+                pass  # Task cancellation should not be logged as an error
+            except RuntimeError as ex:
+                await self._ws_error(ex)
             except Exception as ex:
                 logger.error(f"UserWSSession._send_request: {ex}")
 
@@ -174,6 +170,11 @@ class UserWSSession:
         while self.operational_status is not None:
             msg = await self.web_socket.receive_json()
             self._handle_rate_limits(msg.pop('rateLimits', []))
+
+            logger.info('')
+            logger.info(msg.get('id'))
+            logger.info('')
+
             queue = self.queue.get(msg.get('id'))
             if queue:
                 await queue.put(msg)
