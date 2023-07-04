@@ -1,7 +1,9 @@
-## v1.3.2-2 - 2023-07-xx
+## v1.3.3 2023-07-04
 ### Update
 * UserWSSession moved to crypto-ws-api pkg 
 * Refactoring logging
+* CheckStream(): fix log spamming on passed check
+* Up requirements for crypto-ws-api to 1.0.1
 
 ## v1.3.2 - 2023-06-29
 ### Added for new features

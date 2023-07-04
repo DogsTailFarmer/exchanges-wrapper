@@ -907,11 +907,15 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def CheckStream(self, request: api_pb2.MarketRequest,
                           _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = api_pb2.SimpleResponse()
-        response.success = bool(client.data_streams.get(request.trade_id))
-        logger.debug(f"CheckStream request passed: {response.success} for {request.symbol} on {client.exchange}")
+        open_client = OpenClient.get_client(request.client_id)
+        if open_client:
+            client = open_client.client
+            response.success = bool(client.data_streams.get(request.trade_id))
+        else:
+            response.success = False
+        if not response.success:
+            logger.warning(f"CheckStream request filed for {request.symbol}")
         return response
 
 
