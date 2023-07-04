@@ -5,7 +5,7 @@ import logging
 
 from exchanges_wrapper.errors import UnknownEventType
 
-logger = logging.getLogger('exch_srv_logger')
+logger = logging.getLogger(__name__)
 
 
 # based on: https://stackoverflow.com/a/2022629/10144963

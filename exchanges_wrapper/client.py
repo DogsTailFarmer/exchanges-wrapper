@@ -18,12 +18,13 @@ from exchanges_wrapper.web_sockets import UserEventsDataStream,\
                                             OkxPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
-from exchanges_wrapper.ws_api.ws_session import UserWSSession
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
 
-logger = logging.getLogger('exch_srv_logger')
+from crypto_ws_api.ws_session import UserWSSession
+
+logger = logging.getLogger(__name__)
 
 STATUS_TIMEOUT = 5  # sec
 
@@ -133,8 +134,7 @@ class Client:
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
         user_data_stream = None
         if self.exchange == 'binance':
-            if self.user_wss_session:
-                await self.user_wss_session.start(_trade_id)
+            await self.user_wss_session.start(_trade_id)
             user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'bitfinex':
             user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)

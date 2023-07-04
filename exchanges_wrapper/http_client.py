@@ -14,8 +14,7 @@ from exchanges_wrapper.errors import (
     HTTPError,
     QueryCanceled,
 )
-
-logger = logging.getLogger('exch_srv_logger')
+logger = logging.getLogger(__name__)
 
 AJ = 'application/json'
 

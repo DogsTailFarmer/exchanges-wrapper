@@ -1,3 +1,8 @@
+## v1.3.2-2 - 2023-07-xx
+### Update
+* UserWSSession moved to crypto-ws-api pkg 
+* Refactoring logging
+
 ## v1.3.2 - 2023-06-29
 ### Added for new features
 * Binance: ws_api package implemented, last version

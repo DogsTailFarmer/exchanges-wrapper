@@ -5,7 +5,7 @@ import time
 from decimal import Decimal
 import logging
 
-logger = logging.getLogger('exch_srv_logger')
+logger = logging.getLogger(__name__)
 
 
 def fetch_server_time(res: []) -> {}:

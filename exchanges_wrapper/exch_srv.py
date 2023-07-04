@@ -25,7 +25,24 @@ from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
 #
 HEARTBEAT = 1  # Sec
 MAX_QUEUE_SIZE = 50
-logger = logging.getLogger('exch_srv_logger')
+#
+logger = logging.getLogger(__name__)
+formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
+#
+fh = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1000000, backupCount=10)
+fh.setFormatter(formatter)
+fh.setLevel(logging.DEBUG)
+# logger.addHandler(fh)
+#
+sh = logging.StreamHandler()
+sh.setFormatter(formatter)
+sh.setLevel(logging.INFO)
+# logger.addHandler(sh)
+#
+root_logger = logging.getLogger()
+root_logger.setLevel(min([fh.level, sh.level]))
+root_logger.addHandler(fh)
+root_logger.addHandler(sh)
 
 
 def get_account(_account_name: str) -> ():
@@ -202,11 +219,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         # Nested dict
         response_order = api_pb2.FetchOpenOrdersResponse.Order()
         try:
-            res = []
-            ws_status = bool(client.exchange == 'binance'
-                             and client.user_wss_session
-                             and client.user_wss_session.operational_status)
-            if ws_status:
+            res = None
+            if client.exchange == 'binance':
                 params = {
                     "symbol": request.symbol,
                 }
@@ -216,7 +230,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     api_key=True,
                     signed=True
                 )
-            if not ws_status or res is None:
+            if res is None:
                 res = await client.fetch_open_orders(symbol=request.symbol, receive_window=None)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
@@ -265,11 +279,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         _queue = client.on_order_update_queues.get(request.trade_id)
         response = api_pb2.FetchOrderResponse()
         try:
-            res = {}
-            ws_status = bool(client.exchange == 'binance'
-                             and client.user_wss_session
-                             and client.user_wss_session.operational_status)
-            if ws_status:
+            res = None
+            if client.exchange == 'binance':
                 params = {
                     "symbol": request.symbol,
                     "orderId": request.order_id,
@@ -280,7 +291,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     api_key=True,
                     signed=True
                 )
-            if not ws_status or res is None:
+            if res is None:
                 res = await client.fetch_order(symbol=request.symbol,
                                                order_id=request.order_id,
                                                origin_client_order_id=None,
@@ -319,11 +330,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         response = api_pb2.SimpleResponse()
         try:
-            res = []
-            ws_status = bool(client.exchange == 'binance'
-                             and client.user_wss_session
-                             and client.user_wss_session.operational_status)
-            if ws_status:
+            res = None
+            if client.exchange == 'binance':
                 params = {
                     "symbol": request.symbol,
                 }
@@ -333,7 +341,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     api_key=True,
                     signed=True
                 )
-            if not ws_status or res is None:
+            if res is None:
                 res = await client.cancel_all_orders(symbol=request.symbol, receive_window=None)
             # logger.info(f"CancelAllOrders: {res}")
         except asyncio.CancelledError:
@@ -411,17 +419,14 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         response = api_pb2.FetchAccountBalanceResponse()
         response_balance = api_pb2.FetchAccountBalanceResponse.Balances()
-        account_information = {}
-        ws_status = bool(client.exchange == 'binance'
-                         and client.user_wss_session
-                         and client.user_wss_session.operational_status)
-        if ws_status:
+        account_information = None
+        if client.exchange == 'binance':
             account_information = await client.user_wss_session.handle_request(
                 "account.status",
                 api_key=True,
                 signed=True
             )
-        if not ws_status or account_information is None:
+        if account_information is None:
             account_information = await client.fetch_account_information(receive_window=None)
         # Send only balances
         res = account_information.get('balances', [])
@@ -561,36 +566,41 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def FetchAccountTradeList(self, request: api_pb2.AccountTradeListRequest,
                                     _context: grpc.aio.ServicerContext) -> api_pb2.AccountTradeListResponse:
-        client = OpenClient.get_client(request.client_id).client
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
         response = api_pb2.AccountTradeListResponse()
         response_trade = api_pb2.AccountTradeListResponse.Trade()
-        res = []
-        ws_status = bool(client.user_wss_session and client.user_wss_session.operational_status)
-        if ws_status:
-            params = {
-                "symbol": request.symbol,
-                "startTime": request.start_time,
-                "limit": request.limit,
-                "apiKey": 1,
-                "signature": 1,
-                "timestamp": 1
-            }
-            try:
-                res = await client.user_wss_session.handle_request("myTrades", params)
-            except TimeoutError:
-                ws_status = False
-        if not ws_status:
-            res = await client.fetch_account_trade_list(
-                symbol=request.symbol,
-                start_time=request.start_time,
-                end_time=None,
-                from_id=None,
-                limit=request.limit,
-                receive_window=None)
-        # logger.info(f"FetchAccountTradeList: {res}")
-        for trade in res:
-            trade_order = json_format.ParseDict(trade, response_trade)
-            response.items.append(trade_order)
+        try:
+            res = None
+            if client.exchange == 'binance':
+                params = {
+                    "symbol": request.symbol,
+                    "startTime": request.start_time,
+                    "limit": request.limit,
+                }
+                res = await client.user_wss_session.handle_request(
+                    "myTrades",
+                    params,
+                    api_key=True,
+                    signed=True
+                )
+            if res is None:
+                res = await client.fetch_account_trade_list(
+                    symbol=request.symbol,
+                    start_time=request.start_time,
+                    end_time=None,
+                    from_id=None,
+                    limit=request.limit,
+                    receive_window=None)
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
+        except Exception as _ex:
+            logger.error(f"FetchAccountTradeList for {open_client.name}: {request.symbol} exception: {_ex}")
+        else:
+            # logger.info(f"FetchAccountTradeList: {res}")
+            for trade in res:
+                trade_order = json_format.ParseDict(trade, response_trade)
+                response.items.append(trade_order)
         return response
 
     async def OnTickerUpdate(self, request: api_pb2.MarketRequest,
@@ -748,11 +758,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         # logger.info(f"CreateLimitOrder: quantity: {request.quantity}, price: {request.price}")
         try:
-            res = {}
-            ws_status = bool(client.exchange == 'binance'
-                             and client.user_wss_session
-                             and client.user_wss_session.operational_status)
-            if ws_status:
+            res = None
+            if client.exchange == 'binance':
                 params = {
                     "symbol": request.symbol,
                     "side": 'BUY' if request.buy_side else 'SELL',
@@ -769,7 +776,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     api_key=True,
                     signed=True
                 )
-            if not ws_status or res is None:
+            if res is None:
                 res = await client.create_order(
                     request.symbol,
                     Side.BUY if request.buy_side else Side.SELL,
@@ -811,11 +818,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         try:
-            res = {}
-            ws_status = bool(client.exchange == 'binance'
-                             and client.user_wss_session
-                             and client.user_wss_session.operational_status)
-            if ws_status:
+            res = None
+            if client.exchange == 'binance':
                 params = {
                     "symbol": request.symbol,
                     "orderId": request.order_id,
@@ -826,7 +830,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     api_key=True,
                     signed=True
                 )
-            if not ws_status or res is None:
+            if res is None:
                 res = await client.cancel_order(
                     request.symbol,
                     order_id=request.order_id,
@@ -951,20 +955,6 @@ async def serve() -> None:
 
 
 def main():
-    logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
-    #
-    file_handler = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1000000, backupCount=10)
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.DEBUG)
-    logger.addHandler(file_handler)
-    #
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    stream_handler.setLevel(logging.INFO)
-    # stream_handler.setLevel(logging.DEBUG)
-    logger.addHandler(stream_handler)
-    #
     loop = asyncio.new_event_loop()
     loop.create_task(serve())
     try:
