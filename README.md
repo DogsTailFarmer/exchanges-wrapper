@@ -1,15 +1,11 @@
-
-<p align="center"><img src="https://raw.githubusercontent.com/gist/DogsTailFarmer/167eaf65cebfe95d954082c7f181a2cc/raw/a67270de8663ad3de4733330ff64c9ba3153f87d/Logo%202v3.svg" width="300"></p>
-
-***
-<h1 align="center">Crypto exchanges API/WSS wrapper with grpc powered server</h1>
+<h1 align="center"><img align="center" src="https://raw.githubusercontent.com/gist/DogsTailFarmer/167eaf65cebfe95d954082c7f181a2cc/raw/a67270de8663ad3de4733330ff64c9ba3153f87d/Logo%202v3.svg" width="75">Crypto exchanges API/WSS wrapper with grpc powered server</h1>
 
 <h2 align="center">Binance, Bitfinex, Huobi, OKX,</h2>
 
 <h3 align="center">For SPOT markets</h3>
 
 ***
-<a href="https://badge.fury.io/py/exchanges-wrapper"><img src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version"></a>
+<a href="https://pypi.org/project/exchanges-wrapper/"><img src="https://img.shields.io/pypi/v/exchanges-wrapper" alt="PyPI version"></a>
 <a href="https://codeclimate.com/github/DogsTailFarmer/exchanges-wrapper/maintainability"><img src="https://api.codeclimate.com/v1/badges/f333ab9b1f3024699e09/maintainability" /></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper.svg/?label=resolved+issues&token=XuG5PmzMiKlDL921-qREIuX_"/></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/exchanges-wrapper.svg/?label=active+issues&token=XuG5PmzMiKlDL921-qREIuX_"/></a>
@@ -126,7 +122,7 @@ see ```proto/exchanges_wrapper/api.proto```
 *USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
 
 ## Powered by exchanges-wrapper
-<p align="left"><a href="https://github.com/DogsTailFarmer/martin-binance"></a><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50"></p>
-
+<a><img align="middle" src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50"></a>
 [martin-binance](https://github.com/DogsTailFarmer/martin-binance)
+
 Free trading system for crypto exchanges SPOT markets. Adaptive customizable reverse grid strategy based on martingale.

@@ -951,11 +951,7 @@ class Client:
                 signed=True,
                 **params,
             )
-            active_orders = 1
-            while active_orders:
-                active_orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window)
-                if active_orders:
-                    await asyncio.sleep(STATUS_TIMEOUT / 10)
+            logger.debug(f"cancel_all_orders.res: {res}")
             if res and res[6] == 'SUCCESS':
                 res = res[4]
                 binance_res = bfx.orders(res, response_type=True, cancelled=True)

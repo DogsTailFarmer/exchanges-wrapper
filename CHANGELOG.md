@@ -1,3 +1,7 @@
+## v1.3.3-1 2023-07-xx
+### Update
+* Bitfinex: `exchanges_wrapper.client.Client.cancel_all_orders()`: removed unnecessary status check after cancel request
+
 ## v1.3.3 2023-07-04
 ### Update
 * UserWSSession moved to crypto-ws-api pkg 
