@@ -1,5 +1,10 @@
-## v1.3.3-1 2023-07-xx
+## v1.3.4 2023-07-17
 ### Update
+* Up requirements for grpcio to 1.56.0
+```bazaar
+Known security vulnerabilities detected
+Dependency grpcio 	Version < 1.53.0 	Upgrade to ~> 1.53.0
+```
 * Bitfinex: `exchanges_wrapper.client.Client.cancel_all_orders()`: removed unnecessary status check after cancel request
 
 ## v1.3.3 2023-07-04
