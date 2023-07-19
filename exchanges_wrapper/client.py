@@ -229,7 +229,7 @@ class Client:
                 .rstrip("0")
                 .rstrip(".")
             )
-        return price
+        return decimal.Decimal(price)
 
     def assert_symbol(self, symbol):
         if not symbol:

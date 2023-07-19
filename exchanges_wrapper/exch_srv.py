@@ -32,12 +32,10 @@ formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
 fh = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1000000, backupCount=10)
 fh.setFormatter(formatter)
 fh.setLevel(logging.DEBUG)
-# logger.addHandler(fh)
 #
 sh = logging.StreamHandler()
 sh.setFormatter(formatter)
 sh.setLevel(logging.INFO)
-# logger.addHandler(sh)
 #
 root_logger = logging.getLogger()
 root_logger.setLevel(min([fh.level, sh.level]))

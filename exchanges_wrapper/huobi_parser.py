@@ -302,7 +302,7 @@ def ticker(res: {}, symbol: str = None) -> {}:
     return msg_binance
 
 
-def interval(_interval: str) -> str:
+def interval(_interval) -> str:
     resolution = {
         '1m': '1min',
         '5m': '5min',
@@ -314,10 +314,10 @@ def interval(_interval: str) -> str:
         '1w': '1week',
         '1M': '1mon'
     }
-    return resolution.get(_interval, 0)
+    return resolution.get(_interval, 'unresolved')
 
 
-def interval2value(_interval: str) -> int:
+def interval2value(_interval) -> int:
     resolution = {
         '1min': 60,
         '5min': 5 * 60,

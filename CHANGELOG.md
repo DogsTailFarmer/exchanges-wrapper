@@ -1,3 +1,16 @@
+## v1.3.4-1 2023-07-19
+### Fix
+```
+ERROR: Cannot install crypto_ws_api and grpcio==1.56.0 because these package versions have conflicting dependencies.
+
+The conflict is caused by:
+    The user requested grpcio==1.56.0
+    exchanges-wrapper 1.3.3 depends on grpcio==1.48.1
+    The user requested grpcio==1.56.0
+    exchanges-wrapper 1.3.2 depends on grpcio==1.48.1
+
+```
+
 ## v1.3.4 2023-07-17
 ### Update
 * Up requirements for grpcio to 1.56.0

@@ -212,7 +212,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
         status = 'CANCELED'
     elif Decimal(orig_qty) > Decimal(executed_qty) > 0:
         status = 'PARTIALLY_FILLED'
-    elif  Decimal(executed_qty) >= Decimal(orig_qty):
+    elif Decimal(executed_qty) >= Decimal(orig_qty):
         status = 'FILLED'
     elif cancelled:
         status = 'CANCELED'
@@ -534,7 +534,7 @@ def on_order_update(res: [], last_event: tuple) -> {}:
         status = 'CANCELED'
     elif Decimal(order_quantity) > Decimal(cumulative_filled_quantity) > 0:
         status = 'PARTIALLY_FILLED'
-    elif  Decimal(cumulative_filled_quantity) >= Decimal(order_quantity):
+    elif Decimal(cumulative_filled_quantity) >= Decimal(order_quantity):
         status = 'FILLED'
     else:
         status = 'NEW'
