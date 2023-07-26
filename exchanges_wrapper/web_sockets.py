@@ -416,12 +416,16 @@ class OkxPrivateEventsDataStream(EventsDataStream):
     async def _handle_event(self, msg_data, *args):
         self.try_count = 0
         content = None
+        _data = msg_data.get('data')[0]
         if msg_data.get('arg', {}).get('channel') == 'account':
-            content = okx.on_funds_update(msg_data.get('data')[0])
+            content = okx.on_funds_update(_data)
         elif msg_data.get('arg', {}).get('channel') == 'orders':
-            content = okx.on_order_update(msg_data.get('data')[0])
+            if _data.get('state') == "canceled":
+                _queue = self.client.on_order_update_queues.get(f"{_data.get('instId')}{_data.get('ordId')}")
+                if _queue:
+                    await _queue.put(okx.order(_data, response_type=True))
+            content = okx.on_order_update(_data)
         elif msg_data.get('arg', {}).get('channel') == 'balance_and_position':
-            _data = msg_data.get('data')[0]
             content, self.wss_event_buffer = okx.on_balance_update(_data.get('balData', []),
                                                                    self.wss_event_buffer,
                                                                    bool(_data.get('eventType') == 'transferred'))

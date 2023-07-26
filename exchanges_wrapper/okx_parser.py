@@ -183,6 +183,24 @@ def order(res: {}, response_type=None) -> {}:
     return binance_order
 
 
+def place_order_response(res: {}, req: {}) -> {}:
+    binance_order = {
+        "symbol": req["instId"].replace('-', ''),
+        "orderId": int(res["ordId"]),
+        "orderListId": -1,
+        "clientOrderId": res["clOrdId"],
+        "price": req["px"],
+        "origQty": req["sz"],
+        "executedQty": "0",
+        "cummulativeQuoteQty": "0",
+        "status": "NEW",
+        "timeInForce": "GTC",
+        "type": req["ordType"].upper(),
+        "side": req["side"].upper(),
+    }
+    return binance_order
+
+
 def account_information(res: [], u_time: str) -> {}:
     balances = []
     for asset in res:
