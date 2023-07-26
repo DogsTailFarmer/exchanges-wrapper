@@ -64,7 +64,6 @@ class Client:
         }
 
         self.user_wss_session = None
-
         if self.exchange in ('binance', 'okx'):
             self.user_wss_session = UserWSSession(
                 self.exchange,
@@ -705,7 +704,7 @@ class Client:
                 "type": "EXCHANGE LIMIT",
                 "symbol": self.symbol_to_bfx(symbol),
                 "price": price,
-                "amount": str((float(quantity) * (1 if side == 'BUY' else -1))),
+                "amount": ('' if side == 'BUY' else '-') + quantity,
                 "meta": {"aff_code": "v_4az2nCP"}
             }
             if new_client_order_id:

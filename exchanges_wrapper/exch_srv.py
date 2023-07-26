@@ -22,7 +22,6 @@ from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent
 from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
-import exchanges_wrapper.okx_parser as okx
 #
 HEARTBEAT = 1  # Sec
 MAX_QUEUE_SIZE = 50
