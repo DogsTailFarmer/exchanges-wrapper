@@ -64,13 +64,13 @@ class Client:
         }
 
         self.user_wss_session = None
-        if self.exchange in ('binance', 'okx'):
+        if self.exchange in ('binance', 'okx', 'bitfinex'):
             self.user_wss_session = UserWSSession(
                 self.exchange,
                 self.api_key,
                 self.api_secret,
-                self.passphrase,
                 self.endpoint_ws_api,
+                self.passphrase,
                 self.session,
             )
 

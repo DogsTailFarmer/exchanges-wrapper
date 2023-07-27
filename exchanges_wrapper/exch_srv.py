@@ -68,7 +68,7 @@ def get_account(_account_name: str) -> ():
             ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
             ws_public_mbr = endpoint.get('ws_public_mbr')
             # ws_api
-            if exchange == 'okx':
+            if exchange in ('okx', 'bitfinex'):
                 ws_api = ws_auth
             else:
                 ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
@@ -106,7 +106,7 @@ class OpenClient:
             self.client = Client(*account)
             OpenClient.open_clients.append(self)
         else:
-            raise UserWarning
+            raise UserWarning(f"Account {_account_name} not registered into {WORK_PATH}/config/exch_srv_cfg.toml")
 
     @classmethod
     def get_id(cls, _account_name):
@@ -157,9 +157,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                     else:
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
-            except UserWarning:
-                _context.set_details(f"Account {request.account_name} not registered into"
-                                     f" {WORK_PATH}/config/exch_srv_cfg.toml")
+            except UserWarning as ex:
+                _context.set_details(f"{ex}")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
             else:
                 try:
