@@ -220,7 +220,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         # Nested dict
         response_order = api_pb2.FetchOpenOrdersResponse.Order()
         try:
-            res = await client.fetch_open_orders(symbol=request.symbol, receive_window=None)
+            res = await client.fetch_open_orders(request.trade_id, request.symbol)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
@@ -268,10 +268,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         _queue = client.on_order_update_queues.get(request.trade_id)
         response = api_pb2.FetchOrderResponse()
         try:
-            res = await client.fetch_order(symbol=request.symbol,
-                                           order_id=request.order_id,
-                                           origin_client_order_id=None,
-                                           receive_window=None)
+            res = await client.fetch_order(
+                request.trade_id,
+                symbol=request.symbol,
+                order_id=request.order_id,
+                origin_client_order_id=None,
+                receive_window=None
+            )
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
@@ -306,7 +309,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         response = api_pb2.SimpleResponse()
         try:
-            res = await client.cancel_all_orders(symbol=request.symbol, receive_window=None)
+            res = await client.cancel_all_orders(request.trade_id, request.symbol)
             # logger.info(f"CancelAllOrders: {res}")
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
@@ -384,7 +387,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         response = api_pb2.FetchAccountBalanceResponse()
         response_balance = api_pb2.FetchAccountBalanceResponse.Balances()
-        account_information = await client.fetch_account_information(receive_window=None)
+        account_information = await client.fetch_account_information(request.trade_id, receive_window=None)
         # Send only balances
         res = account_information.get('balances', [])
         # Create consolidated list of asset balances from SPOT and Funding wallets
@@ -529,7 +532,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         response_trade = api_pb2.AccountTradeListResponse.Trade()
         try:
             res = await client.fetch_account_trade_list(
-                symbol=request.symbol,
+                request.trade_id,
+                request.symbol,
                 start_time=request.start_time,
                 end_time=None,
                 from_id=None,
@@ -702,6 +706,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         # logger.info(f"CreateLimitOrder: quantity: {request.quantity}, price: {request.price}")
         try:
             res = await client.create_order(
+                request.trade_id,
                 request.symbol,
                 Side.BUY if request.buy_side else Side.SELL,
                 order_type=OrderType.LIMIT,
@@ -743,6 +748,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         try:
             res = await client.cancel_order(
+                request.trade_id,
                 request.symbol,
                 order_id=request.order_id,
                 origin_client_order_id=None,
@@ -826,7 +832,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         else:
             response.success = False
         if not response.success:
-            logger.warning(f"CheckStream request filed for {request.symbol}")
+            logger.warning(f"CheckStream request failed for {request.symbol}")
         return response
 
 
