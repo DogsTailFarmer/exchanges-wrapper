@@ -99,8 +99,7 @@ class OpenClient:
     open_clients = []
 
     def __init__(self, _account_name: str):
-        account = get_account(_account_name)
-        if account:
+        if account := get_account(_account_name):
             self.name = _account_name
             self.real_market = not account[2]
             self.client = Client(*account)
@@ -110,21 +109,18 @@ class OpenClient:
 
     @classmethod
     def get_id(cls, _account_name):
-        _id = 0
-        for client in cls.open_clients:
-            if client.name == _account_name:
-                _id = id(client)
-                break
-        return _id
+        return next(
+            (
+                id(client)
+                for client in cls.open_clients
+                if client.name == _account_name
+            ),
+            0,
+        )
 
     @classmethod
     def get_client(cls, _id):
-        _client = None
-        for client in cls.open_clients:
-            if id(client) == _id:
-                _client = client
-                break
-        return _client
+        return next((client for client in cls.open_clients if id(client) == _id), None)
 
     @classmethod
     def remove_client(cls, _account_name):
@@ -178,7 +174,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         if client_id:
             exchange = OpenClient.get_client(client_id).client.exchange
             # Set rate_limiter
-            Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
+            Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
             return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
@@ -197,7 +193,7 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def ResetRateLimit(self, request: api_pb2.OpenClientConnectionId,
                              _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
+        Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
         _success = False
         client = OpenClient.get_client(request.client_id).client
         if Martin.rate_limit_reached_time:
@@ -206,9 +202,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                 Martin.rate_limit_reached_time = None
                 logger.info("RateLimit error clear, trying one else time")
                 _success = True
-        else:
-            if client.http.rate_limit_reached:
-                Martin.rate_limit_reached_time = time.time()
+        elif client.http.rate_limit_reached:
+            Martin.rate_limit_reached_time = time.time()
         return api_pb2.SimpleResponse(success=_success)
 
     async def FetchOpenOrders(self, request: api_pb2.MarketRequest,
@@ -814,19 +809,18 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def StopStream(self, request: api_pb2.MarketRequest,
                          _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
-        logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
         response = api_pb2.SimpleResponse()
-        await stop_stream(client, request.trade_id)
+        if open_client := OpenClient.get_client(request.client_id):
+            client = open_client.client
+            logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
+            await stop_stream(client, request.trade_id)
         response.success = True
         return response
 
     async def CheckStream(self, request: api_pb2.MarketRequest,
                           _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         response = api_pb2.SimpleResponse()
-        open_client = OpenClient.get_client(request.client_id)
-        if open_client:
+        if open_client := OpenClient.get_client(request.client_id):
             client = open_client.client
             response.success = bool(client.data_streams.get(request.trade_id))
         else:
@@ -883,7 +877,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        loop.run_until_complete(asyncio.sleep(0.250))
+        loop.run_until_complete(asyncio.sleep(1))
         loop.close()
 
 

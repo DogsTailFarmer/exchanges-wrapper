@@ -13,7 +13,7 @@ from urllib.parse import urlencode, urlparse
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
-from exchanges_wrapper.c_structures import generate_signature
+from crypto_ws_api.ws_session import generate_signature
 
 logger = logging.getLogger('exch_srv_logger')
 
@@ -78,9 +78,8 @@ class EventsDataStream:
             if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED):
                 if self.client.data_streams.get(self.trade_id, None):
                     raise aiohttp.ClientOSError(f"Reconnecting WSS for {symbol}:{ch_type}:{self.trade_id}")
-                else:
-                    logger.info(f"Event stream stopped for {symbol}:{ch_type}:{self.trade_id}")
-                    break
+                logger.info(f"Event stream stopped for {symbol}:{ch_type}:{self.trade_id}")
+                break
             elif msg.type is aiohttp.WSMsgType.ERROR:
                 raise aiohttp.ClientOSError(f"For {symbol}:{ch_type} something went wrong with the WSS, reconnecting")
             msg_data = json.loads(gzip.decompress(msg.data) if msg.type is aiohttp.WSMsgType.BINARY else msg.data)
@@ -421,14 +420,17 @@ class OkxPrivateEventsDataStream(EventsDataStream):
             content = okx.on_funds_update(_data)
         elif msg_data.get('arg', {}).get('channel') == 'orders':
             if _data.get('state') == "canceled":
-                _queue = self.client.on_order_update_queues.get(f"{_data.get('instId')}{_data.get('ordId')}")
-                if _queue:
+                if _queue := self.client.on_order_update_queues.get(
+                    f"{_data.get('instId')}{_data.get('ordId')}"
+                ):
                     await _queue.put(okx.order(_data, response_type=True))
             content = okx.on_order_update(_data)
         elif msg_data.get('arg', {}).get('channel') == 'balance_and_position':
-            content, self.wss_event_buffer = okx.on_balance_update(_data.get('balData', []),
-                                                                   self.wss_event_buffer,
-                                                                   bool(_data.get('eventType') == 'transferred'))
+            content, self.wss_event_buffer = okx.on_balance_update(
+                _data.get('balData', []),
+                self.wss_event_buffer,
+                _data.get('eventType') == 'transferred',
+            )
             for i in content:
                 await self.client.events.wrap_event(i).fire(self.trade_id)
             content = None

@@ -5,7 +5,7 @@ import aiohttp
 import logging
 import time
 from datetime import datetime
-from exchanges_wrapper.c_structures import generate_signature
+from crypto_ws_api.ws_session import generate_signature
 from exchanges_wrapper.errors import (
     RateLimitReached,
     ExchangeError,

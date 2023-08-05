@@ -1,6 +1,3 @@
-import hmac
-import hashlib
-import base64
 from decimal import Decimal
 
 
@@ -76,22 +73,9 @@ class OrderTradesEvent:
         self.quote_order_quantity = "0"
 
 
-def generate_signature(exchange, api_secret, data):
-    if exchange == 'bitfinex':
-        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha384).hexdigest()
-    elif exchange in ('huobi', 'okx'):
-        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).digest()
-        sig = base64.b64encode(sig).decode()
-    elif exchange == 'binance_ws':
-        sig = hmac.new(api_secret.encode("ascii"), data.encode("ascii"), hashlib.sha256).hexdigest()
-    else:
-        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
-    return sig
-
-
 def order(res: {}, response_type=None) -> {}:
     if response_type:
-        binance_order = {
+        return {
             "symbol": res.get('symbol'),
             "origClientOrderId": res.get('origClientOrderId'),
             "orderId": res.get('orderId'),
@@ -108,7 +92,7 @@ def order(res: {}, response_type=None) -> {}:
             "side": res.get('side'),
         }
     elif response_type is None:
-        binance_order = {
+        return {
             "symbol": res.get('symbol'),
             "orderId": res.get('orderId'),
             "orderListId": res.get('orderListId'),
@@ -129,7 +113,7 @@ def order(res: {}, response_type=None) -> {}:
             "origQuoteOrderQty": res.get('origQuoteOrderQty'),
         }
     else:
-        binance_order = {
+        return {
             "symbol": res.get('symbol'),
             "orderId": res.get('orderId'),
             "orderListId": res.get('orderListId'),
@@ -143,5 +127,3 @@ def order(res: {}, response_type=None) -> {}:
             "type": res.get('type'),
             "side": res.get('side'),
         }
-    # print(f"order.binance_order: {binance_order}")
-    return binance_order
