@@ -1,6 +1,6 @@
 aiohttp==3.8.5
 grpcio==1.56.0
-grpcio-tools==1.56.0
+grpcio-tools==1.56.2
 toml==0.10.2
 idna==3.4
 pyotp~=2.8.0
