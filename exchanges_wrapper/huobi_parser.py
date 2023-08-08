@@ -9,14 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 def on_balance_update(res: {}) -> {}:
-    balance = {
+    return {
         'e': 'balanceUpdate',
         'E': res.get('transactTime'),
         'a': res.get('currency').upper(),
         'd': str(res.get('transactAmt')),
-        'T': int(time.time() * 1000)
+        'T': int(time.time() * 1000),
     }
-    return balance
 
 
 def fetch_server_time(res: {}) -> {}:
@@ -86,14 +85,13 @@ def exchange_info(server_time: int, trading_symbol: []) -> {}:
             }
             symbols.append(symbol)
 
-    _binance_res = {
+    return {
         "timezone": "UTC",
         "serverTime": server_time,
         "rateLimits": [],
         "exchangeFilters": [],
         "symbols": symbols,
     }
-    return _binance_res
 
 
 def orders(res: [], response_type=None) -> []:
@@ -134,7 +132,7 @@ def order(res: {}, response_type=None) -> {}:
     is_working = True
     #
     if response_type:
-        binance_order = {
+        return {
             "symbol": symbol,
             "origClientOrderId": client_order_id,
             "orderId": order_id,
@@ -151,7 +149,7 @@ def order(res: {}, response_type=None) -> {}:
             "side": side,
         }
     elif response_type is None:
-        binance_order = {
+        return {
             "symbol": symbol,
             "orderId": order_id,
             "orderListId": order_list_id,
@@ -172,7 +170,7 @@ def order(res: {}, response_type=None) -> {}:
             "origQuoteOrderQty": orig_quote_order_qty,
         }
     else:
-        binance_order = {
+        return {
             "symbol": symbol,
             "orderId": order_id,
             "orderListId": order_list_id,
@@ -186,8 +184,6 @@ def order(res: {}, response_type=None) -> {}:
             "type": _type,
             "side": side,
         }
-    # print(f"order.binance_order: {binance_order}")
-    return binance_order
 
 
 def account_information(res: {}) -> {}:
@@ -201,7 +197,7 @@ def account_information(res: {}) -> {}:
             asset_i.setdefault('available', balance.get('available'))
         else:
             asset_i.setdefault('frozen', balance.get('balance', '0'))
-        assets.update({asset: asset_i})
+        assets[asset] = asset_i
     for asset in assets:
         free = assets.get(asset, {}).get('available', '0')
         locked = assets.get(asset, {}).get('frozen', '0')
@@ -212,22 +208,19 @@ def account_information(res: {}) -> {}:
         }
         balances.append(_binance_res)
 
-    binance_account_info = {
-      "makerCommission": 0,
-      "takerCommission": 0,
-      "buyerCommission": 0,
-      "sellerCommission": 0,
-      "canTrade": True,
-      "canWithdraw": False,
-      "canDeposit": False,
-      "updateTime": int(time.time() * 1000),
-      "accountType": "SPOT",
-      "balances": balances,
-      "permissions": [
-        "SPOT"
-      ]
+    return {
+        "makerCommission": 0,
+        "takerCommission": 0,
+        "buyerCommission": 0,
+        "sellerCommission": 0,
+        "canTrade": True,
+        "canWithdraw": False,
+        "canDeposit": False,
+        "updateTime": int(time.time() * 1000),
+        "accountType": "SPOT",
+        "balances": balances,
+        "permissions": ["SPOT"],
     }
-    return binance_account_info
 
 
 def order_book(res: {}) -> {}:
@@ -238,8 +231,8 @@ def order_book(res: {}) -> {}:
 
 
 def order_book_ws(res: {}, symbol: str) -> {}:
-    bids = res.get('tick').get('bids')[0:5]
-    asks = res.get('tick').get('asks')[0:5]
+    bids = res.get('tick').get('bids')[:5]
+    asks = res.get('tick').get('asks')[:5]
     return {
         'stream': f"{symbol}@depth5",
         'data': {'lastUpdateId': res.get('ts'),
@@ -257,10 +250,12 @@ def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
 
 
 def ticker_price_change_statistics(res: {}, symbol) -> {}:
-    binance_price_ticker = {
+    return {
         "symbol": symbol,
         "priceChange": str(res.get('close') - res.get('open')),
-        "priceChangePercent": str(100 * (res.get('close') - res.get('open')) / res.get('open')),
+        "priceChangePercent": str(
+            100 * (res.get('close') - res.get('open')) / res.get('open')
+        ),
         "weightedAvgPrice": "0.0",
         "prevClosePrice": str(res.get('open')),
         "lastPrice": str(res.get('close')),
@@ -280,12 +275,11 @@ def ticker_price_change_statistics(res: {}, symbol) -> {}:
         "lastId": res.get('id'),
         "count": res.get('count'),
     }
-    return binance_price_ticker
 
 
 def ticker(res: {}, symbol: str = None) -> {}:
     tick = res.get('tick')
-    msg_binance = {
+    return {
         'stream': f"{symbol}@miniTicker",
         'data': {
             "e": "24hrMiniTicker",
@@ -296,10 +290,9 @@ def ticker(res: {}, symbol: str = None) -> {}:
             "h": str(tick.get('high')),
             "l": str(tick.get('low')),
             "v": str(tick.get('amount')),
-            "q": str(tick.get('vol'))
-        }
+            "q": str(tick.get('vol')),
+        },
     }
-    return msg_binance
 
 
 def interval(_interval) -> str:
@@ -359,31 +352,33 @@ def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
     start_time = tick.get('id')
     _interval = ch_type.split('_')[1]
     end_time = start_time + interval2value(interval(_interval)) * 1000 - 1
-    binance_candle = {
+    return {
         'stream': f"{symbol}@{ch_type}",
-        'data': {'e': 'kline',
-                 'E': int(time.time()),
-                 's': symbol.upper(),
-                 'k': {
-                     't': start_time,
-                     'T': end_time,
-                     's': symbol.upper(),
-                     'i': _interval,
-                     'f': 100,
-                     'L': 200,
-                     'o': str(tick.get('open')),
-                     'c': str(tick.get('close')),
-                     'h': str(tick.get('high')),
-                     'l': str(tick.get('low')),
-                     'v': str(tick.get('amount')),
-                     'n': tick.get('count'),
-                     'x': False,
-                     'q': str(tick.get('vol')),
-                     'V': '0.0',
-                     'Q': '0.0',
-                     'B': '0'}}
+        'data': {
+            'e': 'kline',
+            'E': int(time.time()),
+            's': symbol.upper(),
+            'k': {
+                't': start_time,
+                'T': end_time,
+                's': symbol.upper(),
+                'i': _interval,
+                'f': 100,
+                'L': 200,
+                'o': str(tick.get('open')),
+                'c': str(tick.get('close')),
+                'h': str(tick.get('high')),
+                'l': str(tick.get('low')),
+                'v': str(tick.get('amount')),
+                'n': tick.get('count'),
+                'x': False,
+                'q': str(tick.get('vol')),
+                'V': '0.0',
+                'Q': '0.0',
+                'B': '0',
+            },
+        },
     }
-    return binance_candle
 
 
 def on_funds_update(res: {}) -> {}:
@@ -394,8 +389,6 @@ def on_funds_update(res: {}) -> {}:
         'E': event_time,
         'u': data.get('changeTime') or event_time,
     }
-    funds = []
-
     total = data.get('balance')
     free = data.get('available')
     locked = str(Decimal(total) - Decimal(free))
@@ -404,8 +397,7 @@ def on_funds_update(res: {}) -> {}:
         'f': free,
         'l': locked
     }
-    funds.append(balance)
-
+    funds = [balance]
     binance_funds['B'] = funds
     return binance_funds
 
@@ -432,8 +424,7 @@ def on_order_update(res: {}) -> {}:
         cumulative_quote_asset = quote_order_qty
     else:
         status = 'NEW'
-    #
-    msg_binance = {
+    return {
         "e": "executionReport",
         "E": int(time.time() * 1000),
         "s": res.get('symbol').upper(),
@@ -465,9 +456,8 @@ def on_order_update(res: {}) -> {}:
         "O": res.get('orderCreateTime'),
         "Z": cumulative_quote_asset,
         "Y": last_quote_asset_transacted,
-        "Q": quote_order_qty
+        "Q": quote_order_qty,
     }
-    return msg_binance
 
 
 def account_trade_list(res: []) -> []:
@@ -487,8 +477,8 @@ def account_trade_list(res: []) -> []:
             "commission": trade.get('filled-fees'),
             "commissionAsset": trade.get('fee-currency'),
             "time": trade.get('created-at'),
-            "isBuyer": bool('buy' in trade.get('type')),
-            "isMaker": bool('maker' == trade.get('role')),
+            "isBuyer": 'buy' in trade.get('type'),
+            "isMaker": trade.get('role') == 'maker',
             "isBestMatch": True,
         }
         binance_trade_list.append(binance_trade)

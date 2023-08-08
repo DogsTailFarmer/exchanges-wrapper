@@ -174,7 +174,7 @@ class MarketEventsDataStream(EventsDataStream):
         self.candles_max_time = None
 
     async def start_wss(self):
-        logger.info(f"Start market WSS {self.channel if self.channel else ''} for {self.exchange}")
+        logger.info(f"Start market WSS {self.channel or ''} for {self.exchange}")
         registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
         if self.exchange == 'binance':
             combined_streams = "/".join(registered_streams)
@@ -237,15 +237,14 @@ class MarketEventsDataStream(EventsDataStream):
         self.try_count = 0
         if self.exchange == 'bitfinex':
             if 'candles' in ch_type:
-                if isinstance(content[1][-1], list):
-                    bfx_data = content[1][-1]
-                else:
-                    bfx_data = content[1]
-                if self.candles_max_time is None or bfx_data[0] >= self.candles_max_time:
-                    self.candles_max_time = bfx_data[0]
-                    content = bfx.candle(bfx_data, symbol, ch_type)
-                else:
+                bfx_data = content[1][-1] if isinstance(content[1][-1], list) else content[1]
+                if (
+                    self.candles_max_time is not None
+                    and bfx_data[0] < self.candles_max_time
+                ):
                     return
+                self.candles_max_time = bfx_data[0]
+                content = bfx.candle(bfx_data, symbol, ch_type)
             elif ch_type == 'ticker':
                 content = bfx.ticker(content[1], symbol)
             elif ch_type == 'book' and isinstance(order_book, bfx.OrderBook):

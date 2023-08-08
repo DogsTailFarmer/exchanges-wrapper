@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from exchanges_wrapper import __version__
-
+import contextlib
 import time
 import weakref
 import gc
 import traceback
-
 import asyncio
 import functools
 import json
@@ -869,6 +868,12 @@ async def serve() -> None:
     await server.wait_for_termination()
 
 
+async def stop_tasks(loop):
+    for task in asyncio.all_tasks(loop):
+        if all(item in task.get_name() for item in ['keepalive', 'heartbeat']) and not task.done():
+            task.cancel()
+
+
 def main():
     loop = asyncio.new_event_loop()
     loop.create_task(serve())
@@ -877,7 +882,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        loop.run_until_complete(asyncio.sleep(1))
+        loop.run_until_complete(stop_tasks(loop))
         loop.close()
 
 

@@ -1,3 +1,9 @@
+## v1.3.5rc1 2023-08-08
+### Update
+* Dependency: Up requirements for crypto-ws-api~=2.0.0rc3
+* Optimise code by [Sourcery AI](https://docs.sourcery.ai/Guides/Getting-Started/PyCharm/) refactoring engine
+* Some minor improvements
+
 ## v1.3.5b0 - 2023-07-26
 ### Added for new features
 *  Binance, OKX: Most requests use WSS first, REST API is used as a backup and in the case of single rare requests

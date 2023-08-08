@@ -233,10 +233,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
                 exec_price = Decimal(str(trade[5]))
                 executed_qty += exec_amount
                 cummulative_quote_qty += exec_amount * exec_price
-        if executed_qty >= Decimal(orig_qty):
-            status = 'FILLED'
-        else:
-            status = 'PARTIALLY_FILLED'
+        status = 'FILLED' if executed_qty >= Decimal(orig_qty) else 'PARTIALLY_FILLED'
         executed_qty = str(executed_qty)
         cummulative_quote_qty = str(cummulative_quote_qty)
         _type = "MARKET"
@@ -250,7 +247,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
     is_working = True
     #
     if response_type:
-        binance_order = {
+        return {
             "symbol": symbol,
             "origClientOrderId": client_order_id,
             "orderId": order_id,
@@ -267,7 +264,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
             "side": side,
         }
     elif response_type is None:
-        binance_order = {
+        return {
             "symbol": symbol,
             "orderId": order_id,
             "orderListId": order_list_id,
@@ -288,7 +285,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
             "origQuoteOrderQty": orig_quote_order_qty,
         }
     else:
-        binance_order = {
+        return {
             "symbol": symbol,
             "orderId": order_id,
             "orderListId": order_list_id,
@@ -302,8 +299,6 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
             "type": _type,
             "side": side,
         }
-    # print(f"order.binance_order: {binance_order}")
-    return binance_order
 
 
 def orders(res: [], response_type=None, cancelled=False) -> []:

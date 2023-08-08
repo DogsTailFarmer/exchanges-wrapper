@@ -6,4 +6,4 @@ idna==3.4
 pyotp~=2.8.0
 simplejson==3.19.1
 shortuuid~=1.0.11
-crypto-ws-api==1.0.1.post3
+crypto-ws-api~=2.0.0rc3
