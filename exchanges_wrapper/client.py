@@ -688,7 +688,7 @@ class Client:
             binance_res = await self.user_wss_session.handle_request(
                 trade_id,
                 "order.place",
-                params,
+                _params=params,
                 _api_key=True,
                 _signed=True
             )
@@ -705,7 +705,7 @@ class Client:
             }
             if new_client_order_id:
                 params["cid"] = new_client_order_id
-            res = await self.user_wss_session.handle_request(trade_id,"on", params)
+            res = await self.user_wss_session.handle_request(trade_id,"on", _params=params)
             if res is None:
                 res = await self.http.send_api_call(
                     "v2/auth/w/order/submit",
@@ -766,7 +766,7 @@ class Client:
                 "sz": quantity,
                 "px": price,
             }
-            res = await self.user_wss_session.handle_request(trade_id,"order", params)
+            res = await self.user_wss_session.handle_request(trade_id,"order", _params=params)
             if res is None:
                 res = await self.http.send_api_call(
                     "/api/v5/trade/order",
@@ -807,7 +807,7 @@ class Client:
             binance_res = await self.user_wss_session.handle_request(
                     trade_id,
                     "order.status",
-                    params,
+                    _params=params,
                     _api_key=True,
                     _signed=True
                 )
@@ -878,7 +878,7 @@ class Client:
             binance_res = await self.user_wss_session.handle_request(
                 trade_id,
                 "order.cancel",
-                params,
+                _params=params,
                 _api_key=True,
                 _signed=True
             )
@@ -895,7 +895,7 @@ class Client:
                     "This query requires an order_id on Bitfinex. Deletion by user number is not implemented."
                 )
             params = {'id': order_id}
-            res = await self.user_wss_session.handle_request(trade_id,"oc", params)
+            res = await self.user_wss_session.handle_request(trade_id,"oc", _params=params)
             if res is None:
                 res = await self.http.send_api_call(
                     "v2/auth/w/order/cancel",
@@ -935,7 +935,7 @@ class Client:
                 "ordId": str(order_id),
                 "clOrdId": str(origin_client_order_id),
             }
-            _res = await self.user_wss_session.handle_request(trade_id, "cancel-order", params)
+            _res = await self.user_wss_session.handle_request(trade_id, "cancel-order", _params=params)
             if _res is None:
                 _res = await self.http.send_api_call(
                     "/api/v5/trade/cancel-order",
@@ -964,7 +964,7 @@ class Client:
             binance_res = await self.user_wss_session.handle_request(
                 trade_id,
                 "openOrders.cancelAll",
-                params,
+                _params=params,
                 _api_key=True,
                 _signed=True
             )
@@ -977,7 +977,7 @@ class Client:
                 )
         elif self.exchange == 'bitfinex':
             params = {'all': 1}
-            res = await self.user_wss_session.handle_request(trade_id,"oc_multi", params)
+            res = await self.user_wss_session.handle_request(trade_id,"oc_multi", _params=params)
             if res is None:
                 res = await self.http.send_api_call(
                     "v2/auth/w/order/cancel/multi",
@@ -1028,7 +1028,7 @@ class Client:
                 res = await self.user_wss_session.handle_request(
                     trade_id,
                     "batch-cancel-orders",
-                    params
+                    _params=params
                 )
                 if res is None:
                     res = await self.http.send_api_call(
@@ -1053,7 +1053,7 @@ class Client:
             binance_res = await self.user_wss_session.handle_request(
                 trade_id,
                 "openOrders.status",
-                params,
+                _params=params,
                 _api_key=True,
                 _signed=True
             )
@@ -1459,7 +1459,7 @@ class Client:
             binance_res = await self.user_wss_session.handle_request(
                 trade_id,
                 "myTrades",
-                params,
+                _params=params,
                 _api_key=True,
                 _signed=True
             )
