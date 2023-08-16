@@ -159,8 +159,14 @@ class Client:
             start_list.append(market_data_stream.start())
         else:
             for channel in _events:
+                # TODO Remove to config
+                if self.exchange == 'okx' and 'kline' in channel:
+                    _endpoint = 'wss://ws.okx.com:8443/ws/v5/business'
+                else:
+                    _endpoint = self.endpoint_ws_public
+                #
                 market_data_stream = MarketEventsDataStream(self,
-                                                            self.endpoint_ws_public,
+                                                            _endpoint,
                                                             self.exchange, _trade_id,
                                                             channel)
                 self.data_streams[_trade_id] |= {market_data_stream}
