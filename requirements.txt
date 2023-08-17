@@ -1,7 +1,6 @@
-crypto-ws-api~=2.0.1b1
+crypto-ws-api~=2.0.1b3
 grpcio==1.48.1
 grpcio-tools==1.48.1
 idna==3.4
 pyotp==2.9.0
 simplejson==3.19.1
-
