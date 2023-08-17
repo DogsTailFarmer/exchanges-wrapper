@@ -1,9 +1,7 @@
-aiohttp==3.8.4
-grpcio==1.56.0
-grpcio-tools==1.56.0
-toml==0.10.2
+crypto-ws-api~=2.0.1b0
+grpcio==1.57.0
+grpcio-tools==1.57.0
 idna==3.4
-pyotp~=2.8.0
+pyotp==2.9.0
 simplejson==3.19.1
-shortuuid~=1.0.11
-crypto-ws-api==1.0.1.post3
+

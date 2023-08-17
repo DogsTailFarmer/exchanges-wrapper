@@ -951,7 +951,7 @@ async def serve() -> None:
     server = grpc.aio.server()
     api_pb2_grpc.add_MartinServicer_to_server(Martin(), server)
     server.add_insecure_port(listen_addr)
-    logger.info(f"Starting server on {listen_addr}")
+    logger.info(f"Starting server v:{__version__} on {listen_addr}")
     await server.start()
     await server.wait_for_termination()
 
