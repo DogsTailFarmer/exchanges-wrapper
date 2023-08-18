@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from exchanges_wrapper import __version__
-
 import time
 import weakref
 import gc
 import traceback
-
 import asyncio
 import functools
 import json
@@ -67,7 +65,11 @@ def get_account(_account_name: str) -> ():
             api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
             ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
             ws_public_mbr = endpoint.get('ws_public_mbr')
-            ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
+            # ws_api
+            if exchange in ('okx', 'bitfinex'):
+                ws_api = ws_auth
+            else:
+                ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
             #
             exchange = 'binance' if exchange == 'binance_us' else exchange
             #
@@ -95,32 +97,28 @@ class OpenClient:
     open_clients = []
 
     def __init__(self, _account_name: str):
-        account = get_account(_account_name)
-        if account:
+        if account := get_account(_account_name):
             self.name = _account_name
             self.real_market = not account[2]
             self.client = Client(*account)
             OpenClient.open_clients.append(self)
         else:
-            raise UserWarning
+            raise UserWarning(f"Account {_account_name} not registered into {WORK_PATH}/config/exch_srv_cfg.toml")
 
     @classmethod
     def get_id(cls, _account_name):
-        _id = 0
-        for client in cls.open_clients:
-            if client.name == _account_name:
-                _id = id(client)
-                break
-        return _id
+        return next(
+            (
+                id(client)
+                for client in cls.open_clients
+                if client.name == _account_name
+            ),
+            0,
+        )
 
     @classmethod
     def get_client(cls, _id):
-        _client = None
-        for client in cls.open_clients:
-            if id(client) == _id:
-                _client = client
-                break
-        return _client
+        return next((client for client in cls.open_clients if id(client) == _id), None)
 
     @classmethod
     def remove_client(cls, _account_name):
@@ -136,7 +134,10 @@ class Martin(api_pb2_grpc.MartinServicer):
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
         logger.info(f"OpenClientConnection start trade: {request.account_name}:{request.trade_id}")
         client_id = OpenClient.get_id(request.account_name)
-        if not client_id:
+        if client_id:
+            open_client = OpenClient.get_client(client_id)
+            open_client.client.http.rate_limit_reached = False
+        else:
             try:
                 open_client = OpenClient(request.account_name)
                 client_id = id(open_client)
@@ -153,30 +154,38 @@ class Martin(api_pb2_grpc.MartinServicer):
                     else:
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
-            except UserWarning:
-                _context.set_details(f"Account {request.account_name} not registered into"
-                                     f" {WORK_PATH}/config/exch_srv_cfg.toml")
+            except UserWarning as ex:
+                _context.set_details(f"{ex}")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-            else:
-                try:
-                    await open_client.client.load()
-                except asyncio.CancelledError:
-                    pass  # Task cancellation should not be logged as an error
-                except Exception as ex:
-                    logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
-                    logger.debug(f"Exception traceback: {traceback.format_exc()}")
-                    _context.set_details(f"{ex}")
-                    _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
-                    await OpenClient.get_client(client_id).client.session.close()
-                    OpenClient.remove_client(request.account_name)
-                    client_id = None
-        else:
-            OpenClient.get_client(client_id).client.http.rate_limit_reached = False
-        if client_id:
-            exchange = OpenClient.get_client(client_id).client.exchange
-            # Set rate_limiter
-            Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
-            return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
+                return api_pb2.OpenClientConnectionId(
+                    client_id=client_id,
+                    srv_version=__version__,
+                    exchange=request.account_name
+                )
+        try:
+            await open_client.client.load()
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
+        except Exception as ex:
+            logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
+            logger.debug(f"Exception traceback: {traceback.format_exc()}")
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            await OpenClient.get_client(client_id).client.session.close()
+            OpenClient.remove_client(request.account_name)
+            return api_pb2.OpenClientConnectionId(
+                client_id=client_id,
+                srv_version=__version__,
+                exchange=request.account_name
+            )
+
+        # Set rate_limiter
+        Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
+        return api_pb2.OpenClientConnectionId(
+            client_id=client_id,
+            srv_version=__version__,
+            exchange=open_client.client.exchange
+        )
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
                               _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
@@ -194,7 +203,7 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def ResetRateLimit(self, request: api_pb2.OpenClientConnectionId,
                              _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
+        Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
         _success = False
         client = OpenClient.get_client(request.client_id).client
         if Martin.rate_limit_reached_time:
@@ -203,9 +212,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                 Martin.rate_limit_reached_time = None
                 logger.info("RateLimit error clear, trying one else time")
                 _success = True
-        else:
-            if client.http.rate_limit_reached:
-                Martin.rate_limit_reached_time = time.time()
+        elif client.http.rate_limit_reached:
+            Martin.rate_limit_reached_time = time.time()
         return api_pb2.SimpleResponse(success=_success)
 
     async def FetchOpenOrders(self, request: api_pb2.MarketRequest,
@@ -217,19 +225,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         # Nested dict
         response_order = api_pb2.FetchOpenOrdersResponse.Order()
         try:
-            res = None
-            if client.exchange == 'binance':
-                params = {
-                    "symbol": request.symbol,
-                }
-                res = await client.user_wss_session.handle_request(
-                    "openOrders.status",
-                    params,
-                    api_key=True,
-                    signed=True
-                )
-            if res is None:
-                res = await client.fetch_open_orders(symbol=request.symbol, receive_window=None)
+            res = await client.fetch_open_orders(request.trade_id, request.symbol)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
@@ -277,23 +273,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         _queue = client.on_order_update_queues.get(request.trade_id)
         response = api_pb2.FetchOrderResponse()
         try:
-            res = None
-            if client.exchange == 'binance':
-                params = {
-                    "symbol": request.symbol,
-                    "orderId": request.order_id,
-                }
-                res = await client.user_wss_session.handle_request(
-                    "order.status",
-                    params,
-                    api_key=True,
-                    signed=True
-                )
-            if res is None:
-                res = await client.fetch_order(symbol=request.symbol,
-                                               order_id=request.order_id,
-                                               origin_client_order_id=None,
-                                               receive_window=None)
+            res = await client.fetch_order(
+                request.trade_id,
+                symbol=request.symbol,
+                order_id=request.order_id,
+                origin_client_order_id=None,
+                receive_window=None
+            )
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
@@ -328,24 +314,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         response = api_pb2.SimpleResponse()
         try:
-            res = None
-            if client.exchange == 'binance':
-                params = {
-                    "symbol": request.symbol,
-                }
-                res = await client.user_wss_session.handle_request(
-                    "openOrders.cancelAll",
-                    params,
-                    api_key=True,
-                    signed=True
-                )
-            if res is None:
-                res = await client.cancel_all_orders(symbol=request.symbol, receive_window=None)
+            res = await client.cancel_all_orders(request.trade_id, request.symbol)
             # logger.info(f"CancelAllOrders: {res}")
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
             logger.error(f"CancelAllOrder for {open_client.name}:{request.symbol} exception: {ex}")
+            logger.debug(f"CancelAllOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
@@ -417,15 +392,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         response = api_pb2.FetchAccountBalanceResponse()
         response_balance = api_pb2.FetchAccountBalanceResponse.Balances()
-        account_information = None
-        if client.exchange == 'binance':
-            account_information = await client.user_wss_session.handle_request(
-                "account.status",
-                api_key=True,
-                signed=True
-            )
-        if account_information is None:
-            account_information = await client.fetch_account_information(receive_window=None)
+        account_information = await client.fetch_account_information(request.trade_id, receive_window=None)
         # Send only balances
         res = account_information.get('balances', [])
         # Create consolidated list of asset balances from SPOT and Funding wallets
@@ -569,27 +536,14 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.AccountTradeListResponse()
         response_trade = api_pb2.AccountTradeListResponse.Trade()
         try:
-            res = None
-            if client.exchange == 'binance':
-                params = {
-                    "symbol": request.symbol,
-                    "startTime": request.start_time,
-                    "limit": request.limit,
-                }
-                res = await client.user_wss_session.handle_request(
-                    "myTrades",
-                    params,
-                    api_key=True,
-                    signed=True
-                )
-            if res is None:
-                res = await client.fetch_account_trade_list(
-                    symbol=request.symbol,
-                    start_time=request.start_time,
-                    end_time=None,
-                    from_id=None,
-                    limit=request.limit,
-                    receive_window=None)
+            res = await client.fetch_account_trade_list(
+                request.trade_id,
+                request.symbol,
+                start_time=request.start_time,
+                end_time=None,
+                from_id=None,
+                limit=request.limit,
+                receive_window=None)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
@@ -756,39 +710,21 @@ class Martin(api_pb2_grpc.MartinServicer):
         client = open_client.client
         # logger.info(f"CreateLimitOrder: quantity: {request.quantity}, price: {request.price}")
         try:
-            res = None
-            if client.exchange == 'binance':
-                params = {
-                    "symbol": request.symbol,
-                    "side": 'BUY' if request.buy_side else 'SELL',
-                    "type": 'LIMIT',
-                    "timeInForce": 'GTC',
-                    "price": request.price,
-                    "quantity": request.quantity,
-                    "newClientOrderId": request.new_client_order_id,
-                    "newOrderRespType": 'RESULT',
-                }
-                res = await client.user_wss_session.handle_request(
-                    "order.place",
-                    params,
-                    api_key=True,
-                    signed=True
-                )
-            if res is None:
-                res = await client.create_order(
-                    request.symbol,
-                    Side.BUY if request.buy_side else Side.SELL,
-                    order_type=OrderType.LIMIT,
-                    time_in_force=TimeInForce.GTC,
-                    quantity=request.quantity,
-                    quote_order_quantity=None,
-                    price=request.price,
-                    new_client_order_id=request.new_client_order_id,
-                    stop_price=None,
-                    iceberg_quantity=None,
-                    response_type=ResponseType.RESULT.value,
-                    receive_window=None,
-                    test=False)
+            res = await client.create_order(
+                request.trade_id,
+                request.symbol,
+                Side.BUY if request.buy_side else Side.SELL,
+                order_type=OrderType.LIMIT,
+                time_in_force=TimeInForce.GTC,
+                quantity=request.quantity,
+                quote_order_quantity=None,
+                price=request.price,
+                new_client_order_id=request.new_client_order_id,
+                stop_price=None,
+                iceberg_quantity=None,
+                response_type=ResponseType.RESULT.value,
+                receive_window=None,
+                test=False)
         except errors.HTTPError as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol}:{request.new_client_order_id}"
                          f" exception: {ex}")
@@ -816,25 +752,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         try:
-            res = None
-            if client.exchange == 'binance':
-                params = {
-                    "symbol": request.symbol,
-                    "orderId": request.order_id,
-                }
-                res = await client.user_wss_session.handle_request(
-                    "order.cancel",
-                    params,
-                    api_key=True,
-                    signed=True
-                )
-            if res is None:
-                res = await client.cancel_order(
-                    request.symbol,
-                    order_id=request.order_id,
-                    origin_client_order_id=None,
-                    new_client_order_id=None,
-                    receive_window=None)
+            res = await client.cancel_order(
+                request.trade_id,
+                request.symbol,
+                order_id=request.order_id,
+                origin_client_order_id=None,
+                new_client_order_id=None,
+                receive_window=None)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except errors.RateLimitReached as ex:
@@ -895,25 +819,26 @@ class Martin(api_pb2_grpc.MartinServicer):
 
     async def StopStream(self, request: api_pb2.MarketRequest,
                          _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
-        logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
         response = api_pb2.SimpleResponse()
-        await stop_stream(client, request.trade_id)
-        response.success = True
+        if open_client := OpenClient.get_client(request.client_id):
+            client = open_client.client
+            logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
+            await stop_stream(client, request.trade_id)
+            response.success = True
+        else:
+            response.success = False
         return response
 
     async def CheckStream(self, request: api_pb2.MarketRequest,
                           _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         response = api_pb2.SimpleResponse()
-        open_client = OpenClient.get_client(request.client_id)
-        if open_client:
+        if open_client := OpenClient.get_client(request.client_id):
             client = open_client.client
             response.success = bool(client.data_streams.get(request.trade_id))
         else:
             response.success = False
         if not response.success:
-            logger.warning(f"CheckStream request filed for {request.symbol}")
+            logger.warning(f"CheckStream request failed for {request.symbol}")
         return response
 
 
@@ -956,6 +881,12 @@ async def serve() -> None:
     await server.wait_for_termination()
 
 
+async def stop_tasks(loop):
+    for task in asyncio.all_tasks(loop):
+        if all(item in task.get_name() for item in ['keepalive', 'heartbeat']) and not task.done():
+            task.cancel()
+
+
 def main():
     loop = asyncio.new_event_loop()
     loop.create_task(serve())
@@ -964,7 +895,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        loop.run_until_complete(asyncio.sleep(0.250))
+        loop.run_until_complete(stop_tasks(loop))
         loop.close()
 
 

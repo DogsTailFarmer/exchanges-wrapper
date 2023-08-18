@@ -5,7 +5,7 @@ import aiohttp
 import logging
 import time
 from datetime import datetime
-from exchanges_wrapper.c_structures import generate_signature
+from crypto_ws_api.ws_session import generate_signature
 from exchanges_wrapper.errors import (
     RateLimitReached,
     ExchangeError,
@@ -129,12 +129,12 @@ class ClientBFX(HttpClient):
         if kwargs and not bfx_post:
             url += f"?{urlencode(kwargs, safe='/')}"
         if bfx_post and "params" in kwargs:
-            query_kwargs.update({'data': _params})
+            query_kwargs['data'] = _params
         if signed:
             ts = int(time.time() * 1000)
             query_kwargs["headers"]["Content-Type"] = AJ
             if bfx_post:
-                query_kwargs.update({'data': _params})
+                query_kwargs['data'] = _params
             if send_api_key:
                 query_kwargs["headers"]["bfx-apikey"] = self.api_key
             signature_payload = f'/api/{path}{ts}'
@@ -177,13 +177,12 @@ class ClientHBP(HttpClient):
             if method == 'GET':
                 _params.update(**kwargs)
             else:
-                query_kwargs.update({'json': kwargs})
+                query_kwargs['json'] = kwargs
             signature_payload = f"{method}\n{urlparse(_endpoint).hostname}\n/{path}\n{urlencode(_params)}"
             signature = generate_signature(self.exchange, self.api_secret, signature_payload)
-            _params.update({'Signature': signature})
-        else:
-            if method == 'GET':
-                _params = kwargs
+            _params['Signature'] = signature
+        elif method == 'GET':
+            _params = kwargs
         url += urlencode(_params)
 
         # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")

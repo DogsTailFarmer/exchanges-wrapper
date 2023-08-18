@@ -92,7 +92,7 @@ class Events:
         if event_type not in wrapper_by_type:
             raise UnknownEventType()
         wrapper = wrapper_by_type[event_type]
-        return wrapper(event_data, self.handlers[stream if stream else event_type])
+        return wrapper(event_data, self.handlers[(stream or event_type)])
 
 
 class EventWrapper:

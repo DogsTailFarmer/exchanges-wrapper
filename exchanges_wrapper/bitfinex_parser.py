@@ -27,10 +27,11 @@ class OrderBook:
         asks.sort(key=lambda x: float(x[0]), reverse=False)
         return {
             'stream': f"{self.symbol}@depth5",
-            'data': {'lastUpdateId': self.last_update_id,
-                     'bids': bids[0:5],
-                     'asks': asks[0:5],
-                     }
+            'data': {
+                'lastUpdateId': self.last_update_id,
+                'bids': bids[:5],
+                'asks': asks[:5],
+            },
         }
 
     def update_book(self, _update):
@@ -40,11 +41,10 @@ class OrderBook:
                 self.bids[str(_update[0])] = str(_update[2])
             else:
                 self.asks[str(_update[0])] = str(abs(_update[2]))
+        elif _update[2] > 0:
+            self.bids.pop(str(_update[0]), None)
         else:
-            if _update[2] > 0:
-                self.bids.pop(str(_update[0]), None)
-            else:
-                self.asks.pop(str(_update[0]), None)
+            self.asks.pop(str(_update[0]), None)
 
     def __call__(self):
         return self
@@ -71,8 +71,7 @@ def tick_size(precision, _price):
         k = precision - x
     elif k + x - precision < 0:
         k += precision - x - k
-    res = (1 / 10 ** k) if k else 1
-    return res
+    return (1 / 10 ** k) if k else 1
 
 
 def symbol_name(_pair: str) -> ():
@@ -82,16 +81,16 @@ def symbol_name(_pair: str) -> ():
         quote_asset = _pair.split(':')[1].upper()
     else:
         pair = _pair.upper()
-        base_asset = _pair[0:3].upper()
+        base_asset = _pair[:3].upper()
         quote_asset = _pair[3:].upper()
     return pair, base_asset, quote_asset
 
 
 def exchange_info(symbols_details: [], tickers: []) -> {}:
     symbols = []
-    symbols_price = {}
-    for pair in tickers:
-        symbols_price[pair[0].replace(':', '').upper()[1:]] = pair[7]
+    symbols_price = {
+        pair[0].replace(':', '').upper()[1:]: pair[7] for pair in tickers
+    }
     for market in symbols_details:
         if 'f0' not in market.get("pair"):
             _symbol, _base_asset, _quote_asset = symbol_name(market.get("pair"))
@@ -152,14 +151,13 @@ def exchange_info(symbols_details: [], tickers: []) -> {}:
             }
             symbols.append(symbol)
 
-    _binance_res = {
+    return {
         "timezone": "UTC",
-        "serverTime": int(time.time() * 1000),
+        "serverTime": int(time.time() * 1000) if symbols else None,
         "rateLimits": [],
         "exchangeFilters": [],
         "symbols": symbols,
     }
-    return _binance_res
 
 
 def account_information(res: []) -> {}:
@@ -176,23 +174,19 @@ def account_information(res: []) -> {}:
             }
             balances.append(_binance_res)
 
-    binance_account_info = {
-      "makerCommission": 0,
-      "takerCommission": 0,
-      "buyerCommission": 0,
-      "sellerCommission": 0,
-      "canTrade": True,
-      "canWithdraw": False,
-      "canDeposit": False,
-      "updateTime": int(time.time() * 1000),
-      "accountType": "SPOT",
-      "balances": balances,
-      "permissions": [
-        "SPOT"
-      ]
+    return {
+        "makerCommission": 0,
+        "takerCommission": 0,
+        "buyerCommission": 0,
+        "sellerCommission": 0,
+        "canTrade": True,
+        "canWithdraw": False,
+        "canDeposit": False,
+        "updateTime": int(time.time() * 1000),
+        "accountType": "SPOT",
+        "balances": balances,
+        "permissions": ["SPOT"],
     }
-
-    return binance_account_info
 
 
 def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
@@ -233,10 +227,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
                 exec_price = Decimal(str(trade[5]))
                 executed_qty += exec_amount
                 cummulative_quote_qty += exec_amount * exec_price
-        if executed_qty >= Decimal(orig_qty):
-            status = 'FILLED'
-        else:
-            status = 'PARTIALLY_FILLED'
+        status = 'FILLED' if executed_qty >= Decimal(orig_qty) else 'PARTIALLY_FILLED'
         executed_qty = str(executed_qty)
         cummulative_quote_qty = str(cummulative_quote_qty)
         _type = "MARKET"
@@ -250,7 +241,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
     is_working = True
     #
     if response_type:
-        binance_order = {
+        return {
             "symbol": symbol,
             "origClientOrderId": client_order_id,
             "orderId": order_id,
@@ -267,7 +258,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
             "side": side,
         }
     elif response_type is None:
-        binance_order = {
+        return {
             "symbol": symbol,
             "orderId": order_id,
             "orderListId": order_list_id,
@@ -288,7 +279,7 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
             "origQuoteOrderQty": orig_quote_order_qty,
         }
     else:
-        binance_order = {
+        return {
             "symbol": symbol,
             "orderId": order_id,
             "orderListId": order_list_id,
@@ -302,8 +293,6 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
             "type": _type,
             "side": side,
         }
-    # print(f"order.binance_order: {binance_order}")
-    return binance_order
 
 
 def orders(res: [], response_type=None, cancelled=False) -> []:
@@ -329,7 +318,7 @@ def order_book(res: []) -> {}:
 
 
 def ticker_price_change_statistics(res: [], symbol):
-    binance_price_ticker = {
+    return {
         "symbol": symbol,
         "priceChange": str(res[4]),
         "priceChangePercent": str(res[5]),
@@ -352,15 +341,13 @@ def ticker_price_change_statistics(res: [], symbol):
         "lastId": 1,
         "count": 1,
     }
-    return binance_price_ticker
 
 
 def fetch_symbol_price_ticker(res: [], symbol) -> {}:
-    symbol_ticker = {
+    return {
         "symbol": symbol,
         "price": str(res[6]),
     }
-    return symbol_ticker
 
 
 def interval(_interval: str) -> int:
@@ -407,31 +394,33 @@ def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
     symbol = symbol[1:].replace(':', '')
     start_time = res[0]
     _interval = ch_type.split('_')[1]
-    binance_candle = {
+    return {
         'stream': f"{symbol.lower()}@{ch_type.replace('candles', 'kline')}",
-        'data': {'e': 'kline',
-                 'E': int(time.time()),
-                 's': symbol,
-                 'k': {
-                     't': start_time,
-                     'T': start_time + interval(_interval) * 1000 - 1,
-                     's': symbol,
-                     'i': _interval,
-                     'f': 100,
-                     'L': 200,
-                     'o': str(res[1]),
-                     'c': str(res[2]),
-                     'h': str(res[3]),
-                     'l': str(res[4]),
-                     'v': str(res[5]),
-                     'n': 100,
-                     'x': False,
-                     'q': '0.0',
-                     'V': '0.0',
-                     'Q': '0.0',
-                     'B': '0'}}
+        'data': {
+            'e': 'kline',
+            'E': int(time.time()),
+            's': symbol,
+            'k': {
+                't': start_time,
+                'T': start_time + interval(_interval) * 1000 - 1,
+                's': symbol,
+                'i': _interval,
+                'f': 100,
+                'L': 200,
+                'o': str(res[1]),
+                'c': str(res[2]),
+                'h': str(res[3]),
+                'l': str(res[4]),
+                'v': str(res[5]),
+                'n': 100,
+                'x': False,
+                'q': '0.0',
+                'V': '0.0',
+                'Q': '0.0',
+                'B': '0',
+            },
+        },
     }
-    return binance_candle
 
 
 def account_trade_list(res: []) -> []:
@@ -451,8 +440,8 @@ def account_trade_list(res: []) -> []:
             "commission": str(abs(trade[9])),
             "commissionAsset": trade[10],
             "time": trade[2],
-            "isBuyer": bool(trade[4] > 0),
-            "isMaker": bool(trade[8] == 1),
+            "isBuyer": trade[4] > 0,
+            "isMaker": trade[8] == 1,
             "isBestMatch": True,
         }
         binance_trade_list.append(binance_trade)
@@ -461,7 +450,7 @@ def account_trade_list(res: []) -> []:
 
 def ticker(res: [], symbol: str = None) -> {}:
     _symbol = symbol[1:].replace(':', '').lower()
-    msg_binance = {
+    return {
         'stream': f"{_symbol}@miniTicker",
         'data': {
             "e": "24hrMiniTicker",
@@ -472,10 +461,9 @@ def ticker(res: [], symbol: str = None) -> {}:
             "h": str(res[8]),
             "l": str(res[9]),
             "v": str(res[7]),
-            "q": "0"
-        }
+            "q": "0",
+        },
     }
-    return msg_binance
 
 
 def on_funds_update(res: []) -> {}:
@@ -503,14 +491,13 @@ def on_funds_update(res: []) -> {}:
 
 
 def on_balance_update(res: []) -> {}:
-    balance = {
+    return {
         'e': 'balanceUpdate',
         'E': res[3],
         'a': res[1],
         'd': res[5],
-        'T': int(time.time() * 1000)
+        'T': int(time.time() * 1000),
     }
-    return balance
 
 
 def on_order_update(res: [], last_event: tuple) -> {}:
@@ -538,8 +525,7 @@ def on_order_update(res: [], last_event: tuple) -> {}:
         status = 'FILLED'
     else:
         status = 'NEW'
-    #
-    msg_binance = {
+    return {
         "e": "executionReport",
         "E": res[5],
         "s": res[3][1:].replace(':', ''),
@@ -571,9 +557,8 @@ def on_order_update(res: [], last_event: tuple) -> {}:
         "O": res[4],
         "Z": cumulative_quote_asset,
         "Y": last_quote_asset_transacted,
-        "Q": quote_order_qty
+        "Q": quote_order_qty,
     }
-    return msg_binance
 
 
 def on_order_trade(res: [], executed_qty: str) -> {}:
@@ -585,7 +570,7 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
     last_executed_quantity = str(abs(res[4]))
     last_executed_price = str(res[5])
     last_quote_asset = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
-    msg_binance = {
+    return {
         "e": "executionReport",
         "E": res[2],
         "s": res[1][1:].replace(':', ''),
@@ -612,14 +597,13 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
         "t": res[0],
         "I": 123456789,
         "w": True,
-        "m": bool(res[8] == 1),
+        "m": res[8] == 1,
         "M": False,
         "O": res[2],
         "Z": "0.0",
         "Y": last_quote_asset,
-        "Q": "0.0"
+        "Q": "0.0",
     }
-    return msg_binance
 
 
 def funding_wallet(res: []) -> []:
@@ -627,9 +611,9 @@ def funding_wallet(res: []) -> []:
     for balance in res:
         if balance[0] in ('exchange', 'funding'):
             total = str(balance[2] or 0.0)
-            free = str(balance[4] or 0.0)
-            locked = str(Decimal(total) - Decimal(free))
             if float(total):
+                free = str(balance[4] or 0.0)
+                locked = str(Decimal(total) - Decimal(free))
                 _binance_res = {
                     "asset": balance[1],
                     "free": free,

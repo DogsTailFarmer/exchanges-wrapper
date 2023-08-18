@@ -62,16 +62,19 @@ class Client:
             'sub_account': self.sub_account,
             'test_net': self.test_net
         }
-
-        self.user_wss_session = None
-        if self.exchange == 'binance':
-            self.http = ClientBinance(**client_init_params)
+        if self.exchange in ('binance', 'okx', 'bitfinex'):
             self.user_wss_session = UserWSSession(
+                self.session,
+                self.exchange,
+                self.endpoint_ws_api,
                 self.api_key,
                 self.api_secret,
-                self.session,
-                self.endpoint_ws_api
+                self.passphrase,
             )
+        else:
+            self.user_wss_session = None
+        if self.exchange == 'binance':
+            self.http = ClientBinance(**client_init_params)
         elif self.exchange == 'bitfinex':
             self.http = ClientBFX(**client_init_params)
         elif self.exchange == 'huobi':
@@ -98,27 +101,26 @@ class Client:
 
     async def load(self):
         infos = await self.fetch_exchange_info()
-        if infos.get('serverTime'):
-            # load available symbols
-            self.highest_precision = 8
-            original_symbol_infos = infos["symbols"]
-            for symbol_infos in original_symbol_infos:
-                symbol = symbol_infos.pop("symbol")
-                precision = symbol_infos["baseAssetPrecision"]
-                if precision > self.highest_precision:
-                    self.highest_precision = precision
-                symbol_infos["filters"] = dict(
-                    map(lambda x: (x.pop("filterType"), x), symbol_infos["filters"])
-                )
-                self.symbols[symbol] = symbol_infos
-            decimal.getcontext().prec = (
-                self.highest_precision + 4
-            )  # for operations and rounding
-            # load rate limits
-            self.rate_limits = infos["rateLimits"]
-            self.loaded = True
-        else:
+        if not infos.get('serverTime'):
             raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
+        # load available symbols
+        self.highest_precision = 8
+        original_symbol_infos = infos["symbols"]
+        for symbol_infos in original_symbol_infos:
+            symbol = symbol_infos.pop("symbol")
+            precision = symbol_infos["baseAssetPrecision"]
+            if precision > self.highest_precision:
+                self.highest_precision = precision
+            symbol_infos["filters"] = dict(
+                map(lambda x: (x.pop("filterType"), x), symbol_infos["filters"])
+            )
+            self.symbols[symbol] = symbol_infos
+        decimal.getcontext().prec = (
+            self.highest_precision + 4
+        )  # for operations and rounding
+        # load rate limits
+        self.rate_limits = infos["rateLimits"]
+        self.loaded = True
 
     async def close(self):
         await self.session.close()
@@ -134,7 +136,6 @@ class Client:
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
         user_data_stream = None
         if self.exchange == 'binance':
-            await self.user_wss_session.start(_trade_id)
             user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'bitfinex':
             user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
@@ -189,11 +190,11 @@ class Client:
         symbol_info = self.symbols.get(symbol)
         base_asset = symbol_info.get('baseAsset')
         quote_asset = symbol_info.get('quoteAsset')
-        if len(base_asset) > 3 or len(quote_asset) > 3:
-            res = f"t{base_asset}:{quote_asset}"
-        else:
-            res = f"t{base_asset}{quote_asset}"
-        return res
+        return (
+            f"t{base_asset}:{quote_asset}"
+            if len(base_asset) > 3 or len(quote_asset) > 3
+            else f"t{base_asset}{quote_asset}"
+        )
 
     def symbol_to_okx(self, symbol) -> str:
         symbol_info = self.symbols.get(symbol)
@@ -221,7 +222,7 @@ class Client:
             )
         return amount
 
-    def refine_price(self, symbol, price: Union[str, decimal.Decimal]) -> decimal.Decimal:
+    def refine_price(self, symbol, price: Union[str, decimal.Decimal]):
         if isinstance(price, str):  # to save time for developers
             price = decimal.Decimal(price)
 
@@ -235,7 +236,7 @@ class Client:
                 .rstrip("0")
                 .rstrip(".")
             )
-        return decimal.Decimal(price)
+        return price
 
     def assert_symbol(self, symbol):
         if not symbol:
@@ -323,41 +324,40 @@ class Client:
         elif self.exchange == 'okx':
             valid_limits = [1, 5, 10, 20, 50, 100, 400]
         binance_res = {}
-        if limit in valid_limits:
-            if self.exchange == 'binance':
-                binance_res = await self.http.send_api_call(
-                    "/api/v3/depth",
-                    params={"symbol": symbol, "limit": limit},
-                    send_api_key=False,
-                )
-            elif self.exchange == 'bitfinex':
-                params = {'len': limit}
-                res = await self.http.send_api_call(
-                    f"v2/book/{self.symbol_to_bfx(symbol)}/{precision}",
-                    endpoint=self.endpoint_api_public,
-                    **params
-                )
-                # print(f"fetch_order_book.res: {res}")
-                if res:
-                    binance_res = bfx.order_book(res)
-            elif self.exchange == 'huobi':
-                params = {'symbol': symbol.lower(),
-                          'depth': limit,
-                          'type': 'step0'}
-                res = await self.http.send_api_call(
-                    "market/depth",
-                    **params
-                )
-                binance_res = hbp.order_book(res)
-            elif self.exchange == 'okx':
-                params = {'instId': self.symbol_to_okx(symbol),
-                          'sz': str(limit)}
-                res = await self.http.send_api_call("/api/v5/market/books", **params)
-                binance_res = okx.order_book(res[0])
-        else:
+        if limit not in valid_limits:
             raise ValueError(
                 f"{limit} is not a valid limit. Valid limits: {valid_limits}"
             )
+        if self.exchange == 'binance':
+            binance_res = await self.http.send_api_call(
+                "/api/v3/depth",
+                params={"symbol": symbol, "limit": limit},
+                send_api_key=False,
+            )
+        elif self.exchange == 'bitfinex':
+            params = {'len': limit}
+            res = await self.http.send_api_call(
+                f"v2/book/{self.symbol_to_bfx(symbol)}/{precision}",
+                endpoint=self.endpoint_api_public,
+                **params
+            )
+            # print(f"fetch_order_book.res: {res}")
+            if res:
+                binance_res = bfx.order_book(res)
+        elif self.exchange == 'huobi':
+            params = {'symbol': symbol.lower(),
+                      'depth': limit,
+                      'type': 'step0'}
+            res = await self.http.send_api_call(
+                "market/depth",
+                **params
+            )
+            binance_res = hbp.order_book(res)
+        elif self.exchange == 'okx':
+            params = {'instId': self.symbol_to_okx(symbol),
+                      'sz': str(limit)}
+            res = await self.http.send_api_call("/api/v5/market/books", **params)
+            binance_res = okx.order_book(res[0])
         return binance_res
 
     async def fetch_ledgers(self, symbol, limit=10):
@@ -387,8 +387,7 @@ class Client:
                     if len(self.ledgers_id) > limit*len(category):
                         del self.ledgers_id[0]
                     if _res:
-                        binance_res = bfx.on_balance_update(_res)
-                        return binance_res
+                        return bfx.on_balance_update(_res)
         elif self.exchange == 'huobi':
             params = {'accountId': str(self.hbp_account_id),
                       'limit': limit}
@@ -404,8 +403,7 @@ class Client:
                     self.ledgers_id.append(res_i.get('transactId'))
                     if len(self.ledgers_id) > limit:
                         del self.ledgers_id[0]
-                    binance_res = hbp.on_balance_update(res_i)
-                    return binance_res
+                    return hbp.on_balance_update(res_i)
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
     async def fetch_recent_trades_list(self, symbol, limit=500):
@@ -574,9 +572,9 @@ class Client:
         if symbol:
             self.assert_symbol_exists(symbol)
             binance_res = {}
+        elif self.exchange in ('bitfinex', 'huobi'):
+            raise ValueError('For fetch_symbol_price_ticker() symbol parameter required')
         else:
-            if self.exchange in ('bitfinex', 'huobi'):
-                raise ValueError('For fetch_symbol_price_ticker() symbol parameter required')
             binance_res = []
         if self.exchange == 'binance':
             binance_res = await self.http.send_api_call(
@@ -621,6 +619,7 @@ class Client:
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#new-order--trade
     async def create_order(
         self,
+        trade_id,
         symbol,
         side,
         order_type,
@@ -691,24 +690,36 @@ class Client:
                 params["newOrderRespType"] = response_type
             if receive_window:
                 params["recvWindow"] = receive_window
-            route = "/api/v3/order/test" if test else "/api/v3/order"
-            binance_res = await self.http.send_api_call(route, "POST", data=params, signed=True)
+            binance_res = await self.user_wss_session.handle_request(
+                trade_id,
+                "order.place",
+                _params=params,
+                _api_key=True,
+                _signed=True
+            )
+            if binance_res is None:
+                route = "/api/v3/order/test" if test else "/api/v3/order"
+                binance_res = await self.http.send_api_call(route, "POST", data=params, signed=True)
         elif self.exchange == 'bitfinex':
             params = {
                 "type": "EXCHANGE LIMIT",
                 "symbol": self.symbol_to_bfx(symbol),
                 "price": price,
-                "amount": str((float(quantity) * (1 if side == 'BUY' else -1))),
+                "amount": ('' if side == 'BUY' else '-') + quantity,
                 "meta": {"aff_code": "v_4az2nCP"}
             }
             if new_client_order_id:
                 params["cid"] = new_client_order_id
-            res = await self.http.send_api_call(
-                "v2/auth/w/order/submit",
-                method="POST",
-                signed=True,
-                **params,
-            )
+
+            res = None
+            # res = await self.user_wss_session.handle_request(trade_id, "on", _params=params)
+            if res is None:
+                res = await self.http.send_api_call(
+                    "v2/auth/w/order/submit",
+                    method="POST",
+                    signed=True,
+                    **params,
+                )
             logger.debug(f"create_order.res: {res}")
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
                 order_id = res[4][0][0]
@@ -748,11 +759,10 @@ class Client:
                 )
                 if res:
                     break
-                else:
-                    count += 1
-                    logger.debug(f"RateLimitReached for {symbol}, count {count}, try one else")
+                count += 1
+                logger.debug(f"RateLimitReached for {symbol}, count {count}, try one else")
             if res:
-                binance_res = await self.fetch_order(symbol, order_id=res, response_type=False)
+                binance_res = await self.fetch_order(trade_id, symbol, order_id=res, response_type=False)
         elif self.exchange == 'okx':
             params = {
                 "instId": self.symbol_to_okx(symbol),
@@ -763,14 +773,18 @@ class Client:
                 "sz": quantity,
                 "px": price,
             }
-            res = await self.http.send_api_call(
-                "/api/v5/trade/order",
-                method="POST",
-                signed=True,
-                **params,
-            )
+
+            res = None
+            # res = await self.user_wss_session.handle_request(trade_id, "order", _params=params)
+            if res is None:
+                res = await self.http.send_api_call(
+                    "/api/v5/trade/order",
+                    method="POST",
+                    signed=True,
+                    **params,
+                )
             if res[0].get('sCode') == '0':
-                binance_res = await self.fetch_order(symbol, order_id=res[0].get('ordId'), response_type=False)
+                binance_res = okx.place_order_response(res[0], params)
             else:
                 raise UserWarning(f"Code: {res[0].get('sCode')}: {res[0].get('sMsg')}")
         return binance_res
@@ -778,6 +792,7 @@ class Client:
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-order-user_data
     async def fetch_order(  # lgtm [py/similar-function]
         self,
+        trade_id,
         symbol,
         order_id=None,
         origin_client_order_id=None,
@@ -785,16 +800,10 @@ class Client:
         response_type=None,
     ):
         self.assert_symbol(symbol)
-        if self.exchange in ('binance', 'huobi', 'okx'):
-            if not order_id and not origin_client_order_id:
-                raise ValueError(
-                    "This query requires an order_id or an origin_client_order_id"
-                )
-        else:
-            if not order_id:
-                raise ValueError(
-                    "This query requires an order_id"
-                )
+        if self.exchange in ('binance', 'huobi', 'okx') and not order_id and not origin_client_order_id:
+            raise ValueError("This query requires an order_id or an origin_client_order_id")
+        elif not order_id:
+            raise ValueError("This query requires an order_id")
         binance_res = {}
         if self.exchange == 'binance':
             params = {"symbol": symbol}
@@ -804,26 +813,32 @@ class Client:
                 params["origClientOrderId"] = origin_client_order_id
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = await self.http.send_api_call(
-                "/api/v3/order",
-                params=params,
-                signed=True,
-            )
+            binance_res = await self.user_wss_session.handle_request(
+                    trade_id,
+                    "order.status",
+                    _params=params,
+                    _api_key=True,
+                    _signed=True
+                )
+            if binance_res is None:
+                binance_res = await self.http.send_api_call(
+                    "/api/v3/order",
+                    params=params,
+                    signed=True,
+                )
         elif self.exchange == 'bitfinex':
             params = {'id': [order_id]}
             res = await self.http.send_api_call(
-                f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
-                method="POST",
-                signed=True,
-                **params
-            )
-            if not res:
-                res = await self.http.send_api_call(
-                    f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}/hist",
-                    method="POST",
-                    signed=True,
-                    **params
-                )
+                            f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
+                            method="POST",
+                            signed=True,
+                            **params
+                        ) or await self.http.send_api_call(
+                                f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}/hist",
+                                method="POST",
+                                signed=True,
+                                **params
+                            )
             if res:
                 binance_res = bfx.order(res[0], response_type=response_type)
         elif self.exchange == 'huobi':
@@ -846,6 +861,7 @@ class Client:
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-order-trade
     async def cancel_order(  # lgtm [py/similar-function]
         self,
+        trade_id,
         symbol,
         order_id=None,
         origin_client_order_id=None,
@@ -868,24 +884,34 @@ class Client:
                 params["newClientOrderId"] = origin_client_order_id
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = await self.http.send_api_call(
-                "/api/v3/order",
-                "DELETE",
-                params=params,
-                signed=True,
+            binance_res = await self.user_wss_session.handle_request(
+                trade_id,
+                "order.cancel",
+                _params=params,
+                _api_key=True,
+                _signed=True
             )
+            if binance_res is None:
+                binance_res = await self.http.send_api_call(
+                    "/api/v3/order",
+                    "DELETE",
+                    params=params,
+                    signed=True,
+                )
         elif self.exchange == 'bitfinex':
             if not order_id:
                 raise ValueError(
                     "This query requires an order_id on Bitfinex. Deletion by user number is not implemented."
                 )
             params = {'id': order_id}
-            res = await self.http.send_api_call(
-                "v2/auth/w/order/cancel",
-                method="POST",
-                signed=True,
-                **params
-            )
+            res = await self.user_wss_session.handle_request(trade_id, "oc", _params=params)
+            if res is None:
+                res = await self.http.send_api_call(
+                    "v2/auth/w/order/cancel",
+                    method="POST",
+                    signed=True,
+                    **params
+                )
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
                 timeout = STATUS_TIMEOUT / 0.1
                 while timeout:
@@ -906,66 +932,75 @@ class Client:
             timeout = STATUS_TIMEOUT
             while res and not order_cancelled and timeout:
                 timeout -= 1
-                binance_res = await self.fetch_order(symbol, order_id=res, response_type=True)
-                order_cancelled = bool(binance_res.get('status') == 'CANCELED')
+                binance_res = await self.fetch_order(trade_id, symbol, order_id=res, response_type=True)
+                order_cancelled = binance_res.get('status') == 'CANCELED'
                 await asyncio.sleep(1)
         elif self.exchange == 'okx':
+            _symbol = self.symbol_to_okx(symbol)
+            _queue = asyncio.Queue()
+            self.on_order_update_queues.update({f"{_symbol}{order_id}": _queue})
             params = {
-                "instId": self.symbol_to_okx(symbol),
+                "instId": _symbol,
                 "ordId": str(order_id),
                 "clOrdId": str(origin_client_order_id),
             }
-            res = await self.http.send_api_call(
-                "/api/v5/trade/cancel-order",
-                method="POST",
-                signed=True,
-                **params,
-            )
-            if res[0].get('sCode') == '0':
-                _canceled_order_id = res[0].get('ordId')
-                order_cancelled = False
-                timeout = STATUS_TIMEOUT
-                while _canceled_order_id and not order_cancelled and timeout:
-                    timeout -= 1
-                    binance_res = await self.fetch_order(symbol, order_id=_canceled_order_id, response_type=True)
-                    order_cancelled = bool(binance_res.get('status') == 'CANCELED')
-                    await asyncio.sleep(1)
-            else:
-                raise UserWarning(res[0].get('sMsg'))
+            _res = await self.user_wss_session.handle_request(trade_id, "cancel-order", _params=params)
+            if _res is None:
+                _res = await self.http.send_api_call(
+                    "/api/v5/trade/cancel-order",
+                    method="POST",
+                    signed=True,
+                    **params,
+                )
+            if _res[0].get('sCode') != '0':
+                raise UserWarning(_res[0].get('sMsg'))
+            try:
+                binance_res = await asyncio.wait_for(_queue.get(), timeout=STATUS_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.warning(f"WSS CancelOrder for OKX:{symbol} timeout exception")
+            self.on_order_update_queues.pop(f"{_symbol}{order_id}", None)
         logger.debug(f"cancel_order.binance_res: {binance_res}")
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-all-open-orders-on-a-symbol-trade
-    async def cancel_all_orders(self, symbol, receive_window=None):
+    async def cancel_all_orders(self, trade_id, symbol, receive_window=None):
         self.assert_symbol(symbol)
         binance_res = []
         if self.exchange == 'binance':
             params = {"symbol": symbol}
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = await self.http.send_api_call(
-                "/api/v3/openOrders",
-                "DELETE",
-                params=params,
-                signed=True,
+            binance_res = await self.user_wss_session.handle_request(
+                trade_id,
+                "openOrders.cancelAll",
+                _params=params,
+                _api_key=True,
+                _signed=True
             )
+            if binance_res is None:
+                binance_res = await self.http.send_api_call(
+                    "/api/v3/openOrders",
+                    "DELETE",
+                    params=params,
+                    signed=True,
+                )
         elif self.exchange == 'bitfinex':
             params = {'all': 1}
-            res = await self.http.send_api_call(
-                "v2/auth/w/order/cancel/multi",
-                method="POST",
-                signed=True,
-                **params,
-            )
+            res = await self.user_wss_session.handle_request(trade_id, "oc_multi", _params=params)
+            if res is None:
+                res = await self.http.send_api_call(
+                    "v2/auth/w/order/cancel/multi",
+                    method="POST",
+                    signed=True,
+                    **params,
+                )
             logger.debug(f"cancel_all_orders.res: {res}")
             if res and res[6] == 'SUCCESS':
                 res = res[4]
                 binance_res = bfx.orders(res, response_type=True, cancelled=True)
         elif self.exchange == 'huobi':
-            orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window, response_type=True)
-            orders_id = []
-            for order in orders:
-                orders_id.append(str(order.get('orderId')))
+            orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
+            orders_id = [str(order.get('orderId')) for order in orders]
             params = {'order-ids': orders_id}
             res = await self.http.send_api_call(
                 "v1/order/orders/batchcancel",
@@ -979,45 +1014,64 @@ class Client:
                     order['status'] = 'CANCELED'
                     binance_res.append(order)
         elif self.exchange == 'okx':
-            orders = await self.fetch_open_orders(symbol=symbol, receive_window=receive_window, response_type=True)
+            orders = await self.fetch_open_orders(
+                trade_id,
+                symbol,
+                receive_window=receive_window,
+                response_type=True
+            )
             _symbol = self.symbol_to_okx(symbol)
             while orders:
                 orders_canceled = []
                 params = []
-                i = 1
+                i = 0
                 # 20 is OKX limit fo bulk orders cancel
                 for order in orders:
                     order['status'] = 'CANCELED'
                     orders_canceled.append(order)
                     params.append({'instId': _symbol, 'ordId': order.get('orderId')})
-                    if i >= 20:
+                    if i >= 19:
                         break
                     i += 1
                 del orders[:20]
-                res = await self.http.send_api_call(
-                    "/api/v5/trade/cancel-batch-orders",
-                    method="POST",
-                    signed=True,
-                    data=params,
+                res = await self.user_wss_session.handle_request(
+                    trade_id,
+                    "batch-cancel-orders",
+                    _params=params
                 )
+                if res is None:
+                    res = await self.http.send_api_call(
+                        "/api/v5/trade/cancel-batch-orders",
+                        method="POST",
+                        signed=True,
+                        data=params,
+                    )
                 ids_canceled = [int(ordr['ordId']) for ordr in res if ordr['sCode'] == '0']
                 orders_canceled[:] = [i for i in orders_canceled if i['orderId'] in ids_canceled]
                 binance_res.extend(orders_canceled)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
-    async def fetch_open_orders(self, symbol, receive_window=None, response_type=None):
+    async def fetch_open_orders(self, trade_id, symbol, receive_window=None, response_type=None):
         self.assert_symbol(symbol)
         binance_res = []
         if self.exchange == 'binance':
             params = {"symbol": symbol}
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = await self.http.send_api_call(
-                "/api/v3/openOrders",
-                params=params,
-                signed=True
+            binance_res = await self.user_wss_session.handle_request(
+                trade_id,
+                "openOrders.status",
+                _params=params,
+                _api_key=True,
+                _signed=True
             )
+            if binance_res is None:
+                binance_res = await self.http.send_api_call(
+                    "/api/v3/openOrders",
+                    params=params,
+                    signed=True
+                )
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
@@ -1241,17 +1295,24 @@ class Client:
         )
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-information-user_data
-    async def fetch_account_information(self, receive_window=None):
+    async def fetch_account_information(self, trade_id, receive_window=None):
         params = {}
         binance_res = {}
         if self.exchange == 'binance':
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = await self.http.send_api_call(
-                "/api/v3/account",
-                params=params,
-                signed=True,
+            binance_res = await self.user_wss_session.handle_request(
+                trade_id,
+                "account.status",
+                _api_key=True,
+                _signed=True
             )
+            if binance_res is None:
+                binance_res = await self.http.send_api_call(
+                    "/api/v3/account",
+                    params=params,
+                    signed=True,
+                )
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 "v2/auth/r/wallets",
@@ -1297,9 +1358,7 @@ class Client:
             if res:
                 binance_res = bfx.funding_wallet(res)
         elif self.exchange == 'okx':
-            params = {}
-            if asset:
-                params = {'ccy': self.symbol_to_okx(asset)}
+            params = {'ccy': self.symbol_to_okx(asset)} if asset else {}
             res = await self.http.send_api_call("/api/v5/asset/balances", signed=True, **params)
             binance_res = okx.funding_wallet(res)
         return binance_res
@@ -1376,6 +1435,7 @@ class Client:
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-trade-list-user_data
     async def fetch_account_trade_list(
         self,
+        trade_id,
         symbol,
         order_id=None,
         start_time=None,
@@ -1405,11 +1465,19 @@ class Client:
                 params["fromId"] = from_id
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = await self.http.send_api_call(
-                "/api/v3/myTrades",
-                params=params,
-                signed=True,
+            binance_res = await self.user_wss_session.handle_request(
+                trade_id,
+                "myTrades",
+                _params=params,
+                _api_key=True,
+                _signed=True
             )
+            if binance_res is None:
+                binance_res = await self.http.send_api_call(
+                    "/api/v3/myTrades",
+                    params=params,
+                    signed=True,
+                )
         elif self.exchange == 'bitfinex':
             params = {'limit': limit, 'sort': -1}
             if start_time:
@@ -1453,15 +1521,11 @@ class Client:
         logger.debug(f"fetch_account_trade_list.binance_res: {binance_res}")
         return binance_res
 
-    async def fetch_order_trade_list(
-        self,
-        symbol,
-        order_id,
-    ):
+    async def fetch_order_trade_list(self, trade_id, symbol, order_id):
         self.assert_symbol(symbol)
         binance_res = []
         if self.exchange == 'binance':
-            binance_res = await self.fetch_account_trade_list(symbol=symbol, order_id=order_id)
+            binance_res = await self.fetch_account_trade_list(trade_id, symbol, order_id=order_id)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/auth/r/order/{self.symbol_to_bfx(symbol)}:{order_id}/trades",
