@@ -714,7 +714,7 @@ class Client:
             res = (
                     await self.user_wss_session.handle_request(trade_id, "on", _params=params)
                     or await self.http.send_api_call(
-                        f"v2/auth/w/order/submit",
+                        "v2/auth/w/order/submit",
                         method="POST",
                         signed=True,
                         **params,
