@@ -64,7 +64,12 @@ def get_account(_account_name: str) -> ():
             ws_public = endpoint['ws_public']
             api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
             ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
-            ws_public_mbr = endpoint.get('ws_public_mbr')
+            if exchange == 'huobi':
+                ws_add_on = endpoint.get('ws_public_mbr')
+            elif exchange == 'okx':
+                ws_add_on = endpoint.get('ws_business')
+            else:
+                ws_add_on = None
             # ws_api
             if exchange in ('okx', 'bitfinex'):
                 ws_api = ws_auth
@@ -82,7 +87,7 @@ def get_account(_account_name: str) -> ():
                    ws_public,       # 6
                    api_auth,        # 7
                    ws_auth,         # 8
-                   ws_public_mbr,   # 9
+                   ws_add_on,       # 9
                    passphrase,      # 10
                    master_email,    # 11
                    master_name,     # 12
@@ -290,8 +295,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     event = OrderUpdateEvent(res)
                     logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{event.order_id}:"
                                 f"{event.order_status}")
-                    _event = weakref.ref(event)
-                    await _queue.put(_event())
+                    await _queue.put(weakref.ref(event)())
                 elif res.get('status') == 'PARTIALLY_FILLED':
                     try:
                         trades = await client.fetch_order_trade_list(symbol=request.symbol, order_id=request.order_id)
@@ -303,8 +307,18 @@ class Martin(api_pb2_grpc.MartinServicer):
                         logger.debug(f"FetchOrder.trades: {trades}")
                         for trade in trades:
                             event = OrderTradesEvent(trade)
-                            _event = weakref.ref(event)
-                            await _queue.put(_event())
+                            await _queue.put(weakref.ref(event)())
+                try:
+                    trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id)
+                except asyncio.CancelledError:
+                    pass  # Task cancellation should not be logged as an error
+                except Exception as _ex:
+                    logger.error(f"Fetch order trades for {open_client.name}: {request.symbol} exception: {_ex}")
+                else:
+                    logger.debug(f"FetchOrder.trades: {trades}")
+                    for trade in trades:
+                        event = OrderTradesEvent(trade)
+                        await _queue.put(weakref.ref(event)())
             json_format.ParseDict(res, response)
         return response
 
