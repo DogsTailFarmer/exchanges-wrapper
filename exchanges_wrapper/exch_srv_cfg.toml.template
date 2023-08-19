@@ -49,7 +49,7 @@
         api_public = 'https://aws.okx.com'
         api_auth = 'https://aws.okx.com'
         ws_public = 'wss://wsaws.okx.com:8443/ws/v5/public'
-        ws_auth = 'wss://wsaws.okx.com:8443/ws/v5/private'
+        ws_business = 'wss://ws.okx.com:8443/ws/v5/business'
         api_test = 'https://aws.okx.com'
         ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
 # endregion

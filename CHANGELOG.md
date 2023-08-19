@@ -1,7 +1,18 @@
 ## v1.3.6b4 2023-08-18
 ### Fix
-* [#29: Can't resolve missed PARTIALLY_FILLED event](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/29#issue-1857179139)
+* [ Can't resolve missed PARTIALLY_FILLED event #29 ](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/29#issue-1857179139)
+* [ OKX changed WSS endpoint for Candlesticks channel #27 ](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/27#issue-1852639540)
 
+The `exch_srv_cfg.toml` wants to be updated from `exch_srv_cfg.toml.template`:
+```toml
+[endpoint.okx]
+    api_public = 'https://aws.okx.com'
+    api_auth = 'https://aws.okx.com'
+    ws_public = 'wss://wsaws.okx.com:8443/ws/v5/public'
+    ws_business = 'wss://ws.okx.com:8443/ws/v5/business'
+    api_test = 'https://aws.okx.com'
+    ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
+```
 ## v1.3.5rc1 2023-08-08
 ### Update
 * Dependency: Up requirements for crypto-ws-api~=2.0.0rc3
