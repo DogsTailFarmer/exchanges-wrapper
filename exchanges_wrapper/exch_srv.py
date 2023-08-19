@@ -64,7 +64,12 @@ def get_account(_account_name: str) -> ():
             ws_public = endpoint['ws_public']
             api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
             ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
-            ws_public_mbr = endpoint.get('ws_public_mbr')
+            if exchange == 'huobi':
+                ws_add_on = endpoint.get('ws_public_mbr')
+            elif exchange == 'okx':
+                ws_add_on = endpoint.get('ws_business')
+            else:
+                ws_add_on = None
             # ws_api
             if exchange in ('okx', 'bitfinex'):
                 ws_api = ws_auth
@@ -82,7 +87,7 @@ def get_account(_account_name: str) -> ():
                    ws_public,       # 6
                    api_auth,        # 7
                    ws_auth,         # 8
-                   ws_public_mbr,   # 9
+                   ws_add_on,       # 9
                    passphrase,      # 10
                    master_email,    # 11
                    master_name,     # 12
@@ -134,7 +139,10 @@ class Martin(api_pb2_grpc.MartinServicer):
                                    _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
         logger.info(f"OpenClientConnection start trade: {request.account_name}:{request.trade_id}")
         client_id = OpenClient.get_id(request.account_name)
-        if not client_id:
+        if client_id:
+            open_client = OpenClient.get_client(client_id)
+            open_client.client.http.rate_limit_reached = False
+        else:
             try:
                 open_client = OpenClient(request.account_name)
                 client_id = id(open_client)
@@ -154,26 +162,35 @@ class Martin(api_pb2_grpc.MartinServicer):
             except UserWarning as ex:
                 _context.set_details(f"{ex}")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-            else:
-                try:
-                    await open_client.client.load()
-                except asyncio.CancelledError:
-                    pass  # Task cancellation should not be logged as an error
-                except Exception as ex:
-                    logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
-                    logger.debug(f"Exception traceback: {traceback.format_exc()}")
-                    _context.set_details(f"{ex}")
-                    _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
-                    await OpenClient.get_client(client_id).client.session.close()
-                    OpenClient.remove_client(request.account_name)
-                    client_id = None
-        else:
-            OpenClient.get_client(client_id).client.http.rate_limit_reached = False
-        if client_id:
-            exchange = OpenClient.get_client(client_id).client.exchange
-            # Set rate_limiter
-            Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
-            return api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__, exchange=exchange)
+                return api_pb2.OpenClientConnectionId(
+                    client_id=client_id,
+                    srv_version=__version__,
+                    exchange=request.account_name
+                )
+        try:
+            await open_client.client.load()
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
+        except Exception as ex:
+            logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
+            logger.debug(f"Exception traceback: {traceback.format_exc()}")
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            await OpenClient.get_client(client_id).client.session.close()
+            OpenClient.remove_client(request.account_name)
+            return api_pb2.OpenClientConnectionId(
+                client_id=client_id,
+                srv_version=__version__,
+                exchange=request.account_name
+            )
+
+        # Set rate_limiter
+        Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
+        return api_pb2.OpenClientConnectionId(
+            client_id=client_id,
+            srv_version=__version__,
+            exchange=open_client.client.exchange
+        )
 
     async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
                               _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
@@ -278,8 +295,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     event = OrderUpdateEvent(res)
                     logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{event.order_id}:"
                                 f"{event.order_status}")
-                    _event = weakref.ref(event)
-                    await _queue.put(_event())
+                    await _queue.put(weakref.ref(event)())
                 elif res.get('status') == 'PARTIALLY_FILLED':
                     try:
                         trades = await client.fetch_order_trade_list(symbol=request.symbol, order_id=request.order_id)
@@ -291,8 +307,18 @@ class Martin(api_pb2_grpc.MartinServicer):
                         logger.debug(f"FetchOrder.trades: {trades}")
                         for trade in trades:
                             event = OrderTradesEvent(trade)
-                            _event = weakref.ref(event)
-                            await _queue.put(_event())
+                            await _queue.put(weakref.ref(event)())
+                try:
+                    trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id)
+                except asyncio.CancelledError:
+                    pass  # Task cancellation should not be logged as an error
+                except Exception as _ex:
+                    logger.error(f"Fetch order trades for {open_client.name}: {request.symbol} exception: {_ex}")
+                else:
+                    logger.debug(f"FetchOrder.trades: {trades}")
+                    for trade in trades:
+                        event = OrderTradesEvent(trade)
+                        await _queue.put(weakref.ref(event)())
             json_format.ParseDict(res, response)
         return response
 
@@ -812,7 +838,9 @@ class Martin(api_pb2_grpc.MartinServicer):
             client = open_client.client
             logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
             await stop_stream(client, request.trade_id)
-        response.success = True
+            response.success = True
+        else:
+            response.success = False
         return response
 
     async def CheckStream(self, request: api_pb2.MarketRequest,
@@ -862,7 +890,7 @@ async def serve() -> None:
     server = grpc.aio.server()
     api_pb2_grpc.add_MartinServicer_to_server(Martin(), server)
     server.add_insecure_port(listen_addr)
-    logger.info(f"Starting server on {listen_addr}")
+    logger.info(f"Starting server v:{__version__} on {listen_addr}")
     await server.start()
     await server.wait_for_termination()
 

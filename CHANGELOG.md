@@ -1,3 +1,7 @@
+## v1.3.6b4 2023-08-18
+### Fix
+* [#29: Can't resolve missed PARTIALLY_FILLED event](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/29#issue-1857179139)
+
 ## v1.3.5rc1 2023-08-08
 ### Update
 * Dependency: Up requirements for crypto-ws-api~=2.0.0rc3
