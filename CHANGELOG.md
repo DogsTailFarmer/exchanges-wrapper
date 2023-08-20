@@ -1,3 +1,17 @@
+## v1.3.6b7 2023-08-20
+### Fix
+* The `exch_srv_cfg.toml` wants to be updated from `exch_srv_cfg.toml.template`:
+```toml
+[endpoint.okx]
+    api_public = 'https://aws.okx.com'
+    api_auth = 'https://aws.okx.com'
+    ws_public = 'wss://wsaws.okx.com:8443/ws/v5/public'
+    ws_auth = 'wss://wsaws.okx.com:8443/ws/v5/private'
+    ws_business = 'wss://ws.okx.com:8443/ws/v5/business'
+    api_test = 'https://aws.okx.com'
+    ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
+```
+
 ## v1.3.6b4 2023-08-18
 ### Fix
 * [ Can't resolve missed PARTIALLY_FILLED event #29 ](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/29#issue-1857179139)
