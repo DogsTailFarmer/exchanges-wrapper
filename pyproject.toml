@@ -18,8 +18,8 @@ requires-python = ">=3.8"
 
 dependencies = [
     "crypto-ws-api~=2.0.1b5",
-    "grpcio==1.48.1",
-    "grpcio-tools==1.48.1",
+    "grpcio==1.57.0",
+    "grpcio-tools==1.57.0",
     "idna==3.4",
     "pyotp~=2.9.0",
     "simplejson==3.19.1",
