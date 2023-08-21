@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+import tracemalloc
+tracemalloc.start()
+import aiomonitor
+
 from exchanges_wrapper import __version__
 import time
 import weakref
@@ -903,14 +908,30 @@ async def stop_tasks(loop):
 
 def main():
     loop = asyncio.new_event_loop()
-    loop.create_task(serve())
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        loop.run_until_complete(stop_tasks(loop))
-        loop.close()
+
+    def take_snapshot(prev=None, limit=10):
+        res = tracemalloc.take_snapshot()
+        res = res.filter_traces([
+            tracemalloc.Filter(False, tracemalloc.__file__),
+        ])
+        if prev is None:
+            return res
+        st = res.compare_to(prev, 'lineno')
+        print('========================================================================')
+        for stat in st[:limit]:
+            print(stat)
+        return res
+
+    with aiomonitor.start_monitor(loop=loop) as monitor:
+        monitor.console_locals["take_snapshot"] = take_snapshot
+        loop.create_task(serve())
+        try:
+            loop.run_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            loop.run_until_complete(stop_tasks(loop))
+            loop.close()
 
 
 if __name__ == '__main__':
