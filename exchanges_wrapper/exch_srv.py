@@ -3,7 +3,9 @@
 
 import tracemalloc
 tracemalloc.start()
-import aiomonitor
+import os
+import linecache
+
 
 from exchanges_wrapper import __version__
 import time
@@ -27,7 +29,7 @@ from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent
 from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
 #
 HEARTBEAT = 1  # Sec
-MAX_QUEUE_SIZE = 50
+MAX_QUEUE_SIZE = 500
 #
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
@@ -906,32 +908,101 @@ async def stop_tasks(loop):
             task.cancel()
 
 
+async def check_mem():
+    display_top()
+    sn = take_snapshot()
+    while True:
+        await asyncio.sleep(60 * 60)
+        # await asyncio.sleep(30)
+        display_top()
+        sn = take_snapshot(sn)
+
+
+def display_top(key_type='lineno', limit=5, where=''):
+    """
+    Display the top memory usage statistics for the current program execution.
+    https://stackoverflow.com/questions/67998472/memory-leak-in-python-when-defining-dictionaries-in-functions
+    Parameters:
+        key_type (str): The type of key to use for sorting the statistics.
+            Defaults to 'lineno'.
+        limit (int): The number of top lines to display. Defaults to 5.
+        where (str): Additional information to include in the output.
+            Defaults to an empty string.
+
+    Returns:
+        None
+
+    This function takes a snapshot of the current memory usage using the tracemalloc module,
+    filters out irrelevant traces, and calculates the top memory usage statistics based on
+    the specified key_type. It then logs the top lines and their corresponding file locations,
+    as well as any additional information provided in the `where` parameter. Finally, it
+    logs the total allocated size of the program.
+
+    Note: This function assumes that the `tracemalloc`, `logger`, `os`, and `linecache`
+    modules have already been imported.
+
+    """
+    snapshot = tracemalloc.take_snapshot()
+    logger.info('======================================================================')
+    if where != '':
+        logger.info(f'Printing stats: {where}')
+        logger.info('======================================================================')
+
+    snapshot = snapshot.filter_traces((
+        tracemalloc.Filter(False, '<frozen importlib._bootstrap>'),
+        tracemalloc.Filter(False, '<frozen importlib._bootstrap_external>'),
+        tracemalloc.Filter(False, '<unknown>'),
+        tracemalloc.Filter(False, tracemalloc.__file__),
+    ))
+    top_stats = snapshot.statistics(key_type)
+
+    logger.info(f'Top {limit} lines')
+    for index, stat in enumerate(top_stats[:limit], 1):
+        frame = stat.traceback[0]
+        filename = os.sep.join(frame.filename.split(os.sep)[-2:])
+        logger.info(f'#{index}: {filename}:{frame.lineno}: {stat.size / 1024:.1f} KiB')
+        line = linecache.getline(frame.filename, frame.lineno).strip()
+        if line:
+            logger.info(f'    {line}')
+
+    other = top_stats[limit:]
+    if other:
+        size = sum(stat.size for stat in other)
+        logger.info(f'{len(other)} other: {size / 1024:.1f} KiB')
+    total = sum(stat.size for stat in top_stats)
+    logger.info("")
+    logger.info(f'=====> Total allocated size: {total / 1024:.1f} KiB')
+    logger.info("")
+
+
+def take_snapshot(prev=None, limit=10):
+    res = tracemalloc.take_snapshot()
+    res = res.filter_traces([
+        tracemalloc.Filter(False, '<frozen importlib._bootstrap>'),
+        tracemalloc.Filter(False, '<frozen importlib._bootstrap_external>'),
+        tracemalloc.Filter(False, '<unknown>'),
+        tracemalloc.Filter(False, tracemalloc.__file__),
+    ])
+    if prev is None:
+        return res
+    st = res.compare_to(prev, 'lineno')
+    logger.info('========================================================================')
+    for stat in st[:limit]:
+        logger.info(stat)
+    return res
+
+
 def main():
     loop = asyncio.new_event_loop()
-
-    def take_snapshot(prev=None, limit=10):
-        res = tracemalloc.take_snapshot()
-        res = res.filter_traces([
-            tracemalloc.Filter(False, tracemalloc.__file__),
-        ])
-        if prev is None:
-            return res
-        st = res.compare_to(prev, 'lineno')
-        print('========================================================================')
-        for stat in st[:limit]:
-            print(stat)
-        return res
-
-    with aiomonitor.start_monitor(loop=loop) as monitor:
-        monitor.console_locals["take_snapshot"] = take_snapshot
-        loop.create_task(serve())
-        try:
-            loop.run_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            loop.run_until_complete(stop_tasks(loop))
-            loop.close()
+    loop.create_task(serve())
+    loop.create_task(check_mem())
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.run_until_complete(stop_tasks(loop))
+        loop.close()
 
 
 if __name__ == '__main__':
