@@ -1,3 +1,7 @@
+## v1.3.6 2023-08-24
+### Update
+* Some minor improvements
+
 ## v1.3.6b7 2023-08-20
 ### Fix
 * The `exch_srv_cfg.toml` wants to be updated from `exch_srv_cfg.toml.template`:
@@ -252,7 +256,7 @@ of a connection
 
 ## v1.2.4 2022-08-27
 ### Fixed
-* [Incomplete account setup](DogsTailFarmer/martin-binance#17)
+* [Incomplete account setup](https://github.com/DogsTailFarmer/martin-binance#17)
 * 1.2.3-2 Fix wss market handler, was stopped after get int type message instead of dict
 * 1.2.3-5 clear console output
 * 1.2.3-6 Bitfinex WSServerHandshakeError handling
