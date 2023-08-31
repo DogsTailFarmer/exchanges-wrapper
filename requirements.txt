@@ -1,4 +1,4 @@
-crypto-ws-api~=2.0.1b5
+crypto-ws-api==2.0.1
 grpcio==1.57.0
 grpcio-tools==1.57.0
 idna==3.4

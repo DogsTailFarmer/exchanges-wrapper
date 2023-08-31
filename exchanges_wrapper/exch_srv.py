@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import tracemalloc
-tracemalloc.start()
+# tracemalloc.start()
 import os
 import linecache
-
+import guppy
+import psutil
 
 from exchanges_wrapper import __version__
 import time
@@ -909,13 +910,31 @@ async def stop_tasks(loop):
 
 
 async def check_mem():
-    display_top()
-    sn = take_snapshot()
+    # display_top()
+    # sn = take_snapshot()
     while True:
-        await asyncio.sleep(60 * 60)
+        heap()
+        pstats()
+        await asyncio.sleep(60 * 5)
         # await asyncio.sleep(30)
-        display_top()
-        sn = take_snapshot(sn)
+        # display_top()
+        # sn = take_snapshot(sn)
+
+
+def pstats():
+    process = psutil.Process(os.getpid())
+    logger.info(
+        {"rss": f"{process.memory_info().rss / 1024 ** 2:.2f} MiB",
+         "vms": f"{process.memory_info().vms / 1024 ** 2:.2f} MiB",
+         "shared": f"{process.memory_info().shared / 1024 ** 2:.2f} MiB",
+         "open file descriptors": process.num_fds(),
+         "threads": process.num_threads()}
+    )
+
+
+def heap():
+    h = guppy.hpy()
+    logger.info(str(h.heap()))
 
 
 def display_top(key_type='lineno', limit=5, where=''):
@@ -995,7 +1014,7 @@ def take_snapshot(prev=None, limit=10):
 def main():
     loop = asyncio.new_event_loop()
     loop.create_task(serve())
-    loop.create_task(check_mem())
+    # loop.create_task(check_mem())
     try:
         loop.run_forever()
     except KeyboardInterrupt:
