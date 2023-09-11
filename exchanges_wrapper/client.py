@@ -1,6 +1,6 @@
 import aiohttp
 from enum import Enum
-from typing import Union
+from typing import Union, Dict, Any
 import decimal
 import math
 import asyncio
@@ -26,7 +26,7 @@ from crypto_ws_api.ws_session import UserWSSession
 
 logger = logging.getLogger(__name__)
 
-STATUS_TIMEOUT = 5  # sec
+STATUS_TIMEOUT = 5  # sec, also use for lifetime limit for inactive order (Bitfinex) as 60 * STATUS_TIMEOUT
 
 
 def truncate(f, n):
@@ -201,11 +201,10 @@ class Client:
         return f"{symbol_info.get('baseAsset')}-{symbol_info.get('quoteAsset')}"
 
     def active_orders_clear(self, active_orders: list = None):
-        limit_time = int(time.time())
-        self.active_orders = {key: val for key, val in self.active_orders.items()
-                              if not val['filledTime'] or val['filledTime'] > limit_time}
-        for order_id in set(self.active_orders.keys()).difference(set(active_orders)):
-            self.active_orders[order_id]['filledTime'] = limit_time + 60 * 30
+        ts = int(time.time())
+        self.active_orders = {key: val for key, val in self.active_orders.items() if val['lifeTime'] > ts}
+        for order_id in active_orders:
+            self.active_orders[order_id]['lifeTime'] = ts + 60 * STATUS_TIMEOUT
 
     def refine_amount(self, symbol, amount: Union[str, decimal.Decimal], quote=False):
         if type(amount) is str:  # to save time for developers
@@ -726,16 +725,13 @@ class Client:
                 ahead_ws = self.wss_buffer.pop(order_id, [])
                 logger.debug(f"create_order.ahead_ws: {ahead_ws}")
                 binance_res = bfx.order(res[4][0], response_type=False, wss_te=ahead_ws)
-                self.active_orders.update(
-                    {order_id:
-                        {'filledTime': int(),
-                         'origQty': quantity,
-                         'executedQty': "0",
-                         'lastEvent': (),
-                         'cancelled': False
-                         }
-                     }
-                )
+                self.active_orders[order_id] = {
+                    'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
+                    'origQty': quantity,
+                    'executedQty': "0",
+                    'lastEvent': (),
+                    'cancelled': False
+                }
         elif self.exchange == 'huobi':
             params = {
                 'account-id': str(self.hbp_account_id),

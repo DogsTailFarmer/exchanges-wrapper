@@ -1,3 +1,6 @@
+* Bitfinex: Refine handling of active orders
+* OnOrderBookUpdate: change queue to LifoQueue, get last actual order book row
+
 ## v1.3.6b7 2023-08-20
 ### Fix
 * The `exch_srv_cfg.toml` wants to be updated from `exch_srv_cfg.toml.template`:

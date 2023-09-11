@@ -33,6 +33,7 @@ class EventsDataStream:
         try:
             await self.start_wss()
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
+            await self.stop()
             self.try_count += 1
             delay = random.randint(2, 10) * self.try_count
             logger.error(f"WSS start({self.exchange}): {ex}, restart try count: {self.try_count}, delay: {delay}s")
@@ -50,6 +51,7 @@ class EventsDataStream:
         Stop data stream
         """
         if self.web_socket:
+            logger.info(f"Web socket closed for {self.exchange}:{self.trade_id}")
             await self.web_socket.close()
 
     async def upstream_bitfinex(self, request, symbol=None, ch_type=str()):
@@ -217,7 +219,7 @@ class MarketEventsDataStream(EventsDataStream):
                     request = {'event': 'subscribe', 'channel': 'candles', 'key': f"trade:{tf}:{symbol}"}
                 elif ch_type == 'depth5':
                     ch_type = 'book'
-                    request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', }
+                    request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', "freq": "F0"}
                 await self.upstream_bitfinex(request, symbol, ch_type)
             elif self.exchange == 'huobi':
                 self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=20, autoping=False)

@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import tracemalloc
-# tracemalloc.start()
-import os
-import linecache
-import guppy
-import psutil
+from pympler import asizeof
 
 from exchanges_wrapper import __version__
 import time
@@ -24,13 +19,13 @@ import grpc
 from google.protobuf import json_format
 #
 from exchanges_wrapper import events, errors, api_pb2, api_pb2_grpc
-from exchanges_wrapper.client import Client
+from exchanges_wrapper.client import Client, STATUS_TIMEOUT
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent
 from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
 #
 HEARTBEAT = 1  # Sec
-MAX_QUEUE_SIZE = 500
+MAX_QUEUE_SIZE = 100
 #
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
@@ -167,6 +162,9 @@ class Martin(api_pb2_grpc.MartinServicer):
                     else:
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
+
+                # asyncio.create_task(self.check_mem(open_client))
+
             except UserWarning as ex:
                 _context.set_details(f"{ex}")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
@@ -264,16 +262,16 @@ class Martin(api_pb2_grpc.MartinServicer):
                 # logger.debug(f"FetchOpenOrders.new_order: {new_order}")
                 response.items.append(new_order)
                 if client.exchange == 'bitfinex':
-                    client.active_orders.update(
-                        {order['orderId']:
-                            {'filledTime': int(),
-                             'origQty': order['origQty'],
-                             'executedQty': order['executedQty'],
-                             'lastEvent': (),
-                             'cancelled': False
-                             }
-                         }
-                    )
+                    if order['orderId'] in client.active_orders.keys():
+                        client.active_orders[order['orderId']] |= {'executedQty': order['executedQty']}
+                    else:
+                        client.active_orders[order['orderId']] = {
+                            'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
+                            'origQty': order['origQty'],
+                            'executedQty': order['executedQty'],
+                            'lastEvent': (),
+                            'cancelled': False
+                        }
             if client.exchange == 'bitfinex':
                 client.active_orders_clear(active_orders)
         response.rate_limiter = Martin.rate_limiter
@@ -526,6 +524,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 event_handler, _queue, client, request.trade_id, _event_type),
                 _event_type, exchange, request.trade_id)
         while True:
+            response.Clear()
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
@@ -550,6 +549,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                           ]
                 response.candle = json.dumps(candle)
                 yield response
+                _queue.task_done()
 
     async def FetchAccountTradeList(self, request: api_pb2.AccountTradeListRequest,
                                     _context: grpc.aio.ServicerContext) -> api_pb2.AccountTradeListResponse:
@@ -594,6 +594,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         client.events.register_event(functools.partial(event_handler, _queue, client, request.trade_id, _event_type),
                                      _event_type, client.exchange, request.trade_id)
         while True:
+            response.Clear()
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
@@ -607,13 +608,14 @@ class Martin(api_pb2_grpc.MartinServicer):
                               'event_time': _event.event_time}
                 json_format.ParseDict(ticker_24h, response)
                 yield response
+                _queue.task_done()
 
     async def OnOrderBookUpdate(self, request: api_pb2.MarketRequest,
                                 _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
         response = api_pb2.FetchOrderBookResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        _queue = asyncio.Queue(MAX_QUEUE_SIZE * 2)
+        _queue = asyncio.LifoQueue()
         client.stream_queue[request.trade_id] |= {_queue}
         if client.exchange == 'okx':
             _symbol = client.symbol_to_okx(request.symbol)
@@ -625,19 +627,21 @@ class Martin(api_pb2_grpc.MartinServicer):
         client.events.register_event(functools.partial(event_handler, _queue, client, request.trade_id, _event_type),
                                      _event_type, client.exchange, request.trade_id)
         while True:
+            response.Clear()
             _event = await _queue.get()
+            while not _queue.empty():
+                _queue.get_nowait()
+                _queue.task_done()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnOrderBookUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
-                response.Clear()
                 response.lastUpdateId = _event.last_update_id
-                for bid in _event.bids:
-                    response.bids.append(json.dumps(bid))
-                for ask in _event.asks:
-                    response.asks.append(json.dumps(ask))
+                [response.bids.append(json.dumps(bid)) for bid in _event.bids]
+                [response.asks.append(json.dumps(ask)) for ask in _event.asks]
                 yield response
+                _queue.task_done()
 
     async def OnFundsUpdate(self, request: api_pb2.OnFundsUpdateRequest,
                             _context: grpc.aio.ServicerContext) -> api_pb2.OnFundsUpdateResponse:
@@ -650,6 +654,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             event_handler, _queue, client, request.trade_id, 'outboundAccountPosition'),
             'outboundAccountPosition')
         while True:
+            response.Clear()
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
@@ -659,6 +664,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 # logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
                 response.funds = json.dumps(_event.balances)
                 yield response
+                _queue.task_done()
 
     async def OnBalanceUpdate(self, request: api_pb2.MarketRequest,
                               _context: grpc.aio.ServicerContext) -> api_pb2.OnBalanceUpdateResponse:
@@ -671,10 +677,13 @@ class Martin(api_pb2_grpc.MartinServicer):
             client.events.register_user_event(functools.partial(
                 event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
         while True:
+            response.Clear()
             try:
                 _event = await asyncio.wait_for(_queue.get(), timeout=HEARTBEAT * 10)
+                _get_event_from_queue = True
             except asyncio.TimeoutError:
                 _event = None
+                _get_event_from_queue = False
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}:{request.symbol}")
@@ -699,6 +708,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                     }
                     response.balance = json.dumps(balance)
                     yield response
+                    if _get_event_from_queue:
+                        _queue.task_done()
 
     async def OnOrderUpdate(self, request: api_pb2.MarketRequest,
                             _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
@@ -712,6 +723,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             event_handler, _queue, client, request.trade_id, 'executionReport'),
             'executionReport')
         while True:
+            response.Clear()
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
@@ -724,6 +736,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 response.success = True
                 response.result = json.dumps(str(event))
                 yield response
+                _queue.task_done()
 
     async def CreateLimitOrder(self, request: api_pb2.CreateLimitOrderRequest,
                                _context: grpc.aio.ServicerContext) -> api_pb2.CreateLimitOrderResponse:
@@ -839,6 +852,26 @@ class Martin(api_pb2_grpc.MartinServicer):
         response.success = True
         return response
 
+    async def check_mem(self, _open_client: OpenClient):
+        while True:
+            print(f"======================={_open_client.name}===========================")
+            client = _open_client.client
+
+
+
+            '''
+            print(f"session: {asizeof.asizeof(client.session)}")
+            print(f"user_wss_session: {asizeof.asizeof(client.user_wss_session)}")
+            print(f"http: {asizeof.asizeof(client.http)}")
+            print(f"symbols: {asizeof.asizeof(client.symbols)}")
+            print(f"data_streams: {asizeof.asizeof(client.data_streams)}")
+            print(f"active_orders: {asizeof.asizeof(client.active_orders)}")
+            print(f"wss_buffer: {asizeof.asizeof(client.wss_buffer)}")
+            print(f"stream_queue: {asizeof.asizeof(client.stream_queue)}")
+            print(f"on_order_update_queues: {asizeof.asizeof(client.on_order_update_queues)}")
+            '''
+            await asyncio.sleep(60 * 5)
+
     async def StopStream(self, request: api_pb2.MarketRequest,
                          _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         response = api_pb2.SimpleResponse()
@@ -874,9 +907,8 @@ async def stop_stream(client, trade_id):
 
 
 async def event_handler(_queue, client, trade_id, _event_type, event):
-    _event = weakref.ref(event)
     try:
-        _queue.put_nowait(_event())
+        _queue.put_nowait(weakref.ref(event)())
     except asyncio.QueueFull:
         logger.warning(f"For {_event_type} asyncio queue full and wold be closed")
         client.stream_queue.get(trade_id, set()).discard(_queue)
@@ -909,112 +941,9 @@ async def stop_tasks(loop):
             task.cancel()
 
 
-async def check_mem():
-    # display_top()
-    # sn = take_snapshot()
-    while True:
-        heap()
-        pstats()
-        await asyncio.sleep(60 * 5)
-        # await asyncio.sleep(30)
-        # display_top()
-        # sn = take_snapshot(sn)
-
-
-def pstats():
-    process = psutil.Process(os.getpid())
-    logger.info(
-        {"rss": f"{process.memory_info().rss / 1024 ** 2:.2f} MiB",
-         "vms": f"{process.memory_info().vms / 1024 ** 2:.2f} MiB",
-         "shared": f"{process.memory_info().shared / 1024 ** 2:.2f} MiB",
-         "open file descriptors": process.num_fds(),
-         "threads": process.num_threads()}
-    )
-
-
-def heap():
-    h = guppy.hpy()
-    logger.info(str(h.heap()))
-
-
-def display_top(key_type='lineno', limit=5, where=''):
-    """
-    Display the top memory usage statistics for the current program execution.
-    https://stackoverflow.com/questions/67998472/memory-leak-in-python-when-defining-dictionaries-in-functions
-    Parameters:
-        key_type (str): The type of key to use for sorting the statistics.
-            Defaults to 'lineno'.
-        limit (int): The number of top lines to display. Defaults to 5.
-        where (str): Additional information to include in the output.
-            Defaults to an empty string.
-
-    Returns:
-        None
-
-    This function takes a snapshot of the current memory usage using the tracemalloc module,
-    filters out irrelevant traces, and calculates the top memory usage statistics based on
-    the specified key_type. It then logs the top lines and their corresponding file locations,
-    as well as any additional information provided in the `where` parameter. Finally, it
-    logs the total allocated size of the program.
-
-    Note: This function assumes that the `tracemalloc`, `logger`, `os`, and `linecache`
-    modules have already been imported.
-
-    """
-    snapshot = tracemalloc.take_snapshot()
-    logger.info('======================================================================')
-    if where != '':
-        logger.info(f'Printing stats: {where}')
-        logger.info('======================================================================')
-
-    snapshot = snapshot.filter_traces((
-        tracemalloc.Filter(False, '<frozen importlib._bootstrap>'),
-        tracemalloc.Filter(False, '<frozen importlib._bootstrap_external>'),
-        tracemalloc.Filter(False, '<unknown>'),
-        tracemalloc.Filter(False, tracemalloc.__file__),
-    ))
-    top_stats = snapshot.statistics(key_type)
-
-    logger.info(f'Top {limit} lines')
-    for index, stat in enumerate(top_stats[:limit], 1):
-        frame = stat.traceback[0]
-        filename = os.sep.join(frame.filename.split(os.sep)[-2:])
-        logger.info(f'#{index}: {filename}:{frame.lineno}: {stat.size / 1024:.1f} KiB')
-        line = linecache.getline(frame.filename, frame.lineno).strip()
-        if line:
-            logger.info(f'    {line}')
-
-    other = top_stats[limit:]
-    if other:
-        size = sum(stat.size for stat in other)
-        logger.info(f'{len(other)} other: {size / 1024:.1f} KiB')
-    total = sum(stat.size for stat in top_stats)
-    logger.info("")
-    logger.info(f'=====> Total allocated size: {total / 1024:.1f} KiB')
-    logger.info("")
-
-
-def take_snapshot(prev=None, limit=10):
-    res = tracemalloc.take_snapshot()
-    res = res.filter_traces([
-        tracemalloc.Filter(False, '<frozen importlib._bootstrap>'),
-        tracemalloc.Filter(False, '<frozen importlib._bootstrap_external>'),
-        tracemalloc.Filter(False, '<unknown>'),
-        tracemalloc.Filter(False, tracemalloc.__file__),
-    ])
-    if prev is None:
-        return res
-    st = res.compare_to(prev, 'lineno')
-    logger.info('========================================================================')
-    for stat in st[:limit]:
-        logger.info(stat)
-    return res
-
-
 def main():
     loop = asyncio.new_event_loop()
     loop.create_task(serve())
-    # loop.create_task(check_mem())
     try:
         loop.run_forever()
     except KeyboardInterrupt:
