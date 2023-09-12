@@ -1,3 +1,4 @@
+* Bitfinex: Implemented rate limit control for the Bitfinex exchange API.
 * Bitfinex: Refine handling of active orders
 * OnOrderBookUpdate: change queue to LifoQueue, get last actual order book row
 

@@ -1,5 +1,11 @@
 from decimal import Decimal
 
+REST_RATE_LIMIT_INTERVAL = {
+    "bitfinex": {
+        "default": 0.6667,  # 90 requests per minute
+    },
+}
+
 
 class OrderUpdateEvent:
     def __init__(self, event_data: {}):
