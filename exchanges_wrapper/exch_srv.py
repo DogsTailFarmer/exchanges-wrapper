@@ -895,9 +895,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         while True:
             print(f"======================={_open_client.name}===========================")
             client = _open_client.client
-
-
-
             '''
             print(f"session: {asizeof.asizeof(client.session)}")
             print(f"user_wss_session: {asizeof.asizeof(client.user_wss_session)}")

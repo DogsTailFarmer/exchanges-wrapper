@@ -166,10 +166,7 @@ class Client:
                 else:
                     _endpoint = self.endpoint_ws_public
                 #
-                market_data_stream = MarketEventsDataStream(self,
-                                                            _endpoint,
-                                                            self.exchange, _trade_id,
-                                                            channel)
+                market_data_stream = MarketEventsDataStream(self, _endpoint, self.exchange, _trade_id, channel)
                 self.data_streams[_trade_id] |= {market_data_stream}
                 start_list.append(market_data_stream.start())
         await asyncio.gather(*start_list, return_exceptions=True)
