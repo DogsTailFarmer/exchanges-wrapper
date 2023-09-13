@@ -98,7 +98,6 @@ class Client:
         self.hbp_main_account_id = None
         self.hbp_main_uid = None
         self.ledgers_id = []
-        self.ts_rlc = time.time()  # RateLimitControl
 
     async def load(self):
         infos = await self.fetch_exchange_info()
