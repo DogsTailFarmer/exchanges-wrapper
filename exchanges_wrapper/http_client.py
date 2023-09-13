@@ -1,3 +1,4 @@
+import asyncio
 import json
 from urllib.parse import urlencode, urlparse
 
@@ -30,6 +31,7 @@ class HttpClient:
         self.sub_account = kwargs.get('sub_account')
         self.test_net = kwargs.get('test_net')
         self.rate_limit_reached = False
+        self.rest_cycle_busy = None
 
     async def handle_errors(self, response):
         if response.status >= 500:
@@ -130,6 +132,12 @@ class ClientBFX(HttpClient):
             url += f"?{urlencode(kwargs, safe='/')}"
         if bfx_post and "params" in kwargs:
             query_kwargs['data'] = _params
+
+        # To avoid breaking the correct sequence Nonce value
+        while self.rest_cycle_busy:
+            await asyncio.sleep(0.01)
+        self.rest_cycle_busy = True
+
         if signed:
             ts = int(time.time() * 1000)
             query_kwargs["headers"]["Content-Type"] = AJ
@@ -144,9 +152,11 @@ class ClientBFX(HttpClient):
                                                                           self.api_secret,
                                                                           signature_payload)
             query_kwargs["headers"]["bfx-nonce"] = str(ts)
+
         # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
         async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
             # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
+            self.rest_cycle_busy = False
             return await self.handle_errors(response)
 
 

@@ -1,4 +1,5 @@
-* Bitfinex: Implemented rate limit control for the Bitfinex exchange API.
+* Bitfinex: fix 500 `Internal server error`, caused by a Nonce value sequence failure
+* Bitfinex: Implemented rate limit control for the Bitfinex REST API.
 * Bitfinex: Refine handling of active orders
 * OnOrderBookUpdate: change queue to LifoQueue, get last actual order book row
 

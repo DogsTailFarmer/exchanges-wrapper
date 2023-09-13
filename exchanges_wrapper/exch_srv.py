@@ -347,7 +347,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         response = api_pb2.SimpleResponse()
-        await self.rate_limit_control(open_client)
         try:
             res = await client.cancel_all_orders(request.trade_id, request.symbol)
             # logger.info(f"CancelAllOrders: {res}")
@@ -359,7 +358,6 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            open_client.ts_rlc = time.time()
             response.success = True
             response.result = json.dumps(str(res))
         return response
@@ -726,11 +724,13 @@ class Martin(api_pb2_grpc.MartinServicer):
                 logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}:{request.symbol}")
                 return
             if client.exchange in ('bitfinex', 'huobi'):
+                await self.rate_limit_control(open_client)
                 try:
                     balance = await client.fetch_ledgers(request.symbol)
                 except Exception as _ex:
                     logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
                 else:
+                    open_client.ts_rlc = time.time()
                     if balance:
                         _event = client.events.wrap_event(balance)
             if isinstance(_event, events.BalanceUpdateWrapper):
@@ -781,7 +781,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         # logger.info(f"CreateLimitOrder: quantity: {request.quantity}, price: {request.price}")
-        await self.rate_limit_control(open_client)
         try:
             res = await client.create_order(
                 request.trade_id,
@@ -815,7 +814,6 @@ class Martin(api_pb2_grpc.MartinServicer):
                                                origin_client_order_id=request.new_client_order_id,
                                                receive_window=None,
                                                response_type=False)
-            open_client.ts_rlc = time.time()
             json_format.ParseDict(res, response)
             logger.debug(f"CreateLimitOrder: created: {res.get('orderId')}")
         return response
@@ -825,7 +823,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.CancelOrderResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        await self.rate_limit_control(open_client)
         try:
             res = await client.cancel_order(
                 request.trade_id,
@@ -846,7 +843,6 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            open_client.ts_rlc = time.time()
             json_format.ParseDict(res, response)
         return response
 
