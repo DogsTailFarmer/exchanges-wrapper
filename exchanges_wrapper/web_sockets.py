@@ -23,7 +23,6 @@ sys.tracebacklimit = 0
 class EventsDataStream:
     def __init__(self, client, endpoint, exchange, trade_id):
         self.client = client
-        self.session = client.session
         self.endpoint = endpoint
         self.exchange = exchange
         self.trade_id = trade_id
@@ -48,7 +47,6 @@ class EventsDataStream:
             except Exception as ex:
                 logger.error(f"WSS start() other exception: {ex}")
                 # logger.debug(traceback.format_exc())
-                print(traceback.format_exc())
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass

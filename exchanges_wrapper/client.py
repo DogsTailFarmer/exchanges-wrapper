@@ -1,6 +1,6 @@
 import aiohttp
 from enum import Enum
-from typing import Union, Dict, Any
+from typing import Union
 import decimal
 import math
 import asyncio
@@ -64,7 +64,6 @@ class Client:
         }
         if self.exchange in ('binance', 'okx', 'bitfinex'):
             self.user_wss_session = UserWSSession(
-                self.session,
                 self.exchange,
                 self.endpoint_ws_api,
                 self.api_key,

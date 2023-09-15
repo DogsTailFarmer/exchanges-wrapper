@@ -12,7 +12,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "1.3.6-1.dev7"
+__version__ = "1.3.6-1.dev8"
 
 from pathlib import Path
 import shutil

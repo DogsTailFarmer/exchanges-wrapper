@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-from pympler import asizeof
-
 from exchanges_wrapper import __version__
 import time
 import weakref
@@ -171,9 +168,6 @@ class Martin(api_pb2_grpc.MartinServicer):
                     else:
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
-
-                # asyncio.create_task(self.check_mem(open_client))
-
             except UserWarning as ex:
                 _context.set_details(f"{ex}")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
@@ -890,23 +884,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         asyncio.create_task(client.start_user_events_listener(request.trade_id, request.symbol))
         response.success = True
         return response
-
-    async def check_mem(self, _open_client: OpenClient):
-        while True:
-            print(f"======================={_open_client.name}===========================")
-            client = _open_client.client
-            '''
-            print(f"session: {asizeof.asizeof(client.session)}")
-            print(f"user_wss_session: {asizeof.asizeof(client.user_wss_session)}")
-            print(f"http: {asizeof.asizeof(client.http)}")
-            print(f"symbols: {asizeof.asizeof(client.symbols)}")
-            print(f"data_streams: {asizeof.asizeof(client.data_streams)}")
-            print(f"active_orders: {asizeof.asizeof(client.active_orders)}")
-            print(f"wss_buffer: {asizeof.asizeof(client.wss_buffer)}")
-            print(f"stream_queue: {asizeof.asizeof(client.stream_queue)}")
-            print(f"on_order_update_queues: {asizeof.asizeof(client.on_order_update_queues)}")
-            '''
-            await asyncio.sleep(60 * 5)
 
     async def StopStream(self, request: api_pb2.MarketRequest,
                          _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
