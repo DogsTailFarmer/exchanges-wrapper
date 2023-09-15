@@ -1,7 +1,6 @@
-import aiohttp
+import sys
 import asyncio
 import json
-import random
 import logging
 import time
 from decimal import Decimal
@@ -9,7 +8,6 @@ import traceback
 import gzip
 from datetime import datetime
 from urllib.parse import urlencode, urlparse
-
 import websockets.client
 
 import exchanges_wrapper.bitfinex_parser as bfx
@@ -17,7 +15,9 @@ import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
 from crypto_ws_api.ws_session import generate_signature
 
-logger = logging.getLogger('exch_srv_logger')
+logger_ws = logger = logging.getLogger('exch_srv_logger')
+logger_ws.level = logging.INFO
+sys.tracebacklimit = 0
 
 
 class EventsDataStream:
@@ -30,16 +30,21 @@ class EventsDataStream:
         self.websocket = None
         self.try_count = 0
         self.wss_event_buffer = {}
-        self.order_book = None
+        self._order_book = None
+        self._price = None
 
     async def start(self):
-        async for ws in websockets.client.connect(self.endpoint):
+        async for ws in websockets.client.connect(self.endpoint, logger=logger_ws):
             self.websocket = ws
             try:
                 await self.start_wss()
-            except websockets.ConnectionClosed:
-                logger.warning("WSS start() ConnectionClosed")
-                continue
+            except websockets.ConnectionClosed as ex:
+                if ex.code == 4000:
+                    logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")
+                    break
+                else:
+                    logger.warning(f"Restart WSS for {self.exchange}")
+                    continue
             except Exception as ex:
                 logger.error(f"WSS start() other exception: {ex}")
                 # logger.debug(traceback.format_exc())
@@ -53,32 +58,13 @@ class EventsDataStream:
         Stop data stream
         """
         if self.websocket:
-            await self.websocket.close()
-            logger.info(f"Web socket closed for {self.exchange}:{self.trade_id}")
-
-    async def upstream_bitfinex(self, request, symbol=None, ch_type=str()):
-        await self.websocket.send(json.dumps(request))
-        msg = json.loads(await self.websocket.recv())
-        if msg.get('event') == 'info':
-            if msg.get('version') != 2:
-                logger.critical('Change WSS version detected')
-            if msg.get('platform') and msg.get('platform').get('status'):
-                logger.debug(f"BfxPrivateEventsDataStream.msg: {msg}")
-                async for msg_data in self.websocket:
-                    await self._handle_messages(msg_data, symbol, ch_type)
-            else:
-                logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
-                await asyncio.sleep(60)
-                raise websockets.ConnectionClosed
+            await self.websocket.close(code=4000)
 
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
 
     async def _handle_messages(self, msg, symbol=None, ch_type=str()):
-        price = None
-
         msg_data = json.loads(msg if isinstance(msg, str) else gzip.decompress(msg))
-
         if self.exchange == 'binance':
             await self._handle_event(msg_data)
         elif self.exchange == 'okx':
@@ -92,13 +78,20 @@ class EventsDataStream:
                 return
             elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
                 logger.info(f"WSS handle messages: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-                raise aiohttp.ClientOSError(f"Reconnecting OKX user {ch_type} channel")
+                raise websockets.ConnectionClosed(f"Reconnecting OKX user {ch_type} channel")
             else:
                 logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'bitfinex':
             # info and error handling
             if isinstance(msg_data, dict):
-                if msg_data.get('event') == 'subscribed':
+                if msg_data.get('event') == 'info':
+                    if msg_data.get('version') != 2:
+                        logger.critical('Change WSS version detected')
+                    if msg_data.get('platform') and msg_data.get('platform').get('status') != 1:
+                        logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
+                        await asyncio.sleep(60)
+                        raise websockets.ConnectionClosed
+                elif msg_data.get('event') == 'subscribed':
                     chan_id = msg_data.get('chanId')
                     logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
                 elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
@@ -125,14 +118,14 @@ class EventsDataStream:
                 pass  # heartbeat message
             elif isinstance(msg_data, list):
                 if ch_type == 'book' and isinstance(msg_data[1][-1], list):
-                    self.order_book = bfx.OrderBook(msg_data[1], symbol)
+                    self._order_book = bfx.OrderBook(msg_data[1], symbol)
                 else:
-                    await self._handle_event(msg_data, symbol, ch_type, self.order_book)
+                    await self._handle_event(msg_data, symbol, ch_type, self._order_book)
             else:
                 logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'huobi':
             if msg_data.get('ping'):
-                await self.websocket.send_json({"pong": msg_data.get('ping')})
+                await self.websocket.send(json.dumps({"pong": msg_data.get('ping')}))
             elif msg_data.get('action') == 'ping':
                 pong = {
                     "action": "pong",
@@ -140,12 +133,12 @@ class EventsDataStream:
                           "ts": msg_data.get('data').get('ts')
                     }
                 }
-                await self.websocket.send_json(pong)
+                await self.websocket.send(json.dumps(pong))
             elif msg_data.get('tick') or msg_data.get('data'):
                 if ch_type == 'ticker':
                     _price = msg_data.get('tick', {}).get('lastPrice', None)
-                    if price != _price:
-                        price = _price
+                    if self._price != _price:
+                        self._price = _price
                         await self._handle_event(msg_data, symbol, ch_type)
                 else:
                     await self._handle_event(msg_data, symbol, ch_type)
@@ -154,33 +147,37 @@ class EventsDataStream:
             elif (msg_data.get('action') == 'sub' and
                   msg_data.get('code') == 500 and
                   msg_data.get('message') == '系统异常:'):
-                raise aiohttp.ClientOSError(f"Reconnecting Huobi user {ch_type} channel")
+                raise websockets.ConnectionClosed(f"Reconnecting Huobi user {ch_type} channel")
             else:
                 logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
+    async def ws_listener(self, request=None, symbol=None, ch_type=str()):
+        if request:
+            await self.websocket.send(json.dumps(request))
+        async for msg_data in self.websocket:
+            await self._handle_messages(msg_data, symbol, ch_type)
+
 
 class MarketEventsDataStream(EventsDataStream):
-
     def __init__(self, client, endpoint, exchange, trade_id, channel=None):
         super().__init__(client, endpoint, exchange, trade_id)
         self.channel = channel
         self.candles_max_time = None
+        if self.exchange == 'binance':
+            registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
+            combined_streams = "/".join(registered_streams)
+            self.endpoint = f"{endpoint}/stream?streams={combined_streams}"
 
     async def start_wss(self):
         logger.info(f"Start market WSS {self.channel or ''} for {self.exchange}")
-        registered_streams = self.client.events.registered_streams.get(self.exchange, {}).get(self.trade_id, set())
-        if self.exchange == 'binance':
-            combined_streams = "/".join(registered_streams)
-            self.web_socket = await self.session.ws_connect(f"{self.endpoint}/stream?streams={combined_streams}",
-                                                            receive_timeout=100)
-            logger.info(f"Combined events stream started: {combined_streams}")
-            await self._handle_messages(self.web_socket)
-        else:
+        symbol = None
+        ch_type = str()
+        request = {}
+
+        if self.exchange != 'binance':
             symbol = self.channel.split('@')[0]
             ch_type = self.channel.split('@')[1]
-            request = {}
             if self.exchange == 'okx':
-                self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=25)
                 if ch_type == 'miniTicker':
                     _ch_type = 'tickers'
                 elif 'kline_' in ch_type:
@@ -190,15 +187,12 @@ class MarketEventsDataStream(EventsDataStream):
                     _ch_type = 'books5'
                 else:
                     _ch_type = None
-
                 request = {"op": 'subscribe',
                            "args": [{"channel": _ch_type,
                                      "instType": 'SPOT',
                                      "instId": symbol}
                                     ]
                            }
-                await self.web_socket.send_json(request)
-                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
             elif self.exchange == 'bitfinex':
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
@@ -210,9 +204,7 @@ class MarketEventsDataStream(EventsDataStream):
                 elif ch_type == 'depth5':
                     ch_type = 'book'
                     request = {'event': 'subscribe', 'channel': ch_type, 'symbol': symbol, 'prec': 'P0', "freq": "F0"}
-                await self.upstream_bitfinex(request, symbol, ch_type)
             elif self.exchange == 'huobi':
-                self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=20, autoping=False)
                 if ch_type == 'miniTicker':
                     ch_type = 'ticker'
                     request = {'sub': f"market.{symbol}.{ch_type}"}
@@ -221,8 +213,8 @@ class MarketEventsDataStream(EventsDataStream):
                     request = {'sub': f"market.{symbol}.kline.{hbp.interval(tf)}"}
                 elif ch_type == 'depth5':
                     request = {'sub': f"market.{symbol}.depth.step0"}
-                await self.web_socket.send_json(request)
-                await self._handle_messages(self.web_socket, symbol=symbol, ch_type=ch_type)
+
+        await self.ws_listener(request, symbol, ch_type)
 
     async def _handle_event(self, content, symbol=None, ch_type=str(), order_book=None):
         # logger.info(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
@@ -277,7 +269,6 @@ class HbpPrivateEventsDataStream(EventsDataStream):
         self.symbol = symbol
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint, receive_timeout=30, autoping=False)
         ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
         _params = {
                 "accessKey": self.client.api_key,
@@ -295,22 +286,21 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "ch": "auth",
             "params": _params
         }
-        await self.web_socket.send_json(request)
-        await self._handle_messages(self.web_socket)
+        await self.websocket.send(json.dumps(request))
+        await self._handle_messages(await self.websocket.recv())
         request = {
             "action": "sub",
             "ch": "accounts.update#2"
         }
-        await self.web_socket.send_json(request)
+        await self.websocket.send(json.dumps(request))
+        await self._handle_messages(await self.websocket.recv())
         request = {
             "action": "sub",
             "ch": f"trade.clearing#{self.symbol.lower()}#0"
         }
-        await self.web_socket.send_json(request)
-        await self._handle_messages(self.web_socket)
+        await self.ws_listener(request)
 
     async def _handle_event(self, msg_data, *args):
-        self.try_count = 0
         content = None
         if msg_data.get('data').get('accountId') == self.client.hbp_account_id:
             if msg_data.get('ch') == 'accounts.update#2':
@@ -336,10 +326,10 @@ class BfxPrivateEventsDataStream(EventsDataStream):
             'authNonce': ts,
             'filter': ['trading', 'wallet']
         }
-        await self.upstream_bitfinex(request)
+        await self.ws_listener(request)
 
     async def _handle_event(self, msg_data, *args):
-        logger.debug(f"USER_handle_event.msg_data: {msg_data}")
+        # logger.debug(f"BitfinexPrivate: msg_data: {msg_data}")
         content = None
         if msg_data[1] in ('wu', 'ws'):
             content = bfx.on_funds_update(msg_data[2])
@@ -375,7 +365,6 @@ class OkxPrivateEventsDataStream(EventsDataStream):
         self.symbol = symbol
 
     async def start_wss(self):
-        self.web_socket = await self.session.ws_connect(self.endpoint, heartbeat=25)
         ts = int(time.time())
         signature_payload = f"{ts}GET/users/self/verify"
         signature = generate_signature(self.exchange, self.client.api_secret, signature_payload)
@@ -387,8 +376,8 @@ class OkxPrivateEventsDataStream(EventsDataStream):
                              "sign": signature}
                             ]
                    }
-        await self.web_socket.send_json(request)
-        await self._handle_messages(self.web_socket)
+        await self.websocket.send(json.dumps(request))
+        await self._handle_messages(await self.websocket.recv())
         # Channel subscription
         request = {"op": 'subscribe',
                    "args": [{"channel": "account"},
@@ -398,11 +387,9 @@ class OkxPrivateEventsDataStream(EventsDataStream):
                             {"channel": "balance_and_position"}
                             ]
                    }
-        await self.web_socket.send_json(request)
-        await self._handle_messages(self.web_socket)
+        await self.ws_listener(request)
 
     async def _handle_event(self, msg_data, *args):
-        self.try_count = 0
         content = None
         _data = msg_data.get('data')[0]
         if msg_data.get('arg', {}).get('channel') == 'account':
@@ -428,6 +415,17 @@ class OkxPrivateEventsDataStream(EventsDataStream):
 
 
 class UserEventsDataStream(EventsDataStream):
+    def __init__(self, client, endpoint, exchange, trade_id):
+        super().__init__(client, endpoint, exchange, trade_id)
+        self.listen_key = None
+
+    async def async_init(self):
+        self.listen_key = (await self.client.create_listen_key())["listenKey"]
+        self.endpoint = f"{self.endpoint}/ws/{self.listen_key}"
+        return self
+
+    def __await__(self):
+        return self.async_init().__await__()
 
     async def _heartbeat(self, listen_key, interval=60 * 30):
         # 30 minutes is recommended according to
@@ -437,15 +435,13 @@ class UserEventsDataStream(EventsDataStream):
             await self.client.keep_alive_listen_key(listen_key)
 
     async def start_wss(self):
-        listen_key = (await self.client.create_listen_key())["listenKey"]
-        self.web_socket = await self.session.ws_connect(f"{self.endpoint}/ws/{listen_key}", heartbeat=500)
-        _task = asyncio.ensure_future(self._heartbeat(listen_key))
+        logger.info(f"Start User WSS for {self.exchange}")
+        _task = asyncio.ensure_future(self._heartbeat(self.listen_key))
         try:
-            await self._handle_messages(self.web_socket)
+            await self.ws_listener()
         finally:
             _task.cancel()
 
     async def _handle_event(self, content):
-        self.try_count = 0
-        logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
+        # logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
         await self.client.events.wrap_event(content).fire(self.trade_id)

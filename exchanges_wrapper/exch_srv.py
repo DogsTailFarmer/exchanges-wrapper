@@ -650,7 +650,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.FetchOrderBookResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        _queue = asyncio.LifoQueue()
+        _queue = asyncio.LifoQueue(MAX_QUEUE_SIZE * 5)
         client.stream_queue[request.trade_id] |= {_queue}
         if client.exchange == 'okx':
             _symbol = client.symbol_to_okx(request.symbol)
@@ -937,6 +937,7 @@ async def stop_stream(client, trade_id):
     await client.stop_events_listener(trade_id)
     client.events.unregister(client.exchange, trade_id)
     [await _queue.put(trade_id) for _queue in client.stream_queue.get(trade_id, [])]
+    await asyncio.sleep(0)
     client.on_order_update_queues.pop(trade_id, None)
     client.stream_queue.pop(trade_id, None)
     gc.collect(generation=2)

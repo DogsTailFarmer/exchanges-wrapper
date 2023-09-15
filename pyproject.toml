@@ -23,6 +23,7 @@ dependencies = [
     "idna==3.4",
     "pyotp~=2.9.0",
     "simplejson==3.19.1",
+    "websockets~=11.0.3",
 ]
 
 [tool.flit.module]
