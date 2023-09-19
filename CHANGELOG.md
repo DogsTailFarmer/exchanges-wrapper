@@ -1,8 +1,15 @@
-* Migrated from aiohttp.ws_connection to websockets.client
+## v1.3.7 2023-09-19
+### Fix
 * Bitfinex: fix 500 `Internal server error`, caused by a Nonce value sequence failure
+
+### Update
+* For web socket connection migrated from aiohttp.ws_connection to websockets.client
 * Bitfinex: Implemented rate limit control for the Bitfinex REST API.
 * Bitfinex: Refine handling of active orders
-* OnOrderBookUpdate: change queue to LifoQueue, get last actual order book row
+* OnOrderBookUpdate: change queue to LifoQueue, for get last actual order book row
+
+### Don't fix
+* gRPC [(grpcio + grpcio-tools)](https://github.com/grpc/grpc): massive memory leak for version later than 1.48.2
 
 ## v1.3.6b7 2023-08-20
 ### Fix

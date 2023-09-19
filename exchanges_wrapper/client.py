@@ -148,15 +148,17 @@ class Client:
                                                           self.symbol_to_okx(symbol))
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
-            await user_data_stream.start()
+            await asyncio.sleep(1)
+            asyncio.ensure_future(user_data_stream.start())
 
     async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
-        start_list = []
         if self.exchange == 'binance':
             market_data_stream = MarketEventsDataStream(self, self.endpoint_ws_public, self.exchange, _trade_id)
             self.data_streams[_trade_id] |= {market_data_stream}
-            start_list.append(market_data_stream.start())
+            await asyncio.sleep(1)
+            asyncio.ensure_future(market_data_stream.start())
+            # start_list.append(market_data_stream.start())
         else:
             for channel in _events:
                 # https://www.okx.com/help-center/changes-to-v5-api-websocket-subscription-parameter-and-url
@@ -167,8 +169,8 @@ class Client:
                 #
                 market_data_stream = MarketEventsDataStream(self, _endpoint, self.exchange, _trade_id, channel)
                 self.data_streams[_trade_id] |= {market_data_stream}
-                start_list.append(market_data_stream.start())
-        await asyncio.gather(*start_list, return_exceptions=True)
+                await asyncio.sleep(1)
+                asyncio.ensure_future(market_data_stream.start())
 
     async def stop_events_listener(self, _trade_id):
         logger.info(f"Stop events listener data streams for {_trade_id}")
