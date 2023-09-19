@@ -1,6 +1,10 @@
-crypto-ws-api==2.0.1
-grpcio==1.48.1
-grpcio-tools==1.48.1
+crypto-ws-api==2.0.2
+grpcio==1.48.2
+grpcio-tools==1.48.2
 idna==3.4
 pyotp==2.9.0
 simplejson==3.19.1
+toml~=0.10.2
+aiohttp~=3.8.5
+Pympler~=1.0.1
+websockets~=11.0.3

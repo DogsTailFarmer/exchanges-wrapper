@@ -1,6 +1,15 @@
-## v1.3.6 2023-08-24
+## v1.3.7 2023-09-19
+### Fix
+* Bitfinex: fix 500 `Internal server error`, caused by a Nonce value sequence failure
+
 ### Update
-* Some minor improvements
+* For web socket connection migrated from aiohttp.ws_connection to websockets.client
+* Bitfinex: Implemented rate limit control for the Bitfinex REST API.
+* Bitfinex: Refine handling of active orders
+* OnOrderBookUpdate: change queue to LifoQueue, for get last actual order book row
+
+### Don't fix
+* gRPC [(grpcio + grpcio-tools)](https://github.com/grpc/grpc): massive memory leak for version later than 1.48.2
 
 ## v1.3.6b7 2023-08-20
 ### Fix
@@ -256,7 +265,7 @@ of a connection
 
 ## v1.2.4 2022-08-27
 ### Fixed
-* [Incomplete account setup](https://github.com/DogsTailFarmer/martin-binance#17)
+* [Incomplete account setup](DogsTailFarmer/martin-binance#17)
 * 1.2.3-2 Fix wss market handler, was stopped after get int type message instead of dict
 * 1.2.3-5 clear console output
 * 1.2.3-6 Bitfinex WSServerHandshakeError handling

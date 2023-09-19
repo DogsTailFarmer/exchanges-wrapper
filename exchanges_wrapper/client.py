@@ -26,7 +26,7 @@ from crypto_ws_api.ws_session import UserWSSession
 
 logger = logging.getLogger(__name__)
 
-STATUS_TIMEOUT = 5  # sec
+STATUS_TIMEOUT = 5  # sec, also use for lifetime limit for inactive order (Bitfinex) as 60 * STATUS_TIMEOUT
 
 
 def truncate(f, n):
@@ -64,7 +64,6 @@ class Client:
         }
         if self.exchange in ('binance', 'okx', 'bitfinex'):
             self.user_wss_session = UserWSSession(
-                self.session,
                 self.exchange,
                 self.endpoint_ws_api,
                 self.api_key,
@@ -136,7 +135,7 @@ class Client:
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
         user_data_stream = None
         if self.exchange == 'binance':
-            user_data_stream = UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
+            user_data_stream = await UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'bitfinex':
             user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'huobi':
@@ -149,15 +148,17 @@ class Client:
                                                           self.symbol_to_okx(symbol))
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
-            await user_data_stream.start()
+            await asyncio.sleep(1)
+            asyncio.ensure_future(user_data_stream.start())
 
     async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
-        start_list = []
         if self.exchange == 'binance':
             market_data_stream = MarketEventsDataStream(self, self.endpoint_ws_public, self.exchange, _trade_id)
             self.data_streams[_trade_id] |= {market_data_stream}
-            start_list.append(market_data_stream.start())
+            await asyncio.sleep(1)
+            asyncio.ensure_future(market_data_stream.start())
+            # start_list.append(market_data_stream.start())
         else:
             for channel in _events:
                 # https://www.okx.com/help-center/changes-to-v5-api-websocket-subscription-parameter-and-url
@@ -166,13 +167,10 @@ class Client:
                 else:
                     _endpoint = self.endpoint_ws_public
                 #
-                market_data_stream = MarketEventsDataStream(self,
-                                                            _endpoint,
-                                                            self.exchange, _trade_id,
-                                                            channel)
+                market_data_stream = MarketEventsDataStream(self, _endpoint, self.exchange, _trade_id, channel)
                 self.data_streams[_trade_id] |= {market_data_stream}
-                start_list.append(market_data_stream.start())
-        await asyncio.gather(*start_list, return_exceptions=True)
+                await asyncio.sleep(1)
+                asyncio.ensure_future(market_data_stream.start())
 
     async def stop_events_listener(self, _trade_id):
         logger.info(f"Stop events listener data streams for {_trade_id}")
@@ -201,11 +199,10 @@ class Client:
         return f"{symbol_info.get('baseAsset')}-{symbol_info.get('quoteAsset')}"
 
     def active_orders_clear(self, active_orders: list = None):
-        limit_time = int(time.time())
-        self.active_orders = {key: val for key, val in self.active_orders.items()
-                              if not val['filledTime'] or val['filledTime'] > limit_time}
-        for order_id in set(self.active_orders.keys()).difference(set(active_orders)):
-            self.active_orders[order_id]['filledTime'] = limit_time + 60 * 30
+        ts = int(time.time())
+        self.active_orders = {key: val for key, val in self.active_orders.items() if val['lifeTime'] > ts}
+        for order_id in active_orders:
+            self.active_orders[order_id]['lifeTime'] = ts + 60 * STATUS_TIMEOUT
 
     def refine_amount(self, symbol, amount: Union[str, decimal.Decimal], quote=False):
         if type(amount) is str:  # to save time for developers
@@ -726,16 +723,13 @@ class Client:
                 ahead_ws = self.wss_buffer.pop(order_id, [])
                 logger.debug(f"create_order.ahead_ws: {ahead_ws}")
                 binance_res = bfx.order(res[4][0], response_type=False, wss_te=ahead_ws)
-                self.active_orders.update(
-                    {order_id:
-                        {'filledTime': int(),
-                         'origQty': quantity,
-                         'executedQty': "0",
-                         'lastEvent': (),
-                         'cancelled': False
-                         }
-                     }
-                )
+                self.active_orders[order_id] = {
+                    'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
+                    'origQty': quantity,
+                    'executedQty': "0",
+                    'lastEvent': (),
+                    'cancelled': False
+                }
         elif self.exchange == 'huobi':
             params = {
                 'account-id': str(self.hbp_account_id),
