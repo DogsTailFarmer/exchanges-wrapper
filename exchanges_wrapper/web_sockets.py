@@ -4,7 +4,6 @@ import json
 import logging
 import time
 from decimal import Decimal
-import traceback
 import gzip
 from datetime import datetime
 from urllib.parse import urlencode, urlparse
