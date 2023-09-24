@@ -469,7 +469,7 @@ def account_trade_list(res: []) -> []:
         binance_trade = {
             "symbol": trade.get('symbol').upper(),
             "id": trade.get('trade-id'),
-            "orderId": trade.get('id'),
+            "orderId": trade.get('order-id'),
             "orderListId": -1,
             "price": price,
             "qty": qty,

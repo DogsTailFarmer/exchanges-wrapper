@@ -312,7 +312,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     await _queue.put(weakref.ref(event)())
                 elif res.get('status') == 'PARTIALLY_FILLED':
                     try:
-                        trades = await client.fetch_order_trade_list(symbol=request.symbol, order_id=request.order_id)
+                        trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id)
                     except asyncio.CancelledError:
                         pass  # Task cancellation should not be logged as an error
                     except Exception as _ex:
@@ -322,17 +322,6 @@ class Martin(api_pb2_grpc.MartinServicer):
                         for trade in trades:
                             event = OrderTradesEvent(trade)
                             await _queue.put(weakref.ref(event)())
-                try:
-                    trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id)
-                except asyncio.CancelledError:
-                    pass  # Task cancellation should not be logged as an error
-                except Exception as _ex:
-                    logger.error(f"Fetch order trades for {open_client.name}: {request.symbol} exception: {_ex}")
-                else:
-                    logger.debug(f"FetchOrder.trades: {trades}")
-                    for trade in trades:
-                        event = OrderTradesEvent(trade)
-                        await _queue.put(weakref.ref(event)())
             json_format.ParseDict(res, response)
         return response
 
