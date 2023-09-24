@@ -1,3 +1,12 @@
+## v1.3.7.post1 2023-09-24
+### Fix
+* [2023-09-24 07:10:21,076: ERROR] Fetch order trades for HuobiSub2: HTUSDT exception: Client.fetch_order_trade_list()
+missing 1 required positional argument: 'trade_id'
+*  exchanges_wrapper.huobi_parser.account_trade_list: incorrect key for `orderId`
+
+### Update
+* Dependency: Up requirements for crypto-ws-api==2.0.2.post1
+
 ## v1.3.7 2023-09-19
 ### Fix
 * Bitfinex: fix 500 `Internal server error`, caused by a Nonce value sequence failure
