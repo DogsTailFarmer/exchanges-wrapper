@@ -1,3 +1,7 @@
+## v1.3.7.post2 2023-09-30
+### Update
+* Dependency: Up requirements for crypto-ws-api==2.0.3
+
 ## v1.3.7.post1 2023-09-24
 ### Fix
 * [2023-09-24 07:10:21,076: ERROR] Fetch order trades for HuobiSub2: HTUSDT exception: Client.fetch_order_trade_list()
