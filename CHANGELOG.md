@@ -1,3 +1,7 @@
+## v1.3.7.post3 2023-10-05
+### Update
+* Dependency: Up requirements for crypto-ws-api==2.0.3.post1
+
 ## v1.3.7.post2 2023-09-30
 ### Update
 * Dependency: Up requirements for crypto-ws-api==2.0.3
