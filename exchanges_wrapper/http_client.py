@@ -61,6 +61,8 @@ class HttpClient:
                 raise HTTPError(f"Malformed request: status: {response.status}, reason: {response.reason}")
         if self.exchange in ('binance', 'bitfinex'):
             return payload
+        elif self.exchange == 'bybit' and payload and payload.get('retCode') == 0:
+            return payload.get('result')
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
             return payload.get('data', payload.get('tick'))
         elif self.exchange == 'okx' and payload and payload.get('code') == '0':
@@ -77,6 +79,51 @@ class HttpClient:
                             timeout=None,
                             **kwargs):
         pass  # meant to be overridden in a subclass
+
+
+class ClientBybit(HttpClient):
+
+    async def send_api_call(self,
+                            path,
+                            method="GET",
+                            signed=False,
+                            send_api_key=False,
+                            endpoint=None,
+                            timeout=None,
+                            **kwargs):
+        if self.rate_limit_reached:
+            raise QueryCanceled(QueryCanceled.message)
+
+        url = endpoint or self.endpoint
+        params = None
+        query_kwargs = None
+        query_string = urlencode(kwargs)
+
+        if method == 'GET':
+            url += f'{path}?{query_string}'
+
+        if signed:
+            ts = int(time.time() * 1000)
+
+            if method == 'GET':
+                signature_payload = f"{ts}{self.api_key}{query_string}"
+            else:
+                url += path
+                query_kwargs = json.dumps(kwargs)
+                signature_payload = f"{ts}{self.api_key}{query_kwargs}"
+
+            signature = generate_signature(self.exchange, self.api_secret, signature_payload)
+            params = {
+                "Content-Type": AJ,
+                "X-BAPI-API-KEY": self.api_key,
+                "X-BAPI-SIGN": signature,
+                "X-BAPI-TIMESTAMP": str(ts)
+            }
+
+        print(f"send_api_call.request: url: {url}, headers: {params}, data: {query_kwargs}")
+        async with self.session.request(method, url, timeout=timeout, headers=params, data=query_kwargs) as response:
+            print(f"send_api_call.response: url: {response.url}, status: {response.status}")
+            return await self.handle_errors(response)
 
 
 class ClientBinance(HttpClient):

@@ -44,7 +44,7 @@ root_logger.addHandler(sh)
 def get_account(_account_name: str) -> ():
     config = toml.load(str(CONFIG_FILE))
     accounts = config.get('accounts')
-    res = ()
+
     for account in accounts:
         if account.get('name') == _account_name:
             exchange = account['exchange']
@@ -52,50 +52,43 @@ def get_account(_account_name: str) -> ():
             test_net = account['test_net']
             master_email = account.get('master_email')
             master_name = account.get('master_name')
-            #
-            api_key = account['api_key']
-            api_secret = account['api_secret']
-            passphrase = account.get('passphrase')
-            two_fa = account.get('two_fa')
-            #
+
             endpoint = config['endpoint'][exchange]
-            #
-            api_public = endpoint['api_public']
-            ws_public = endpoint['ws_public']
-            api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
-            ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
+            ws_add_on = None
+
             if exchange == 'huobi':
                 ws_add_on = endpoint.get('ws_public_mbr')
             elif exchange == 'okx':
                 ws_add_on = endpoint.get('ws_business')
-            else:
-                ws_add_on = None
-            # ws_api
-            if exchange in ('okx', 'bitfinex'):
-                ws_api = ws_auth
-            else:
-                ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
-            #
-            exchange = 'binance' if exchange == 'binance_us' else exchange
-            #
-            res = (exchange,        # 0
-                   sub_account,     # 1
-                   test_net,        # 2
-                   api_key,         # 3
-                   api_secret,      # 4
-                   api_public,      # 5
-                   ws_public,       # 6
-                   api_auth,        # 7
-                   ws_auth,         # 8
-                   ws_add_on,       # 9
-                   passphrase,      # 10
-                   master_email,    # 11
-                   master_name,     # 12
-                   two_fa,          # 13
-                   ws_api,          # 14
-                   )
-            break
-    return res
+
+            ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
+            ws_public = endpoint['ws_test_public'] if exchange == 'bybit' and test_net else endpoint['ws_public']
+            api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
+            api_public = endpoint['api_public']
+            ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
+
+            if exchange == 'binance_us':
+                exchange = 'binance'
+
+            res = (
+                exchange,
+                sub_account,
+                test_net,
+                account['api_key'],
+                account['api_secret'],
+                api_public,
+                ws_public,
+                api_auth,
+                ws_auth,
+                ws_add_on,
+                account.get('passphrase'),
+                master_email,
+                master_name,
+                account.get('two_fa'),
+                ws_api
+            )
+            return res
+    return ()
 
 
 class OpenClient:

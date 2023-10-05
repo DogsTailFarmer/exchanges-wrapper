@@ -9,7 +9,7 @@ import time
 from collections import defaultdict
 import pyotp
 
-from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX
+from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX, ClientBybit
 from exchanges_wrapper.errors import ExchangePyError
 from exchanges_wrapper.web_sockets import UserEventsDataStream, \
     MarketEventsDataStream, \
@@ -21,6 +21,7 @@ from exchanges_wrapper.events import Events
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
+import exchanges_wrapper.bybit_parser as bbt
 
 from crypto_ws_api.ws_session import UserWSSession
 
@@ -80,6 +81,8 @@ class Client:
             self.http = ClientHBP(**client_init_params)
         elif self.exchange == 'okx':
             self.http = ClientOKX(**client_init_params)
+        elif self.exchange == 'bybit':
+            self.http = ClientBybit(**client_init_params)
         else:
             raise UserWarning(f"Exchange {self.exchange} not yet connected")
         #
@@ -264,6 +267,9 @@ class Client:
         elif self.exchange == 'okx':
             res = await self.http.send_api_call("/api/v5/public/time")
             binance_res = okx.fetch_server_time(res)
+        elif self.exchange == 'bybit':
+            res = await self.http.send_api_call("/v5/market/time")
+            binance_res = bbt.fetch_server_time(res)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#exchange-information
@@ -304,6 +310,12 @@ class Client:
             instruments = await self.http.send_api_call("/api/v5/public/instruments", **params)
             tickers = await self.http.send_api_call("/api/v5/market/tickers", **params)
             binance_res = okx.exchange_info(server_time.get('serverTime'), instruments, tickers)
+        elif self.exchange == 'bybit':
+            params = {'category': 'spot'}
+            server_time = await self.fetch_server_time()
+            instruments = await self.http.send_api_call("/v5/market/instruments-info", **params)
+            binance_res = bbt.exchange_info(server_time.get('serverTime'), instruments.get('list'))
+        # print(f"fetch_exchange_info: binance_res: {binance_res}")
         return binance_res
 
     # MARKET DATA ENDPOINTS
@@ -995,8 +1007,7 @@ class Client:
             )
             logger.debug(f"cancel_all_orders.res: {res}")
             if res and res[6] == 'SUCCESS':
-                res = res[4]
-                binance_res = bfx.orders(res, response_type=True, cancelled=True)
+                return bfx.orders(res[4], response_type=True, cancelled=True)
         elif self.exchange == 'huobi':
             orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
             orders_id = [str(order.get('orderId')) for order in orders]
@@ -1049,6 +1060,17 @@ class Client:
                 ids_canceled = [int(ordr['ordId']) for ordr in res if ordr['sCode'] == '0']
                 orders_canceled[:] = [i for i in orders_canceled if i['orderId'] in ids_canceled]
                 binance_res.extend(orders_canceled)
+        elif self.exchange == 'bybit':
+            orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
+            params = {'category': 'spot', 'symbol': symbol}
+            res = await self.http.send_api_call(
+                "/v5/order/cancel-all",
+                method="POST",
+                signed=True,
+                **params,
+            )
+            if res and res.get('success'):
+                return orders
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
@@ -1103,6 +1125,11 @@ class Client:
             )
             # print(f"fetch_open_orders.res: {res}")
             binance_res = okx.orders(res, response_type=response_type)
+        elif self.exchange == 'bybit':
+            params = {'category': 'spot', 'symbol': symbol}
+            res = await self.http.send_api_call("/v5/order/realtime", signed=True, **params)
+            # print(f"fetch_open_orders.res: {res}")
+            binance_res = bbt.orders(res['list'], response_type=response_type)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#all-orders-user_data
