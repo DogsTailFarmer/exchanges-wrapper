@@ -791,7 +791,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                                                receive_window=None,
                                                response_type=False)
             json_format.ParseDict(res, response)
-            logger.debug(f"CreateLimitOrder: created: {res.get('orderId')}")
+            logger.debug(f"CreateLimitOrder: for {open_client.name}:{request.symbol}: created: {res.get('orderId')}")
         return response
 
     async def CancelOrder(self, request: api_pb2.CancelOrderRequest,

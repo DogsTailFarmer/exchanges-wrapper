@@ -1,5 +1,5 @@
 """
-Parser for convert Bybit REST API / WSS V5 response to Binance like result
+Parser for convert Bybit REST API/WSS V5 response to Binance like result
 """
 import time
 from decimal import Decimal
@@ -138,3 +138,10 @@ def order(res: dict, response_type=None) -> dict:
         }
 
     return response
+
+
+def order_book(res: {}) -> {}:
+    return {"lastUpdateId": res['u'],
+            "bids": res['b'],
+            "asks": res['a'],
+            }

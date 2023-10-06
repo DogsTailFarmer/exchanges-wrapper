@@ -1,5 +1,5 @@
 """
-Parser for convert OKX REST API/WSS response to Binance like result
+Parser for convert OKX REST API/WSS V5 response to Binance like result
 """
 import time
 from decimal import Decimal

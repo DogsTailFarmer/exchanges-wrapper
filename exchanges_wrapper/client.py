@@ -332,6 +332,8 @@ class Client:
             valid_limits = [5, 10, 20]
         elif self.exchange == 'okx':
             valid_limits = [1, 5, 10, 20, 50, 100, 400]
+        elif self.exchange == 'bybit':
+            valid_limits = range(1, 51)
         binance_res = {}
         if limit not in valid_limits:
             raise ValueError(
@@ -367,6 +369,10 @@ class Client:
                       'sz': str(limit)}
             res = await self.http.send_api_call("/api/v5/market/books", **params)
             binance_res = okx.order_book(res[0])
+        elif self.exchange == 'bybit':
+            params = {"category": "spot", "symbol": symbol, "limit": limit}
+            res = await self.http.send_api_call("/v5/market/orderbook", **params)
+            binance_res = bbt.order_book(res)
         return binance_res
 
     async def fetch_ledgers(self, symbol, limit=10):
