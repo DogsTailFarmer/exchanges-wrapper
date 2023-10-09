@@ -3,7 +3,7 @@ grpcio==1.48.2
 grpcio-tools==1.48.2
 idna==3.4
 pyotp==2.9.0
-simplejson==3.19.1
+simplejson==3.19.2
 toml~=0.10.2
 aiohttp~=3.8.5
 Pympler~=1.0.1
