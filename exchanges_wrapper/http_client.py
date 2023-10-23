@@ -62,7 +62,7 @@ class HttpClient:
         if self.exchange in ('binance', 'bitfinex'):
             return payload
         elif self.exchange == 'bybit' and payload and payload.get('retCode') == 0:
-            return payload.get('result')
+            return payload.get('result'), payload.get('time')
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
             return payload.get('data', payload.get('tick'))
         elif self.exchange == 'okx' and payload and payload.get('code') == '0':
@@ -120,9 +120,9 @@ class ClientBybit(HttpClient):
                 "X-BAPI-TIMESTAMP": str(ts)
             }
 
-        print(f"send_api_call.request: url: {url}, headers: {params}, data: {query_kwargs}")
+        # print(f"send_api_call.request: url: {url}, headers: {params}, data: {query_kwargs}")
         async with self.session.request(method, url, timeout=timeout, headers=params, data=query_kwargs) as response:
-            print(f"send_api_call.response: url: {response.url}, status: {response.status}")
+            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
             return await self.handle_errors(response)
 
 

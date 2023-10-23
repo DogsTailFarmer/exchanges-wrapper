@@ -61,11 +61,19 @@ def get_account(_account_name: str) -> ():
             elif exchange == 'okx':
                 ws_add_on = endpoint.get('ws_business')
 
-            ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
-            ws_public = endpoint['ws_test_public'] if exchange == 'bybit' and test_net else endpoint['ws_public']
-            api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
+            if exchange == 'bitfinex':
+                api_auth = endpoint['api_auth']
+            else:
+                api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
             api_public = endpoint['api_public']
-            ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
+
+            ws_public = endpoint['ws_test_public'] if exchange == 'bybit' and test_net else endpoint['ws_public']
+
+            if exchange == 'bitfinex':
+                ws_api = ws_auth = endpoint['ws_auth']
+            else:
+                ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
+                ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
 
             if exchange == 'binance_us':
                 exchange = 'binance'
@@ -523,6 +531,9 @@ class Martin(api_pb2_grpc.MartinServicer):
         elif client.exchange == 'okx':
             exchange = 'okx'
             _symbol = client.symbol_to_okx(request.symbol)
+        elif client.exchange == 'bybit':
+            exchange = 'bybit'
+            _symbol = request.symbol
         else:
             exchange = 'huobi' if client.exchange == 'huobi' else 'binance'
             _symbol = request.symbol.lower()
@@ -599,6 +610,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _symbol = client.symbol_to_okx(request.symbol)
         elif client.exchange == 'bitfinex':
             _symbol = client.symbol_to_bfx(request.symbol)
+        elif client.exchange == 'bybit':
+            _symbol = request.symbol
         else:
             _symbol = request.symbol.lower()
         _event_type = f"{_symbol}@miniTicker"
@@ -612,11 +625,11 @@ class Martin(api_pb2_grpc.MartinServicer):
                 logger.info(f"OnTickerUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
-                # logger.info(f"OnTickerUpdate.event: {_event.symbol}, _event.close_price: {_event.close_price}")
                 ticker_24h = {'symbol': _event.symbol,
                               'open_price': _event.open_price,
                               'close_price': _event.close_price,
                               'event_time': _event.event_time}
+                # logger.info(f"OnTickerUpdate.event: {_event.symbol}, ticker_24h: {ticker_24h}")
                 json_format.ParseDict(ticker_24h, response)
                 yield response
                 _queue.task_done()
@@ -632,6 +645,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _symbol = client.symbol_to_okx(request.symbol)
         elif client.exchange == 'bitfinex':
             _symbol = client.symbol_to_bfx(request.symbol)
+        elif client.exchange == 'bybit':
+            _symbol = request.symbol
         else:
             _symbol = request.symbol.lower()
         _event_type = f"{_symbol}@depth5"
@@ -687,31 +702,32 @@ class Martin(api_pb2_grpc.MartinServicer):
         if client.exchange in ('binance', 'okx'):
             client.events.register_user_event(functools.partial(
                 event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
+        _events = []
         while True:
             response.Clear()
+            _events.clear()
             try:
                 _event = await asyncio.wait_for(_queue.get(), timeout=HEARTBEAT * 30)
+                if isinstance(_event, str) and _event == request.trade_id:
+                    client.stream_queue.get(request.trade_id, set()).discard(_queue)
+                    logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}:{request.symbol}")
+                    return
+                _events.append(_event)
                 _get_event_from_queue = True
             except asyncio.TimeoutError:
-                _event = None
                 _get_event_from_queue = False
-            if isinstance(_event, str) and _event == request.trade_id:
-                client.stream_queue.get(request.trade_id, set()).discard(_queue)
-                logger.info(f"OnBalanceUpdate: Stop user stream for {open_client.name}:{request.symbol}")
-                return
-            if client.exchange in ('bitfinex', 'huobi'):
-                await self.rate_limit_control(open_client)
-                try:
-                    balance = await client.fetch_ledgers(request.symbol)
-                except Exception as _ex:
-                    logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
-                else:
-                    open_client.ts_rlc = time.time()
-                    if balance:
-                        _event = client.events.wrap_event(balance)
-            if isinstance(_event, events.BalanceUpdateWrapper):
-                logger.debug(f"OnBalanceUpdate: {open_client.name}:{_event.event_time}:"
-                             f"{_event.asset}:{_event.balance_delta}")
+
+                if client.exchange in ('bitfinex', 'huobi', 'bybit'):
+                    await self.rate_limit_control(open_client)
+                    try:
+                        balances = await client.fetch_ledgers(request.symbol)
+                    except Exception as _ex:
+                        logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
+                    else:
+                        open_client.ts_rlc = time.time()
+                        [_events.append(client.events.wrap_event(balance)) for balance in balances]
+
+            for _event in _events:
                 if _event.asset in request.symbol:
                     balance = {
                         "event_time": _event.event_time,
@@ -719,10 +735,14 @@ class Martin(api_pb2_grpc.MartinServicer):
                         "balance_delta": _event.balance_delta,
                         "clear_time": _event.clear_time
                     }
+
+                    logger.debug(f"OnBalanceUpdate: {open_client.name}:{request.symbol}: {balance}")
+
                     response.balance = json.dumps(balance)
                     yield response
-                    if _get_event_from_queue:
-                        _queue.task_done()
+
+                if _get_event_from_queue:
+                    _queue.task_done()
 
     async def OnOrderUpdate(self, request: api_pb2.MarketRequest,
                             _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:

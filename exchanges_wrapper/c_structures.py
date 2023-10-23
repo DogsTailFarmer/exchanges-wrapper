@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import datetime, timedelta
 
 REST_RATE_LIMIT_INTERVAL = {
     "bitfinex": {

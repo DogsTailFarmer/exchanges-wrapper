@@ -8,6 +8,7 @@ import logging
 import time
 from collections import defaultdict
 import pyotp
+from expiringdict import ExpiringDict
 
 from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX, ClientBybit
 from exchanges_wrapper.errors import ExchangePyError
@@ -15,14 +16,14 @@ from exchanges_wrapper.web_sockets import UserEventsDataStream, \
     MarketEventsDataStream, \
     BfxPrivateEventsDataStream, \
     HbpPrivateEventsDataStream, \
-    OkxPrivateEventsDataStream
+    OkxPrivateEventsDataStream, \
+    BBTPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
 import exchanges_wrapper.bitfinex_parser as bfx
 import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
 import exchanges_wrapper.bybit_parser as bbt
-
 from crypto_ws_api.ws_session import UserWSSession
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ class Client:
         self.rate_limits = None
         self.data_streams = defaultdict(set)
         self.active_orders = {}
-        self.wss_buffer = {}
+        self.wss_buffer = ExpiringDict(max_len=50, max_age_seconds=STATUS_TIMEOUT*2)
         self.stream_queue = defaultdict(set)
         self.on_order_update_queues = {}
         self.hbp_account_id = None
@@ -100,6 +101,13 @@ class Client:
         self.hbp_main_account_id = None
         self.hbp_main_uid = None
         self.ledgers_id = []
+
+    async def fetch_object(self, key):
+        res = None
+        while res is None:
+            await asyncio.sleep(0.05)
+            res = self.wss_buffer.pop(key, None)
+        return res
 
     async def load(self):
         infos = await self.fetch_exchange_info()
@@ -149,6 +157,8 @@ class Client:
                                                           self.exchange,
                                                           _trade_id,
                                                           self.symbol_to_okx(symbol))
+        elif self.exchange == 'bybit':
+            user_data_stream = BBTPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
             await asyncio.sleep(1)
@@ -268,7 +278,7 @@ class Client:
             res = await self.http.send_api_call("/api/v5/public/time")
             binance_res = okx.fetch_server_time(res)
         elif self.exchange == 'bybit':
-            res = await self.http.send_api_call("/v5/market/time")
+            res, _ = await self.http.send_api_call("/v5/market/time")
             binance_res = bbt.fetch_server_time(res)
         return binance_res
 
@@ -313,7 +323,7 @@ class Client:
         elif self.exchange == 'bybit':
             params = {'category': 'spot'}
             server_time = await self.fetch_server_time()
-            instruments = await self.http.send_api_call("/v5/market/instruments-info", **params)
+            instruments, _ = await self.http.send_api_call("/v5/market/instruments-info", **params)
             binance_res = bbt.exchange_info(server_time.get('serverTime'), instruments.get('list'))
         # print(f"fetch_exchange_info: binance_res: {binance_res}")
         return binance_res
@@ -371,13 +381,14 @@ class Client:
             binance_res = okx.order_book(res[0])
         elif self.exchange == 'bybit':
             params = {"category": "spot", "symbol": symbol, "limit": limit}
-            res = await self.http.send_api_call("/v5/market/orderbook", **params)
+            res, _ = await self.http.send_api_call("/v5/market/orderbook", **params)
             binance_res = bbt.order_book(res)
         return binance_res
 
-    async def fetch_ledgers(self, symbol, limit=10):
+    async def fetch_ledgers(self, symbol, limit=25):
         self.assert_symbol(symbol)
         # From exchange get ledger records about deposit/withdraw/transfer in last 60s time-frame
+        balances = []
         if self.exchange == 'bitfinex':
             # https://docs.bitfinex.com/reference/rest-auth-ledgers
             category = [51, 101, 104]
@@ -386,7 +397,7 @@ class Client:
             for i in category:
                 params = {'limit': limit,
                           'category': i,
-                          'start': (int(time.time()) - 60) * 1000}
+                          'start': (int(time.time()) - 300) * 1000}
                 _res = await self.http.send_api_call(
                     "v2/auth/r/ledgers/hist",
                     method="POST",
@@ -395,14 +406,14 @@ class Client:
                 )
                 if _res:
                     res.extend(_res)
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
             for _res in res:
                 if _res[1] in symbol and _res[0] not in self.ledgers_id:
                     self.ledgers_id.append(_res[0])
                     if len(self.ledgers_id) > limit * len(category):
-                        del self.ledgers_id[0]
-                    if _res:
-                        return bfx.on_balance_update(_res)
+                        self.ledgers_id.pop(0)
+                    balances.append(bfx.on_balance_update(_res))
+            return balances
         elif self.exchange == 'huobi':
             params = {'accountId': str(self.hbp_account_id),
                       'limit': limit}
@@ -411,14 +422,60 @@ class Client:
                 signed=True,
                 **params,
             )
-            for res_i in res:
-                time_select = (int(time.time() * 1000) - res_i.get('transactTime', 0)) < 1000 * 60
-                if (time_select and res_i.get('currency').upper() in symbol and
-                        res_i.get('transactId') not in self.ledgers_id):
-                    self.ledgers_id.append(res_i.get('transactId'))
+            for _res in res:
+                time_select = (int(time.time() * 1000) - _res.get('transactTime', 0)) < 1000 * 300
+                if (time_select and _res.get('currency').upper() in symbol and
+                        _res.get('transactId') not in self.ledgers_id):
+                    self.ledgers_id.append(_res.get('transactId'))
                     if len(self.ledgers_id) > limit:
-                        del self.ledgers_id[0]
-                    return hbp.on_balance_update(res_i)
+                        self.ledgers_id.pop(0)
+                    balances.append(hbp.on_balance_update(_res))
+            return balances
+        elif self.exchange == 'bybit':
+            params = {
+                'status': 'SUCCESS',
+                'startTime': (int(time.time()) - 300) * 1000
+            }
+            # Internal transfer, ie from Funding to UTA account
+            res, ts = await self.http.send_api_call(
+                "/v5/asset/transfer/query-inter-transfer-list",
+                signed=True,
+                **params
+            )
+            _res = bbt.on_balance_update(res['list'], ts, symbol, 'internal')
+
+            # Universal Transfer Records, ie from Main account to Sub account
+            res, _ = await self.http.send_api_call(
+                "/v5/asset/transfer/query-universal-transfer-list",
+                signed=True,
+                **params
+            )
+            _res += bbt.on_balance_update(res['list'], ts, symbol, 'universal', bool(self.sub_account))
+
+            # Get Deposit Records (on-chain)
+            res, _ = await self.http.send_api_call(
+                "/v5/asset/deposit/query-record",
+                signed=True,
+                **params
+            )
+            _res += bbt.on_balance_update(res['rows'], ts, symbol, 'deposit')
+
+            # Get Withdrawal Records
+            res, _ = await self.http.send_api_call(
+                "/v5/asset/withdraw/query-record",
+                signed=True,
+                **params
+            )
+            _res += bbt.on_balance_update(res['rows'], ts, symbol, 'withdraw')
+
+            for i in _res:
+                _id = next(iter(i))
+                if _id not in self.ledgers_id:
+                    self.ledgers_id.append(_id)
+                    if len(self.ledgers_id) > limit * 4:
+                        self.ledgers_id.pop(0)
+                    balances.append(i[_id])
+            return balances
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
     async def fetch_recent_trades_list(self, symbol, limit=500):
@@ -483,6 +540,8 @@ class Client:
             interval = hbp.interval(interval)
         elif self.exchange == 'okx':
             interval = okx.interval(interval)
+        elif self.exchange == 'bybit':
+            interval = bbt.interval(interval)
         if not interval:
             raise ValueError("This query requires correct interval value")
 
@@ -535,6 +594,17 @@ class Client:
             res = await self.http.send_api_call("/api/v5/market/candles", **params)
             res.sort(reverse=False)
             binance_res = okx.klines(res, interval)
+        elif self.exchange == 'bybit':
+            params = {"category": "spot", "symbol": symbol, "interval": interval, "limit": limit}
+            if start_time:
+                params["start"] = start_time
+            if end_time:
+                params["end"] = end_time
+            res, _ = await self.http.send_api_call("/v5/market/kline", **params)
+            res = res.get("list", [])
+            res.sort(reverse=False)
+            binance_res = bbt.klines(res, interval)
+        # print(f"fetch_klines.binance_res: {binance_res}")
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-average-price
@@ -580,6 +650,10 @@ class Client:
             res = await self.http.send_api_call("/api/v5/market/ticker", **params)
             # print(f"fetch_ticker_price_change_statistics: res: {res}")
             binance_res = okx.ticker_price_change_statistics(res[0])
+        elif self.exchange == 'bybit':
+            params = {'category': 'spot', 'symbol': symbol}
+            res, ts = await self.http.send_api_call("/v5/market/tickers", **params)
+            binance_res = bbt.ticker_price_change_statistics(res["list"][0], ts)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-price-ticker
@@ -616,6 +690,14 @@ class Client:
             params = {'instId': self.symbol_to_okx(symbol)}
             res = await self.http.send_api_call("/api/v5/market/ticker", **params)
             binance_res = okx.fetch_symbol_price_ticker(res[0], symbol)
+        elif self.exchange == 'bybit':
+            params = {'category': 'spot', 'symbol': symbol}
+            res, _ = await self.http.send_api_call("/v5/market/tickers", **params)
+            binance_res = {
+                "symbol": symbol,
+                "price": res["list"][0]["lastPrice"]
+            }
+        # print(f"fetch_symbol_price_ticker: binance_res: {binance_res}")
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-order-book-ticker
@@ -739,7 +821,8 @@ class Client:
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
                 order_id = res[4][0][0]
                 ahead_ws = self.wss_buffer.pop(order_id, [])
-                logger.debug(f"create_order.ahead_ws: {ahead_ws}")
+                if ahead_ws:
+                    logger.debug(f"create_order.ahead_ws: {ahead_ws}")
                 binance_res = bfx.order(res[4][0], response_type=False, wss_te=ahead_ws)
                 self.active_orders[order_id] = {
                     'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
@@ -798,6 +881,21 @@ class Client:
                 binance_res = okx.place_order_response(res[0], params)
             else:
                 raise UserWarning(f"Code: {res[0].get('sCode')}: {res[0].get('sMsg')}")
+        elif self.exchange == 'bybit':
+            params = {
+                'category': 'spot',
+                'symbol': symbol,
+                'side': side.title(),
+                'orderType': order_type.title(),
+                'qty': quantity,
+                'price': price,
+                'orderLinkId': str(new_client_order_id),
+            }
+            res, ts = await self.http.send_api_call("/v5/order/create", method="POST", signed=True, **params)
+            if res:
+                res["ts"] = ts
+                binance_res = bbt.place_order_response(res, params)
+
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-order-user_data
@@ -867,6 +965,17 @@ class Client:
             res = await self.http.send_api_call("/api/v5/trade/order", signed=True, **params)
             logger.debug(f"fetch_order.res: {res}")
             binance_res = okx.order(res[0], response_type=response_type)
+        elif self.exchange == 'bybit':
+            params = {
+                'category': 'spot',
+                'symbol': symbol,
+                'orderId': str(order_id),
+                'orderLinkId': str(origin_client_order_id),
+                'openOnly': 1
+
+            }
+            res, _ = await self.http.send_api_call("/v5/order/realtime", signed=True, **params)
+            binance_res = bbt.order(res["list"][0], response_type=response_type)
         logger.debug(f"fetch_order.binance_res: {binance_res}")
         return binance_res
 
@@ -974,6 +1083,20 @@ class Client:
             except asyncio.TimeoutError:
                 logger.warning(f"WSS CancelOrder for OKX:{symbol} timeout exception")
             self.on_order_update_queues.pop(f"{_symbol}{order_id}", None)
+        elif self.exchange == 'bybit':
+            params = {
+                'category': 'spot',
+                'symbol': symbol,
+                'orderId': str(order_id),
+                'orderLinkId': str(origin_client_order_id)
+            }
+            res, _ = await self.http.send_api_call("/v5/order/cancel", method="POST", signed=True, **params)
+            if order_id := res.get("orderId"):
+                try:
+                    binance_res = await asyncio.wait_for(self.fetch_object(f"oc-{order_id}"), timeout=STATUS_TIMEOUT)
+                except asyncio.TimeoutError:
+                    logger.warning(f"WSS CancelOrder for ByBit:{symbol}:{order_id} timeout exception")
+
         logger.debug(f"cancel_order.binance_res: {binance_res}")
         return binance_res
 
@@ -1067,16 +1190,28 @@ class Client:
                 orders_canceled[:] = [i for i in orders_canceled if i['orderId'] in ids_canceled]
                 binance_res.extend(orders_canceled)
         elif self.exchange == 'bybit':
-            orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
             params = {'category': 'spot', 'symbol': symbol}
-            res = await self.http.send_api_call(
-                "/v5/order/cancel-all",
-                method="POST",
-                signed=True,
-                **params,
-            )
-            if res and res.get('success'):
-                return orders
+            res, _ = await self.http.send_api_call("/v5/order/cancel-all", method="POST", signed=True, **params)
+
+            tasks = []
+            for order in res.get('list', []):
+                _id = order.get('orderId')
+                task = asyncio.ensure_future(self.fetch_object(f"oc-{_id}"))
+                task.set_name(f"{_id}")
+                tasks.append(task)
+
+            done, pending = await asyncio.wait(tasks, timeout=STATUS_TIMEOUT)
+            binance_res = [task.result() for task in done]
+
+            if pending:
+                [task.cancel() for task in pending]
+                if res.get("success"):
+                    for task in pending:
+                        _id = task.get_name()
+                        _res = await self.fetch_order(trade_id, symbol, order_id=_id, response_type=True)
+                        binance_res.append(_res)
+                pending.clear()
+
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
@@ -1133,7 +1268,7 @@ class Client:
             binance_res = okx.orders(res, response_type=response_type)
         elif self.exchange == 'bybit':
             params = {'category': 'spot', 'symbol': symbol}
-            res = await self.http.send_api_call("/v5/order/realtime", signed=True, **params)
+            res, _ = await self.http.send_api_call("/v5/order/realtime", signed=True, **params)
             # print(f"fetch_open_orders.res: {res}")
             binance_res = bbt.orders(res['list'], response_type=response_type)
         return binance_res
@@ -1354,7 +1489,6 @@ class Client:
                 method="POST",
                 signed=True
             )
-            # print(f"fetch_account_information.res: {res}")
             if res:
                 binance_res = bfx.account_information(res)
         elif self.exchange == 'huobi':
@@ -1363,6 +1497,16 @@ class Client:
         elif self.exchange == 'okx':
             res = await self.http.send_api_call("/api/v5/account/balance", signed=True)
             binance_res = okx.account_information(res[0].get('details'), res[0].get('uTime'))
+        elif self.exchange == 'bybit':
+            if self.sub_account:
+                params = {'accountType': 'SPOT'}
+                res, ts = await self.http.send_api_call("/v5/asset/transfer/query-asset-info", signed=True, **params)
+                binance_res = bbt.account_information(res["spot"]["assets"], ts)
+            else:
+                params = {'accountType': 'UNIFIED'}
+                res, ts = await self.http.send_api_call("/v5/account/wallet-balance", signed=True, **params)
+                binance_res = bbt.account_information(res["list"][0]["coin"], ts)
+        # print(f"fetch_account_information.binance_res: {binance_res}")
         return binance_res
 
     # https://binance-docs.github.io/apidocs/spot/en/#funding-wallet-user_data

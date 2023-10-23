@@ -1,18 +1,58 @@
 """
 Parser for convert Bybit REST API/WSS V5 response to Binance like result
 """
-import time
 from decimal import Decimal
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def fetch_server_time(res: {}) -> {}:
+class OrderBook:
+    def __init__(self, snapshot) -> None:
+        self.symbol = snapshot["s"].lower()
+        self.last_update_id = snapshot["seq"]
+        self.asks = {i[0]: i[1] for i in snapshot["a"]}
+        self.bids = {i[0]: i[1] for i in snapshot["b"]}
+
+    def get_book(self) -> dict:
+        return {
+            'stream': f"{self.symbol}@depth5",
+            'data': {
+                'lastUpdateId': self.last_update_id,
+                'bids': list(map(list, self.bids.items()))[:5],
+                'asks': list(map(list, self.asks.items()))[:5],
+            },
+        }
+
+    def update_book(self, delta):
+        self.last_update_id = delta["seq"]
+        for i in delta["a"]:
+            if Decimal(i[1]):
+                self.asks[i[0]] = i[1]
+            else:
+                self.asks.pop(i[0], None)
+
+        if len(delta["a"]) > 1:
+            self.asks = dict(sorted(self.asks.items(), key=lambda x: float(x[0]), reverse=False))
+
+        for i in delta["b"]:
+            if Decimal(i[1]):
+                self.bids[i[0]] = i[1]
+            else:
+                self.bids.pop(i[0], None)
+
+        if len(delta["b"]) > 1:
+            self.bids = dict(sorted(self.bids.items(), key=lambda x: float(x[0]), reverse=True))
+
+    # def __call__(self):
+        # return self
+
+
+def fetch_server_time(res: dict) -> dict:
     return {'serverTime': int(res['timeNano']) // 1000000}
 
 
-def exchange_info(server_time: int, trading_symbol: []) -> {}:
+def exchange_info(server_time: int, trading_symbol: list) -> dict:
     symbols = []
 
     for market in trading_symbol:
@@ -92,8 +132,8 @@ def order(res: dict, response_type=None) -> dict:
     state = res['orderStatus']
     status = {
         'Rejected': 'REJECTED',
-        'Canceled': 'CANCELED',
-        'PartiallyFilledCanceled': 'CANCELED',
+        'Cancelled': 'CANCELED',
+        'PartiallyFilledCanceled': 'PARTIALLY_FILLED',
         'PartiallyFilled': 'PARTIALLY_FILLED',
         'Filled': 'FILLED'
     }.get(state, 'NEW')
@@ -140,8 +180,307 @@ def order(res: dict, response_type=None) -> dict:
     return response
 
 
-def order_book(res: {}) -> {}:
+def order_book(res: dict) -> dict:
     return {"lastUpdateId": res['u'],
             "bids": res['b'],
             "asks": res['a'],
             }
+
+
+def ticker_price_change_statistics(res: dict, ts: int) -> dict:
+    return {
+        "symbol": res["symbol"],
+        "priceChange": str(Decimal(res["lastPrice"]) - Decimal(res["prevPrice24h"])),
+        "priceChangePercent": res["price24hPcnt"],
+        "weightedAvgPrice": str(Decimal(res["turnover24h"]) / Decimal(res["volume24h"])),
+        "prevClosePrice": res["prevPrice24h"],
+        "lastPrice": res["lastPrice"],
+        "lastQty": "0.0",
+        "bidPrice": res["bid1Price"],
+        "bidQty": res["bid1Size"],
+        "askPrice": res["ask1Price"],
+        "askQty": res["ask1Size"],
+        "openPrice": res["prevPrice24h"],
+        "highPrice": res["highPrice24h"],
+        "lowPrice": res["lowPrice24h"],
+        "volume": res["volume24h"],
+        "quoteVolume": res["turnover24h"],
+        "openTime": ts,
+        "closeTime": ts - 60 * 60 * 24,
+        "firstId": 0,
+        "lastId": 1,
+        "count": 1,
+    }
+
+
+def account_information(res: list, ts: int) -> dict:
+    balances = []
+    for asset in res:
+        if total := asset.get("walletBalance"):
+            locked = asset["locked"]
+            free = str(Decimal(total) - Decimal(locked))
+        else:
+            free = asset["free"]
+            locked = asset["frozen"]
+        balances.append({
+            "asset": asset["coin"],
+            "free": free,
+            "locked": locked,
+        })
+    return {
+        "makerCommission": 0,
+        "takerCommission": 0,
+        "buyerCommission": 0,
+        "sellerCommission": 0,
+        "canTrade": True,
+        "canWithdraw": False,
+        "canDeposit": False,
+        "brokered": False,
+        "updateTime": ts,
+        "accountType": "SPOT",
+        "balances": balances,
+        "permissions": ["SPOT"],
+    }
+
+
+def ticker(res: dict) -> dict:
+    symbol = res.get('symbol')
+    return {
+        'stream': f"{symbol.lower()}@miniTicker",
+        'data': {
+            "e": "24hrMiniTicker",
+            "E": res.get('ts'),
+            "s": symbol,
+            "c": res.get('lastPrice'),
+            "o": res.get('prevPrice24h'),
+            "h": res.get('highPrice24h'),
+            "l": res.get('lowPrice24h'),
+            "v": res.get('volume24h'),
+            "q": res.get('turnover24h'),
+        },
+    }
+
+
+def interval(_interval: str) -> str:
+    resolution = {
+        '1m': '1',
+        '3m': '3',
+        '5m': '5',
+        '15m': '15',
+        '30m': '30',
+        '1h': '60',
+        '2h': '120',
+        '4h': '240',
+        '1d': 'D',
+        '1w': 'W',
+        '1M': 'M'
+    }
+    return resolution.get(_interval, 0)
+
+
+def klines(res: list, _interval: str) -> list:
+    binance_klines = []
+    for i in res:
+        start_time = int(i[0])
+        _candle = [
+            start_time,
+            i[1],
+            i[2],
+            i[3],
+            i[4],
+            i[5],
+            start_time + interval2value(_interval) * 1000 - 1,
+            i[6],
+            1,
+            '0.0',
+            '0.0',
+            '0.0',
+            ]
+        binance_klines.append(_candle)
+    return binance_klines
+
+
+def interval2value(_interval: str) -> int:
+    resolution = {
+        '1': 60,
+        '3': 60 * 3,
+        '5': 60 * 5,
+        '15': 60 * 15,
+        '30': 60 * 30,
+        '120': 60 * 60,
+        '240': 60 * 60 * 2,
+        'D': 60 * 60 * 24,
+        'W': 60 * 60 * 24 * 7,
+        'M': 60 * 60 * 24 * 31
+    }
+    return resolution.get(_interval, 0)
+
+
+def candle(res: dict, symbol: str = None, ch_type: str = None) -> dict:
+    symbol = symbol.lower()
+    return {
+        'stream': f"{symbol}@{ch_type}",
+        'data': {
+            'e': 'kline',
+            'E': res["timestamp"],
+            's': symbol,
+            'k': {
+                't': res["start"],
+                'T': res["end"],
+                's': symbol,
+                'i': ch_type.replace('kline_', ''),
+                'f': 100,
+                'L': 200,
+                'o': res["open"],
+                'c': res["close"],
+                'h': res["high"],
+                'l': res["low"],
+                'v': res["volume"],
+                'n': 100,
+                'x': res["confirm"],
+                'q': res["turnover"],
+                'V': '0.0',
+                'Q': '0.0',
+                'B': '0',
+            },
+        },
+    }
+
+
+def place_order_response(res: dict, req: dict) -> dict:
+    return {
+        "symbol": req["symbol"],
+        "orderId": int(res["orderId"]),
+        "orderListId": -1,
+        "clientOrderId": res["orderLinkId"],
+        "transactTime": res["ts"],
+        "price": req["price"],
+        "origQty": req["qty"],
+        "executedQty": "0",
+        "cummulativeQuoteQty": "0",
+        "status": "NEW",
+        "timeInForce": "GTC",
+        "type": req["orderType"].upper(),
+        "side": req["side"].upper(),
+    }
+
+
+def on_trade_update(res: dict) -> dict:
+    order_quantity = Decimal(res.get("orderQty", res.get("qty")))
+    order_price = Decimal(res.get("orderPrice", res.get("price")))
+    quote_order_qty = str(order_quantity * order_price)
+
+    leaves_qty = Decimal(res["leavesQty"])
+    cumulative_filled_quantity = res.get("cumExecQty", str(order_quantity - leaves_qty))
+    cumulative_quote_asset = res.get("cumExecValue", str(Decimal(cumulative_filled_quantity) * order_price))
+
+    last_executed_quantity = res.get("execQty", cumulative_filled_quantity)
+    last_executed_price = res.get("execPrice", res.get("avgPrice"))
+    last_quote_asset_transacted = res.get("execValue", cumulative_quote_asset)
+
+    status = 'NEW' if leaves_qty == order_quantity else 'PARTIALLY_FILLED' if leaves_qty > 0 else 'FILLED'
+
+    return {
+        "e": "executionReport",
+        "E": int(res.get("execTime", res.get("updatedTime"))),
+        "s": res["symbol"],
+        "c": res["orderLinkId"],
+        "S": res["side"].upper(),
+        "o": res["orderType"].upper(),
+        "f": "GTC",
+        "q": str(order_quantity),
+        "p": str(order_price),
+        "P": "0.00000000",
+        "F": "0.00000000",
+        "g": -1,
+        "C": "",
+        "x": "TRADE",
+        "X": status,
+        "r": "NONE",
+        "i": int(res["orderId"]),
+        "l": last_executed_quantity,
+        "z": cumulative_filled_quantity,
+        "L": last_executed_price,
+        "n": res.get("execFee", res.get("cumExecFee")),
+        "N": res.get("feeCurrency", ""),
+        "T": int(res.get("execTime", res.get("updatedTime"))),
+        "t": int(res.get("execId", -1)),
+        "I": 123456789,
+        "w": True,
+        "m": False,
+        "M": False,
+        "O": int(res.get("execTime", res.get("createdTime"))),
+        "Z": cumulative_quote_asset,
+        "Y": last_quote_asset_transacted,
+        "Q": quote_order_qty,
+    }
+
+
+def on_funds_update(res: dict) -> dict:
+    event_time = res["creationTime"]
+    data = res["coin"]
+    funds = []
+    for currency in data:
+        balance = {
+            'a': currency["coin"],
+            'f': currency["availableToWithdraw"],
+            'l': currency["locked"],
+        }
+        funds.append(balance)
+    return {
+        'e': 'outboundAccountPosition',
+        'E': event_time,
+        'u': event_time,
+        'B': funds,
+    }
+
+
+def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, _sub: bool = False) -> list:
+    data_out = []
+
+    if mode == 'internal':
+        for i in data_in:
+            if i['coin'] in symbol:
+                data_out.append(
+                    {
+                        i['transferId']: {
+                            'e': 'balanceUpdate',
+                            'E': i['timestamp'],
+                            'a': i['coin'],
+                            'd': i['amount'] if i['toAccountType'] == 'UNIFIED' else '-'+i['amount'],
+                            'T': ts,
+                        }
+                    }
+                )
+
+    elif mode == 'universal':
+        for i in data_in:
+            if i['coin'] in symbol:
+                data_out.append(
+                    {
+                        i['transferId']: {
+                            'e': 'balanceUpdate',
+                            'E': i['timestamp'],
+                            'a': i['coin'],
+                            'd': i['amount'] if _sub and i['toAccountType'] == 'SPOT' else '-'+i['amount'],
+                            'T': ts,
+                        }
+                    }
+                )
+
+    elif mode in ('deposit', 'withdraw'):
+        for i in data_in:
+            if i['coin'] in symbol:
+                data_out.append(
+                    {
+                        i['txID']: {
+                            'e': 'balanceUpdate',
+                            'E': i['successAt'] if mode == 'deposit' else i['updateTime'],
+                            'a': i['coin'],
+                            'd': i['amount'] if mode == 'deposit' else '-'+i['amount'],
+                            'T': ts if mode == 'deposit' else i['createTime'],
+                        }
+                    }
+                )
+
+    return data_out

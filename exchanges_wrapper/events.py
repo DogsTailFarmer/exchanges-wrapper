@@ -46,8 +46,10 @@ class Events:
             event_type = f"{event_type.split('@')[0][1:].replace(':', '').lower()}@{event_type.split('@')[1]}"
         elif exchange == 'okx':
             event_type = f"{event_type.split('@')[0].replace('-', '').lower()}@{event_type.split('@')[1]}"
+        elif exchange == 'bybit':
+            event_type = f"{event_type.split('@')[0].lower()}@{event_type.split('@')[1]}"
         self.handlers[event_type].append(listener)
-        logger.debug(f"register_event: registered_streams{self.registered_streams}")
+        # logger.debug(f"register_event: registered_streams {self.registered_streams}")
 
     def unregister(self, exchange, trade_id):
         logger.info(f"Unregister events for {trade_id}")
