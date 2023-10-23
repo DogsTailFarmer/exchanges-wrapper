@@ -7,4 +7,4 @@ simplejson==3.19.1
 toml~=0.10.2
 aiohttp~=3.8.5
 Pympler~=1.0.1
-websockets~=11.0.3
+websockets~=12.0
