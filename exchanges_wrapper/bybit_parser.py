@@ -133,7 +133,7 @@ def order(res: dict, response_type=None) -> dict:
     status = {
         'Rejected': 'REJECTED',
         'Cancelled': 'CANCELED',
-        'PartiallyFilledCanceled': 'PARTIALLY_FILLED',
+        'PartiallyFilledCanceled': 'CANCELED',
         'PartiallyFilled': 'PARTIALLY_FILLED',
         'Filled': 'FILLED'
     }.get(state, 'NEW')
@@ -216,12 +216,8 @@ def ticker_price_change_statistics(res: dict, ts: int) -> dict:
 def account_information(res: list, ts: int) -> dict:
     balances = []
     for asset in res:
-        if total := asset.get("walletBalance"):
-            locked = asset["locked"]
-            free = str(Decimal(total) - Decimal(locked))
-        else:
-            free = asset["free"]
-            locked = asset["frozen"]
+        locked = asset["locked"]
+        free = str(Decimal(asset.get("walletBalance")) - Decimal(locked))
         balances.append({
             "asset": asset["coin"],
             "free": free,
@@ -435,12 +431,11 @@ def on_funds_update(res: dict) -> dict:
     }
 
 
-def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, _sub: bool = False) -> list:
+def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, uid=None) -> list:
     data_out = []
-
     if mode == 'internal':
         for i in data_in:
-            if i['coin'] in symbol:
+            if i['coin'] in symbol and 'UNIFIED' in (i['fromAccountType'], i['toAccountType']):
                 data_out.append(
                     {
                         i['transferId']: {
@@ -455,32 +450,66 @@ def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, _sub: bool
 
     elif mode == 'universal':
         for i in data_in:
-            if i['coin'] in symbol:
+            if i['coin'] in symbol and 'UNIFIED' in (i['fromAccountType'], i['toAccountType']):
                 data_out.append(
                     {
                         i['transferId']: {
                             'e': 'balanceUpdate',
                             'E': i['timestamp'],
                             'a': i['coin'],
-                            'd': i['amount'] if _sub and i['toAccountType'] == 'SPOT' else '-'+i['amount'],
+                            'd': i['amount'] if int(i['toMemberId']) == uid else '-'+i['amount'],
                             'T': ts,
                         }
                     }
                 )
 
-    elif mode in ('deposit', 'withdraw'):
-        for i in data_in:
-            if i['coin'] in symbol:
-                data_out.append(
-                    {
-                        i['txID']: {
-                            'e': 'balanceUpdate',
-                            'E': i['successAt'] if mode == 'deposit' else i['updateTime'],
-                            'a': i['coin'],
-                            'd': i['amount'] if mode == 'deposit' else '-'+i['amount'],
-                            'T': ts if mode == 'deposit' else i['createTime'],
-                        }
-                    }
-                )
-
     return data_out
+
+
+def funding_wallet(res: []) -> []:
+    balances = []
+    for balance in res:
+        _binance_res = {
+            "asset": balance["coin"],
+            "free": balance["transferBalance"],
+            "locked": "0",
+            "freeze": str(Decimal(balance["walletBalance"]) - Decimal(balance["transferBalance"])),
+            "withdrawing": "0",
+            "btcValuation": "0.0",
+        }
+        balances.append(_binance_res)
+    return balances
+
+
+def order_trade_list(res: [], order_id: str) -> []:
+    trade_rows = {}
+    order_trades = []
+    [order_trades.append(trade) for trade in res if trade['orderId'] == order_id]
+
+    for trade in order_trades:
+        trade_id = trade['tradeId']
+        qty = Decimal(trade['cashFlow'])
+        fee = Decimal(trade['fee'])
+        if (trade['side'] == 'Buy' and qty > 0) or (trade['side'] == 'Sell' and qty < 0):
+            price = trade['tradePrice']
+            qty = abs(qty)
+            quote_qty = str(Decimal(price) * qty)
+            trade_rows[trade_id] = {
+                "symbol": trade['symbol'],
+                "id": int(trade['tradeId']),
+                "orderId": int(order_id),
+                "orderListId": -1,
+                "price": price,
+                "qty": str(qty),
+                "quoteQty": quote_qty,
+                "time": int(trade['transactionTime']),
+                "isBuyer": trade['side'] == 'Buy',
+                "isMaker": True,
+                "isBestMatch": True,
+            }
+
+        if fee:
+            trade_rows[trade_id]["commission"] = str(fee)
+            trade_rows[trade_id]["commissionAsset"] = str(trade['currency'])
+
+    return list(trade_rows.values())

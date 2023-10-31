@@ -15,7 +15,7 @@ import grpc
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
 #
-from exchanges_wrapper import events, errors, api_pb2, api_pb2_grpc
+from exchanges_wrapper import errors, api_pb2, api_pb2_grpc
 from exchanges_wrapper.client import Client, STATUS_TIMEOUT
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent, REST_RATE_LIMIT_INTERVAL
@@ -161,11 +161,11 @@ class Martin(api_pb2_grpc.MartinServicer):
                     main_account = get_account(open_client.client.master_name)
                     main_client = Client(*main_account)
                     await main_client.fetch_exchange_info()
-                    if main_client.hbp_uid and main_client.hbp_account_id:
-                        open_client.client.hbp_main_uid = main_client.hbp_uid
-                        open_client.client.hbp_main_account_id = main_client.hbp_account_id
+                    if main_client.account_uid and main_client.account_id:
+                        open_client.client.main_account_uid = main_client.account_uid
+                        open_client.client.main_account_id = main_client.account_id
                         logger.info(f"The values for main Huobi account were received and set:"
-                                    f" UID: {main_client.hbp_uid} and account ID: {main_client.hbp_account_id}")
+                                    f" UID: {main_client.account_uid} and account ID: {main_client.account_id}")
                     else:
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
@@ -178,7 +178,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     exchange=request.account_name
                 )
         try:
-            await open_client.client.load()
+            await open_client.client.load(request.symbol)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
@@ -296,13 +296,13 @@ class Martin(api_pb2_grpc.MartinServicer):
                 request.trade_id,
                 symbol=request.symbol,
                 order_id=request.order_id,
-                origin_client_order_id=None,
+                origin_client_order_id=request.client_order_id,
                 receive_window=None
             )
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
-            logger.error(f"FetchOrders for {open_client.name}: {request.symbol} exception: {_ex}")
+            logger.error(f"FetchOrder for {open_client.name}: {request.symbol}: {request.order_id} exception: {_ex}")
         else:
             open_client.ts_rlc = time.time()
             if _queue and request.filled_update_call:
@@ -333,7 +333,6 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.SimpleResponse()
         try:
             res = await client.cancel_all_orders(request.trade_id, request.symbol)
-            # logger.info(f"CancelAllOrders: {res}")
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
@@ -439,7 +438,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         response_balance = api_pb2.FetchFundingWalletResponse.Balances()
         await self.rate_limit_control(open_client)
         res = []
-        if client.exchange in ('bitfinex', 'okx') or (open_client.real_market and client.exchange == 'binance'):
+        if (client.exchange in ('bitfinex', 'okx', 'bybit') or
+                (open_client.real_market and client.exchange == 'binance')):
             try:
                 res = await client.fetch_funding_wallet(asset=request.asset,
                                                         need_btc_valuation=request.need_btc_valuation,
@@ -722,7 +722,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     try:
                         balances = await client.fetch_ledgers(request.symbol)
                     except Exception as _ex:
-                        logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
+                        logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}: {traceback.format_exc()}")
                     else:
                         open_client.ts_rlc = time.time()
                         [_events.append(client.events.wrap_event(balance)) for balance in balances]
@@ -857,7 +857,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
         except Exception as ex:
             logger.error(f"TransferToMaster for {open_client.name}: {request.symbol} exception: {ex}")
-            logger.debug(f"TransferToMaster for {open_client.name}: {request.symbol} error: {traceback.format_exc()}")
+            # logger.debug(f"TransferToMaster for {open_client.name}: {request.symbol} error: {traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:

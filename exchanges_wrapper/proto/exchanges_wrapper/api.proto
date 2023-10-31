@@ -375,7 +375,8 @@ message FetchOrderRequest{
   string trade_id = 2;
   string symbol = 3;
   int64 order_id = 4;
-  bool filled_update_call = 5;
+  string client_order_id = 5;
+  bool filled_update_call = 6;
 }
 
 message FetchOrderResponse {
@@ -448,6 +449,7 @@ message OpenClientConnectionRequest {
   string trade_id = 1;
   string account_name = 2;
   int32 rate_limiter = 3;
+  string symbol = 4;
 }
 
 message OpenClientConnectionId {

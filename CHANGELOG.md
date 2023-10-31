@@ -1,5 +1,16 @@
+## v1.4.0rc1 2023-10-31
 ### Fix
 * Bitfinex: WSS Information message processing logic adjusted
+
+### Update
+* Dependency: Up requirements for crypto-ws-api==2.0.5
+* Other dependency
+* protobuf format for:
+ + OpenClientConnectionRequest
+ + FetchOrderRequest
+
+### Added for new features
+* Bybit exchange V5 API support implemented. Supported account type is Unified SPOT, for main and sub-accounts.
 
 ## v1.3.7.post4 2023-10-09
 ### Update

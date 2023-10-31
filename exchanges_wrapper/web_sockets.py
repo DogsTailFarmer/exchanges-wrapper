@@ -63,11 +63,6 @@ class EventsDataStream:
 
     async def _handle_messages(self, msg, symbol=None, ch_type=str()):
         msg_data = json.loads(msg if isinstance(msg, str) else gzip.decompress(msg))
-
-        if ch_type not in ("depth5", "miniTicker") and 'kline_' not in ch_type:
-            # print(f"ByBit WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
-            pass
-
         if self.exchange == 'binance':
             await self._handle_event(msg_data)
         elif self.exchange == 'bybit':
@@ -346,7 +341,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
 
     async def _handle_event(self, msg_data, *args):
         content = None
-        if msg_data.get('data').get('accountId') == self.client.hbp_account_id:
+        if msg_data.get('data').get('accountId') == self.client.account_id:
             if msg_data.get('ch') == 'accounts.update#2':
                 content = hbp.on_funds_update(msg_data)
             elif msg_data.get('ch') == f"trade.clearing#{self.symbol.lower()}#0":
