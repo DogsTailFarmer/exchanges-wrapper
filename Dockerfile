@@ -6,7 +6,7 @@ USER appuser
 
 ENV PATH="/home/appuser/.local/bin:${PATH}"
 ENV PATH="/home/appuser/.local/lib/python3.10/site-packages:${PATH}"
-ENV PYTHONUNBUFFERED = 1
+ENV PYTHONUNBUFFERED=1
 
 COPY requirements.txt requirements.txt
 
@@ -16,7 +16,7 @@ COPY ./exchanges_wrapper/* /home/appuser/.local/lib/python3.10/site-packages/exc
 
 WORKDIR "/home/appuser/.local/lib/python3.10/site-packages"
 
-LABEL org.opencontainers.image.description = "See README.md 'Get started' for setup and run package"
+LABEL org.opencontainers.image.description="See README.md 'Get started' for setup and run package"
 
 EXPOSE 50051
 

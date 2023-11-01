@@ -722,7 +722,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                     try:
                         balances = await client.fetch_ledgers(request.symbol)
                     except Exception as _ex:
-                        logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}: {traceback.format_exc()}")
+                        logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}:"
+                                       f" {_ex}: {traceback.format_exc()}")
                     else:
                         open_client.ts_rlc = time.time()
                         [_events.append(client.events.wrap_event(balance)) for balance in balances]

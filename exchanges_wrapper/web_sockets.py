@@ -3,7 +3,6 @@ import asyncio
 import json
 import logging
 import time
-import traceback
 from decimal import Decimal
 import gzip
 from datetime import datetime
@@ -474,7 +473,8 @@ class BBTPrivateEventsDataStream(EventsDataStream):
         }
         await self.ws_listener(request)
 
-    async def _handle_event(self, msg_data, symbol=None, ch_type=str()):
+    async def _handle_event(self, msg_data, *args):
+        ch_type = args[1]
         content = None
         if ch_type == 'execution.spot':
             for event in msg_data:
