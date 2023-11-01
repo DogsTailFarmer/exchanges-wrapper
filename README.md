@@ -42,9 +42,9 @@ Served methods describes into ```example/exch_client.py```
 - WSS keepalive
 - Reuse session for new client sessions
 - Utilizing Websocket API (bidirectional) for the most commonly used methods:
- + Binance ws-api/v3
- + Bitfinex Websocket Authenticated Inputs v2
- + OKX WS v5
+    + Binance ws-api/v3
+    + Bitfinex Websocket Authenticated Inputs v2
+    + OKX WS v5
 
 ## Extra exchanges implementation features
 - Binance REST API and WSS are accepted as basic, connection of other exchanges wrapped their API to Binance compatible

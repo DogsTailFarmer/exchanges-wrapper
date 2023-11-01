@@ -6,11 +6,13 @@
 * Dependency: Up requirements for crypto-ws-api==2.0.5
 * Other dependency
 * protobuf format for:
- + OpenClientConnectionRequest
- + FetchOrderRequest
+    + OpenClientConnectionRequest
+    + FetchOrderRequest
 
 ### Added for new features
-* Bybit exchange V5 API support implemented. Supported account type is Unified SPOT, for main and sub-accounts.
+* Bybit exchange V5 API support implemented. Supported account type is
+[Unified Trading Account](https://testnet.bybit.com/en/help-center/article/Introduction-to-Bybit-Unified-Trading-Account),
+for main and sub-accounts. Spot Trading only.
 
 ## v1.3.7.post4 2023-10-09
 ### Update
