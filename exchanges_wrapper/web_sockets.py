@@ -81,7 +81,8 @@ class EventsDataStream:
                 return
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and not msg_data.get("success")):
-                raise ConnectionClosed(f"Reconnecting ByBit WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
+                logger.warning(f"Reconnecting ByBit WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
+                raise ConnectionClosed(None, None)
             else:
                 logger.info(f"ByBit undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'okx':
@@ -94,7 +95,8 @@ class EventsDataStream:
             elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
                 return
             elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
-                raise ConnectionClosed(f"Reconnecting OKX WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
+                logger.warning(f"Reconnecting OKX WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
+                raise ConnectionClosed(None, None)
             else:
                 logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'bitfinex':
@@ -105,11 +107,12 @@ class EventsDataStream:
                 if msg_data.get('platform') and msg_data.get('platform').get('status') != 1:
                     logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
                     await asyncio.sleep(60)
-                    raise ConnectionClosed
+                    raise ConnectionClosed(None, None)
                 elif 'code' in msg_data:
                     code = msg_data.get('code')
                     if code == 10300:
-                        raise ConnectionClosed('WSS Subscription failed (generic)')
+                        logger.warning('WSS Subscription failed (generic)')
+                        raise ConnectionClosed(None, None)
                     elif code == 10301:
                         logger.error('WSS Already subscribed')
                     elif code == 10302:
@@ -117,11 +120,12 @@ class EventsDataStream:
                     elif code == 10305:
                         raise UserWarning('WSS Reached limit of open channels')
                     elif code == 20051:
-                        raise ConnectionClosed('WSS reconnection request received from exchange')
+                        logger.warning('WSS reconnection request received from exchange')
+                        raise ConnectionClosed(None, None)
                     elif code == 20060:
                         logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
                         await asyncio.sleep(120)
-                        raise ConnectionClosed
+                        raise ConnectionClosed(None, None)
                 elif msg_data.get('event') == 'subscribed':
                     chan_id = msg_data.get('chanId')
                     logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
@@ -163,7 +167,8 @@ class EventsDataStream:
             elif (msg_data.get('action') == 'sub' and
                   msg_data.get('code') == 500 and
                   msg_data.get('message') == '系统异常:'):
-                raise ConnectionClosed(f"Reconnecting Huobi user {ch_type} channel")
+                logger.warning(f"Reconnecting Huobi user {ch_type} channel")
+                raise ConnectionClosed(None, None)
             else:
                 logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
