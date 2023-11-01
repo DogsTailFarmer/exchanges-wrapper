@@ -1,3 +1,7 @@
+## v1.4.0rc3 2023-11-01
+### Fix
+* websockets v12.0 raised `ConnectionClosed` exception
+
 ## v1.4.0rc1 2023-10-31
 ### Fix
 * Bitfinex: WSS Information message processing logic adjusted
