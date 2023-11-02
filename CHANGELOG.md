@@ -1,6 +1,7 @@
 ## v1.4.0rc3 2023-11-01
 ### Fix
 * websockets v12.0 raised `ConnectionClosed` exception
+* Dependency: Up requirements for crypto-ws-api==2.0.5.post3
 
 ## v1.4.0rc1 2023-10-31
 ### Fix
