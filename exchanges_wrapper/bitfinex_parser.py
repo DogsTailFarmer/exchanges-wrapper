@@ -86,7 +86,7 @@ def symbol_name(_pair: str) -> ():
     return pair, base_asset, quote_asset
 
 
-def exchange_info(symbols_details: [], tickers: []) -> {}:
+def exchange_info(symbols_details: [], tickers: [], symbol_t) -> {}:
     symbols = []
     symbols_price = {
         pair[0].replace(':', '').upper()[1:]: pair[7] for pair in tickers
@@ -94,62 +94,63 @@ def exchange_info(symbols_details: [], tickers: []) -> {}:
     for market in symbols_details:
         if 'f0' not in market.get("pair"):
             _symbol, _base_asset, _quote_asset = symbol_name(market.get("pair"))
-            _base_asset_precision = len(str(market.get('minimum_order_size'))) - 2
-            # Filters var
-            _price = symbols_price.get(_symbol, 0.0)
-            _tick_size = tick_size(market.get('price_precision'), _price)
-            _min_qty = float(market.get('minimum_order_size'))
-            _max_qty = float(market.get('maximum_order_size'))
-            _step_size = 0.00001
-            _min_notional = _min_qty * _price
+            if _symbol == symbol_t:
+                _base_asset_precision = len(str(market.get('minimum_order_size'))) - 2
+                # Filters var
+                _price = symbols_price.get(_symbol, 0.0)
+                _tick_size = tick_size(market.get('price_precision'), _price)
+                _min_qty = float(market.get('minimum_order_size'))
+                _max_qty = float(market.get('maximum_order_size'))
+                _step_size = 0.00001
+                _min_notional = _min_qty * _price
 
-            _price_filter = {
-                "filterType": "PRICE_FILTER",
-                "minPrice": str(_tick_size),
-                "maxPrice": "100000.00000000",
-                "tickSize": str(_tick_size)
-            }
-            _lot_size = {
-                "filterType": "LOT_SIZE",
-                "minQty": str(_min_qty),
-                "maxQty": str(_max_qty),
-                "stepSize": str(_step_size)
-            }
-            _min_notional = {
-                "filterType": "MIN_NOTIONAL",
-                "minNotional": str(_min_notional),
-                "applyToMarket": True,
-                "avgPriceMins": 0
-            }
-            _percent_price = {
-                "filterType": "PERCENT_PRICE",
-                "multiplierUp": "5",
-                "multiplierDown": "0.2",
-                "avgPriceMins": 5
-            }
+                _price_filter = {
+                    "filterType": "PRICE_FILTER",
+                    "minPrice": str(_tick_size),
+                    "maxPrice": "100000.00000000",
+                    "tickSize": str(_tick_size)
+                }
+                _lot_size = {
+                    "filterType": "LOT_SIZE",
+                    "minQty": str(_min_qty),
+                    "maxQty": str(_max_qty),
+                    "stepSize": str(_step_size)
+                }
+                _min_notional = {
+                    "filterType": "MIN_NOTIONAL",
+                    "minNotional": str(_min_notional),
+                    "applyToMarket": True,
+                    "avgPriceMins": 0
+                }
+                _percent_price = {
+                    "filterType": "PERCENT_PRICE",
+                    "multiplierUp": "5",
+                    "multiplierDown": "0.2",
+                    "avgPriceMins": 5
+                }
 
-            symbol = {
-                "symbol": _symbol,
-                "status": "TRADING",
-                "baseAsset": _base_asset,
-                "baseAssetPrecision": _base_asset_precision,
-                "quoteAsset": _quote_asset,
-                "quotePrecision": _base_asset_precision,
-                "quoteAssetPrecision": _base_asset_precision,
-                "baseCommissionPrecision": 8,
-                "quoteCommissionPrecision": 8,
-                "orderTypes": ["LIMIT", "MARKET"],
-                "icebergAllowed": False,
-                "ocoAllowed": False,
-                "quoteOrderQtyMarketAllowed": False,
-                "allowTrailingStop": False,
-                "cancelReplaceAllowed": False,
-                "isSpotTradingAllowed": True,
-                "isMarginTradingAllowed": False,
-                "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
-                "permissions": ["SPOT"],
-            }
-            symbols.append(symbol)
+                symbol = {
+                    "symbol": _symbol,
+                    "status": "TRADING",
+                    "baseAsset": _base_asset,
+                    "baseAssetPrecision": _base_asset_precision,
+                    "quoteAsset": _quote_asset,
+                    "quotePrecision": _base_asset_precision,
+                    "quoteAssetPrecision": _base_asset_precision,
+                    "baseCommissionPrecision": 8,
+                    "quoteCommissionPrecision": 8,
+                    "orderTypes": ["LIMIT", "MARKET"],
+                    "icebergAllowed": False,
+                    "ocoAllowed": False,
+                    "quoteOrderQtyMarketAllowed": False,
+                    "allowTrailingStop": False,
+                    "cancelReplaceAllowed": False,
+                    "isSpotTradingAllowed": True,
+                    "isMarginTradingAllowed": False,
+                    "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
+                    "permissions": ["SPOT"],
+                }
+                symbols.append(symbol)
 
     return {
         "timezone": "UTC",

@@ -32,12 +32,14 @@ class EventsDataStream:
         self.wss_event_buffer = {}
         self._order_book = None
         self._price = None
+        self.tasks_list = []
 
     async def start(self):
         async for self.websocket in websockets.client.connect(self.endpoint, logger=logger_ws):
             try:
                 await self.start_wss()
             except ConnectionClosed as ex:
+                self.tasks_cancel()
                 if ex.code == 4000:
                     logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")
                     break
@@ -45,6 +47,7 @@ class EventsDataStream:
                     logger.warning(f"Restart WSS for {self.exchange}")
                     continue
             except Exception as ex:
+                self.tasks_cancel()
                 logger.error(f"WSS start() other exception: {ex}")
 
     async def start_wss(self):
@@ -54,8 +57,13 @@ class EventsDataStream:
         """
         Stop data stream
         """
+        self.tasks_cancel()
         if self.websocket:
             await self.websocket.close(code=4000)
+
+    def tasks_cancel(self):
+        [task.cancel() for task in self.tasks_list if not task.done()]
+        self.tasks_list.clear()
 
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
@@ -76,8 +84,12 @@ class EventsDataStream:
                     if msg_data["topic"] == "wallet":
                         _data[0]["creationTime"] = msg_data["creationTime"]
                 await self._handle_event(_data, symbol, ch_type)
+            elif msg_data.get("ret_msg") == "pong" or msg_data.get("op") == "pong":
+                return
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and msg_data.get("success")):
+                _task = asyncio.ensure_future(self.bybit_heartbeat(ch_type or "private"))
+                self.tasks_list.append(_task)
                 return
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and not msg_data.get("success")):
@@ -177,6 +189,11 @@ class EventsDataStream:
             await self.websocket.send(json.dumps(request))
         async for msg_data in self.websocket:
             await self._handle_messages(msg_data, symbol, ch_type)
+
+    async def bybit_heartbeat(self, req_id, interval=20):
+        while True:
+            await asyncio.sleep(interval)
+            await self.websocket.send(json.dumps({"req_id": req_id, "op": "ping"}))
 
 
 class MarketEventsDataStream(EventsDataStream):
@@ -523,10 +540,11 @@ class UserEventsDataStream(EventsDataStream):
     async def start_wss(self):
         logger.info(f"Start User WSS for {self.exchange}")
         _task = asyncio.ensure_future(self._heartbeat(self.listen_key))
+        self.tasks_list.append(_task)
         try:
             await self.ws_listener()
         finally:
-            _task.cancel()
+            self.tasks_cancel()
 
     async def _handle_event(self, content):
         # logger.debug(f"UserEventsDataStream._handle_event.content: {content}")

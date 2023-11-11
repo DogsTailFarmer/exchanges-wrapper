@@ -73,7 +73,10 @@ def get_account(_account_name: str) -> ():
                 ws_api = ws_auth = endpoint['ws_auth']
             else:
                 ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
-                ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
+                if exchange == 'okx':
+                    ws_api = ws_auth
+                else:
+                    ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
 
             if exchange == 'binance_us':
                 exchange = 'binance'
@@ -160,7 +163,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     # For HuobiPro get master account uid and account_id
                     main_account = get_account(open_client.client.master_name)
                     main_client = Client(*main_account)
-                    await main_client.fetch_exchange_info()
+                    await main_client.fetch_exchange_info(request.symbol)
                     if main_client.account_uid and main_client.account_id:
                         open_client.client.main_account_uid = main_client.account_uid
                         open_client.client.main_account_id = main_client.account_id
@@ -302,7 +305,8 @@ class Martin(api_pb2_grpc.MartinServicer):
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
-            logger.error(f"FetchOrder for {open_client.name}: {request.symbol}: {request.order_id} exception: {_ex}")
+            logger.error(f"FetchOrder for {open_client.name}: {request.symbol}:"
+                         f" {request.order_id}({request.client_order_id}) exception: {_ex}")
         else:
             open_client.ts_rlc = time.time()
             if _queue and request.filled_update_call:
@@ -310,6 +314,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     event = OrderUpdateEvent(res)
                     logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{event.order_id}:"
                                 f"{event.order_status}")
+                    await asyncio.sleep(HEARTBEAT)
                     await _queue.put(weakref.ref(event)())
                 elif res.get('status') == 'PARTIALLY_FILLED':
                     try:
@@ -350,14 +355,12 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         response = api_pb2.FetchExchangeInfoSymbolResponse()
-        exchange_info = await client.fetch_exchange_info()
-        exchange_info_symbol = {}
+        exchange_info = await client.fetch_exchange_info(request.symbol)
+        if exchange_info_symbol := exchange_info.get('symbols'):
+            exchange_info_symbol = exchange_info_symbol[0]
+        else:
+            raise UserWarning(f"Symbol {request.symbol} not exist")
         await self.rate_limit_control(open_client)
-        try:
-            exchange_info_symbol = next(item for item in exchange_info.get('symbols')
-                                        if item["symbol"] == request.symbol)
-        except StopIteration:
-            logger.info("FetchExchangeInfoSymbol.exchange_info_symbol: None")
         # logger.info(f"exchange_info_symbol: {exchange_info_symbol}")
         open_client.ts_rlc = time.time()
         filters_res = exchange_info_symbol.pop('filters', [])
@@ -799,6 +802,11 @@ class Martin(api_pb2_grpc.MartinServicer):
                          f" exception: {ex}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+
+            if 'Insufficient balance.' in str(ex.args):
+                _res = await client.fetch_account_information(request.trade_id)
+                logger.warning(f"CreateLimitOrder: Balances: {_res}")
+
         except Exception as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
             logger.debug(f"CreateLimitOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")

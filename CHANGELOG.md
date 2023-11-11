@@ -1,3 +1,9 @@
+## v1.4.0rc6 2023-11-11
+### Fix
+* FetchOrder for Demo - ByBitSub01: BTCUSDT: 0 exception: list index out of range
+* OKX: get ws_api endpoint from config
+* ByBit: send and handling WSS keepalive message
+
 ## v1.4.0rc3 2023-11-01
 ### Fix
 * websockets v12.0 raised `ConnectionClosed` exception

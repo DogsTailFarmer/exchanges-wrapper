@@ -13,7 +13,7 @@ def fetch_server_time(res: []) -> {}:
         return {'serverTime': int(res[0].get('ts'))}
 
 
-def exchange_info(server_time: int, trading_symbol: [], tickers: []) -> {}:
+def exchange_info(server_time: int, trading_symbol: [], tickers: [], symbol_t) -> {}:
     symbols = []
     symbols_price = {
         pair.get('instId').replace('-', ''): Decimal(pair.get('last'))
@@ -21,7 +21,7 @@ def exchange_info(server_time: int, trading_symbol: [], tickers: []) -> {}:
     }
     for market in trading_symbol:
         _symbol = market.get("instId").replace('-', '')
-        if symbols_price.get(_symbol):
+        if symbols_price.get(_symbol) and _symbol == symbol_t:
             _base_asset = market.get("baseCcy")
             _quote_asset = market.get("quoteCcy")
             _base_asset_precision = len(market.get('lotSz')) - 2

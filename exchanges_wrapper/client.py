@@ -112,7 +112,7 @@ class Client:
         return res
 
     async def load(self, symbol):
-        infos = await self.fetch_exchange_info()
+        infos = await self.fetch_exchange_info(symbol)
         if not infos.get('serverTime'):
             raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
         self.ts_start[symbol] = int(time.time() * 1000)
@@ -291,11 +291,12 @@ class Client:
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#exchange-information
-    async def fetch_exchange_info(self):
+    async def fetch_exchange_info(self, symbol):
         binance_res = {}
         if self.exchange == 'binance':
             binance_res = await self.http.send_api_call(
                 "/api/v3/exchangeInfo",
+                params={"symbol": symbol},
                 send_api_key=False
             )
         elif self.exchange == 'bitfinex':
@@ -310,7 +311,7 @@ class Client:
                 symbols=bfx.get_symbols(symbols_details)
             )
             if symbols_details and tickers:
-                binance_res = bfx.exchange_info(symbols_details, tickers)
+                binance_res = bfx.exchange_info(symbols_details, tickers, symbol)
         elif self.exchange == 'huobi':
             server_time = await self.fetch_server_time()
             trading_symbols = await self.http.send_api_call("v1/common/symbols")
@@ -321,15 +322,15 @@ class Client:
                         self.account_id = account.get('id')
                         break
                 self.account_uid = await self.http.send_api_call("v2/user/uid", signed=True)
-            binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbols)
+            binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbols, symbol)
         elif self.exchange == 'okx':
             params = {'instType': 'SPOT'}
             server_time = await self.fetch_server_time()
             instruments = await self.http.send_api_call("/api/v5/public/instruments", **params)
             tickers = await self.http.send_api_call("/api/v5/market/tickers", **params)
-            binance_res = okx.exchange_info(server_time.get('serverTime'), instruments, tickers)
+            binance_res = okx.exchange_info(server_time.get('serverTime'), instruments, tickers, symbol)
         elif self.exchange == 'bybit':
-            params = {'category': 'spot'}
+            params = {'category': 'spot', 'symbol': symbol}
             server_time = await self.fetch_server_time()
             instruments, _ = await self.http.send_api_call("/v5/market/instruments-info", **params)
             binance_res = bbt.exchange_info(server_time.get('serverTime'), instruments.get('list'))
@@ -451,6 +452,9 @@ class Client:
                 signed=True,
                 **params
             )
+
+            # logger.info(f"fetch_ledgers: INTERNAL: uid: {self.account_uid}: res: {res}")
+
             _res = bbt.on_balance_update(res['list'], ts, symbol, 'internal')
 
             # Universal Transfer Records, ie from Main account to Sub account
@@ -459,6 +463,9 @@ class Client:
                 signed=True,
                 **params
             )
+
+            # logger.info(f"fetch_ledgers: UNIVERSAL: uid: {self.account_uid}: res: {res}")
+
             _res += bbt.on_balance_update(
                 res['list'],
                 ts,
@@ -467,13 +474,27 @@ class Client:
                 uid=self.account_uid
             )
 
+            # logger.info(f"fetch_ledgers: uid: {self.account_uid}: _res: {_res}")
+
             for i in _res:
+
+                # logger.info(f"fetch_ledgers: i: {i}")
+
                 _id = next(iter(i))
+
+                # logger.info(f"fetch_ledgers: _id: {_id}")
+                # logger.info(f"fetch_ledgers: self.ledgers_id: {self.ledgers_id}")
+
                 if _id not in self.ledgers_id:
                     self.ledgers_id.append(_id)
                     if len(self.ledgers_id) > limit * 4:
                         self.ledgers_id.pop(0)
                     balances.append(i[_id])
+
+            if balances:
+                pass
+                # logger.info(f"fetch_ledgers: balances: {balances}")
+
             return balances
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
@@ -895,6 +916,9 @@ class Client:
                 'price': price,
                 'orderLinkId': str(new_client_order_id),
             }
+
+            # logger.info(f"create_order: params: {params}")
+
             res, ts = await self.http.send_api_call("/v5/order/create", method="POST", signed=True, **params)
             if res:
                 res["ts"] = ts
@@ -962,14 +986,15 @@ class Client:
                 res = await self.http.send_api_call("/v1/order/orders/getClientOrder", signed=True, **params)
             else:
                 res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
-            binance_res = hbp.order(res, response_type=response_type)
+            if res:
+                binance_res = hbp.order(res, response_type=response_type)
         elif self.exchange == 'okx':
             params = {'instId': self.symbol_to_okx(symbol),
                       'ordId': str(order_id),
                       'clOrdId': str(origin_client_order_id)}
             res = await self.http.send_api_call("/api/v5/trade/order", signed=True, **params)
-            logger.debug(f"fetch_order.res: {res}")
-            binance_res = okx.order(res[0], response_type=response_type)
+            if res:
+                binance_res = okx.order(res[0], response_type=response_type)
         elif self.exchange == 'bybit':
             params = {
                 'category': 'spot',
@@ -978,7 +1003,8 @@ class Client:
                 'orderLinkId': str(origin_client_order_id),
             }
             res, _ = await self.http.send_api_call("/v5/order/history", signed=True, **params)
-            binance_res = bbt.order(res["list"][0], response_type=response_type)
+            if res["list"]:
+                binance_res = bbt.order(res["list"][0], response_type=response_type)
         logger.debug(f"fetch_order.binance_res: {binance_res}")
         return binance_res
 
