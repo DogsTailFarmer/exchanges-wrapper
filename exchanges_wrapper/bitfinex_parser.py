@@ -107,7 +107,7 @@ def exchange_info(symbols_details: [], tickers: [], symbol_t) -> {}:
                 _price_filter = {
                     "filterType": "PRICE_FILTER",
                     "minPrice": str(_tick_size),
-                    "maxPrice": "100000.00000000",
+                    "maxPrice": "1000000",
                     "tickSize": str(_tick_size)
                 }
                 _lot_size = {

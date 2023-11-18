@@ -59,8 +59,8 @@ def exchange_info(server_time: int, trading_symbol: list) -> dict:
 
         _price_filter = {
             "filterType": "PRICE_FILTER",
-            "minPrice": '0',
-            "maxPrice": '0',
+            "minPrice": market['priceFilter']['tickSize'],
+            "maxPrice": '1000000',
             "tickSize": market['priceFilter']['tickSize']
         }
         _lot_size = {
@@ -79,7 +79,7 @@ def exchange_info(server_time: int, trading_symbol: list) -> dict:
             "filterType": "PERCENT_PRICE",
             "multiplierUp": "5",
             "multiplierDown": "0.2",
-            "avgPriceMins": 5
+            "avgPriceMins": 0
         }
 
         symbol = {
