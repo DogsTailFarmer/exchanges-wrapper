@@ -452,9 +452,6 @@ class Client:
                 signed=True,
                 **params
             )
-
-            # logger.info(f"fetch_ledgers: INTERNAL: uid: {self.account_uid}: res: {res}")
-
             _res = bbt.on_balance_update(res['list'], ts, symbol, 'internal')
 
             # Universal Transfer Records, ie from Main account to Sub account
@@ -463,9 +460,6 @@ class Client:
                 signed=True,
                 **params
             )
-
-            # logger.info(f"fetch_ledgers: UNIVERSAL: uid: {self.account_uid}: res: {res}")
-
             _res += bbt.on_balance_update(
                 res['list'],
                 ts,
@@ -473,28 +467,13 @@ class Client:
                 'universal',
                 uid=self.account_uid
             )
-
-            # logger.info(f"fetch_ledgers: uid: {self.account_uid}: _res: {_res}")
-
             for i in _res:
-
-                # logger.info(f"fetch_ledgers: i: {i}")
-
                 _id = next(iter(i))
-
-                # logger.info(f"fetch_ledgers: _id: {_id}")
-                # logger.info(f"fetch_ledgers: self.ledgers_id: {self.ledgers_id}")
-
                 if _id not in self.ledgers_id:
                     self.ledgers_id.append(_id)
                     if len(self.ledgers_id) > limit * 4:
                         self.ledgers_id.pop(0)
                     balances.append(i[_id])
-
-            if balances:
-                pass
-                # logger.info(f"fetch_ledgers: balances: {balances}")
-
             return balances
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
@@ -916,9 +895,6 @@ class Client:
                 'price': price,
                 'orderLinkId': str(new_client_order_id),
             }
-
-            # logger.info(f"create_order: params: {params}")
-
             res, ts = await self.http.send_api_call("/v5/order/create", method="POST", signed=True, **params)
             if res:
                 res["ts"] = ts
@@ -1229,17 +1205,17 @@ class Client:
                 task.set_name(f"{_id}")
                 tasks.append(task)
 
-            done, pending = await asyncio.wait(tasks, timeout=STATUS_TIMEOUT)
-            binance_res = [task.result() for task in done]
-
-            if pending:
-                [task.cancel() for task in pending]
-                if res.get("success"):
-                    for task in pending:
-                        _id = task.get_name()
-                        _res = await self.fetch_order(trade_id, symbol, order_id=_id, response_type=True)
-                        binance_res.append(_res)
-                pending.clear()
+            if tasks:
+                done, pending = await asyncio.wait(tasks, timeout=STATUS_TIMEOUT)
+                binance_res = [task.result() for task in done]
+                if pending:
+                    [task.cancel() for task in pending]
+                    if res.get("success"):
+                        for task in pending:
+                            _id = task.get_name()
+                            _res = await self.fetch_order(trade_id, symbol, order_id=_id, response_type=True)
+                            binance_res.append(_res)
+                    pending.clear()
 
         return binance_res
 
@@ -1786,11 +1762,7 @@ class Client:
                 'endTime': res.get('updateTime') + 500,
             }
             res, _ = await self.http.send_api_call("/v5/account/transaction-log", signed=True, **params)
-
-            try:
-                binance_res = bbt.order_trade_list(res['list'], str(order_id))
-            except Exception as e:
-                logger.info(f"fetch_order_trade_list: {e}")
+            binance_res = bbt.order_trade_list(res['list'], str(order_id))
 
         logger.debug(f"fetch_order_trade_list.binance_res: {binance_res}")
         return binance_res

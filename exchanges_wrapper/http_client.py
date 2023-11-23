@@ -115,6 +115,7 @@ class ClientBybit(HttpClient):
             signature = generate_signature(self.exchange, self.api_secret, signature_payload)
             params = {
                 "Content-Type": AJ,
+                "X-Referer": "9KEW1K",
                 "X-BAPI-API-KEY": self.api_key,
                 "X-BAPI-SIGN": signature,
                 "X-BAPI-TIMESTAMP": str(ts)

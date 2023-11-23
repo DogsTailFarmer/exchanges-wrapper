@@ -1,3 +1,7 @@
+## v1.4.0 2023-11-23
+### Update
+* Some minor improvements
+
 ## v1.4.0rc6 2023-11-11
 ### Fix
 * FetchOrder for Demo - ByBitSub01: BTCUSDT: 0 exception: list index out of range

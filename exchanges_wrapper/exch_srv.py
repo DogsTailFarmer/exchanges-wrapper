@@ -802,11 +802,6 @@ class Martin(api_pb2_grpc.MartinServicer):
                          f" exception: {ex}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-
-            if 'Insufficient balance.' in str(ex.args):
-                _res = await client.fetch_account_information(request.trade_id)
-                logger.warning(f"CreateLimitOrder: Balances: {_res}")
-
         except Exception as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
             logger.debug(f"CreateLimitOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")
