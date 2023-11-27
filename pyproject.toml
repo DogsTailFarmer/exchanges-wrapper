@@ -23,7 +23,7 @@ dependencies = [
     "idna==3.4",
     "pyotp~=2.9.0",
     "simplejson==3.19.2",
-    "aiohttp==3.9.0",
+    "aiohttp==3.9.1",
     "Pympler~=1.0.1",
     "websockets~=12.0",
     "expiringdict~=1.2.2"
