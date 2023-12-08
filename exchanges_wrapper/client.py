@@ -454,8 +454,8 @@ class Client:
             )
             _res = bbt.on_balance_update(res['list'], ts, symbol, 'internal')
 
-            # Universal Transfer Records, ie from Main account to Sub account
-            res, _ = await self.http.send_api_call(
+            # Universal Transfer Records, ie from Sub account to Main account
+            res, ts = await self.http.send_api_call(
                 "/v5/asset/transfer/query-universal-transfer-list",
                 signed=True,
                 **params
@@ -467,6 +467,26 @@ class Client:
                 'universal',
                 uid=self.account_uid
             )
+
+            params.pop('status')
+            params['accountType'] = 'UNIFIED'
+            params['category'] = 'spot'
+            params['type'] = 'TRANSFER_IN'
+
+            # Get Transaction Log
+            res, ts = await self.http.send_api_call(
+                "/v5/account/transaction-log",
+                signed=True,
+                **params
+            )
+
+            _res += bbt.on_balance_update(
+                res['list'],
+                ts,
+                symbol,
+                'log'
+            )
+
             for i in _res:
                 _id = next(iter(i))
                 if _id not in self.ledgers_id:

@@ -1,3 +1,7 @@
+## v1.4.1 2023-12-01
+### Update
+* Bybit: fetch_ledgers(): get transfer event from Sub account to Main account on Main account
+
 ## v1.4.0 2023-11-23
 ### Update
 * Some minor improvements

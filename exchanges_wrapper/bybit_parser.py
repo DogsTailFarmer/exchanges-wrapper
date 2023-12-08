@@ -463,6 +463,21 @@ def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, uid=None) 
                     }
                 )
 
+    elif mode == 'log':
+        for i in data_in:
+            if i['currency'] in symbol:
+                data_out.append(
+                    {
+                        i['id']: {
+                            'e': 'balanceUpdate',
+                            'E': i['transactionTime'],
+                            'a': i['currency'],
+                            'd': i['cashFlow'],
+                            'T': ts,
+                        }
+                    }
+                )
+
     return data_out
 
 
