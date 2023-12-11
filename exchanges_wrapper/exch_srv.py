@@ -314,7 +314,6 @@ class Martin(api_pb2_grpc.MartinServicer):
                     event = OrderUpdateEvent(res)
                     logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{event.order_id}:"
                                 f"{event.order_status}")
-                    await asyncio.sleep(HEARTBEAT)
                     await _queue.put(weakref.ref(event)())
                 elif res.get('status') == 'PARTIALLY_FILLED':
                     try:
