@@ -268,7 +268,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             for order in res:
                 order_id = order['orderId']
                 active_orders.append(order_id)
-                new_order = json_format.ParseDict(order, response_order)
+                new_order = json_format.ParseDict(order, response_order, ignore_unknown_fields=True)
                 # logger.debug(f"FetchOpenOrders.new_order: {new_order}")
                 response.items.append(new_order)
                 if client.exchange == 'bitfinex':
@@ -327,7 +327,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                         for trade in trades:
                             event = OrderTradesEvent(trade)
                             await _queue.put(weakref.ref(event)())
-            json_format.ParseDict(res, response)
+            json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 
     async def CancelAllOrders(self, request: api_pb2.MarketRequest,
@@ -363,48 +363,68 @@ class Martin(api_pb2_grpc.MartinServicer):
         # logger.info(f"exchange_info_symbol: {exchange_info_symbol}")
         open_client.ts_rlc = time.time()
         filters_res = exchange_info_symbol.pop('filters', [])
-        json_format.ParseDict(exchange_info_symbol, response)
+        json_format.ParseDict(exchange_info_symbol, response, ignore_unknown_fields=True)
         # logger.info(f"filters: {filters_res}")
         filters = response.filters
         for _filter in filters_res:
             filter_type = _filter.get('filterType')
             if filter_type == 'PRICE_FILTER':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.PriceFilter()
-                filters.price_filter.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.price_filter.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif 'PERCENT_PRICE' in filter_type:
                 if filter_type == 'PERCENT_PRICE_BY_SIDE':
-                    _filter['multiplierUp'] = _filter['bidMultiplierUp']
+                    _filter['multiplierUp'] = _filter['askMultiplierUp']
                     _filter['multiplierDown'] = _filter['bidMultiplierDown']
                     del _filter['bidMultiplierUp']
                     del _filter['bidMultiplierDown']
                     del _filter['askMultiplierUp']
                     del _filter['askMultiplierDown']
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.PercentPrice()
-                filters.percent_price.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.percent_price.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif filter_type == 'LOT_SIZE':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.LotSize()
-                filters.lot_size.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.lot_size.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif filter_type == 'MIN_NOTIONAL':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MinNotional()
-                filters.min_notional.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.min_notional.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif filter_type == 'NOTIONAL':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.Notional()
-                filters.notional.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.notional.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif filter_type == 'ICEBERG_PARTS':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.IcebergParts()
-                filters.iceberg_parts.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.iceberg_parts.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif filter_type == 'MARKET_LOT_SIZE':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MarketLotSize()
-                filters.market_lot_size.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.market_lot_size.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif filter_type == 'MAX_NUM_ORDERS':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxNumOrders()
-                filters.max_num_orders.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.max_num_orders.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif filter_type == 'MAX_NUM_ICEBERG_ORDERS':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxNumIcebergOrders()
-                filters.max_num_iceberg_orders.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.max_num_iceberg_orders.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
             elif filter_type == 'MAX_POSITION':
                 new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxPosition()
-                filters.max_position.CopyFrom(json_format.ParseDict(_filter, new_filter_template))
+                filters.max_position.CopyFrom(
+                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
+                )
         return response
 
     async def FetchAccountInformation(self, request: api_pb2.OpenClientConnectionId,
@@ -428,7 +448,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                 balances.append({'asset': i.get('asset'), 'free': i.get('free'), 'locked': i.get('locked')})
         # logger.info(f"account_information.balances: {balances}")
         for balance in balances:
-            new_balance = json_format.ParseDict(balance, response_balance)
+            new_balance = json_format.ParseDict(balance, response_balance, ignore_unknown_fields=True)
             response.balances.extend([new_balance])
         return response
 
@@ -451,7 +471,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         open_client.ts_rlc = time.time()
         logger.debug(f"funding_wallet: {res}")
         for balance in res:
-            new_balance = json_format.ParseDict(balance, response_balance)
+            new_balance = json_format.ParseDict(balance, response_balance, ignore_unknown_fields=True)
             response.balances.extend([new_balance])
         return response
 
@@ -482,7 +502,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         await self.rate_limit_control(open_client)
         res = await client.fetch_symbol_price_ticker(symbol=request.symbol)
         open_client.ts_rlc = time.time()
-        json_format.ParseDict(res, response)
+        json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 
     async def FetchTickerPriceChangeStatistics(
@@ -494,7 +514,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         await self.rate_limit_control(open_client)
         res = await client.fetch_ticker_price_change_statistics(symbol=request.symbol)
         open_client.ts_rlc = time.time()
-        json_format.ParseDict(res, response)
+        json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 
     async def FetchKlines(self, request: api_pb2.FetchKlinesRequest,
@@ -597,7 +617,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             # logger.info(f"FetchAccountTradeList: {res}")
             open_client.ts_rlc = time.time()
             for trade in res:
-                trade_order = json_format.ParseDict(trade, response_trade)
+                trade_order = json_format.ParseDict(trade, response_trade, ignore_unknown_fields=True)
                 response.items.append(trade_order)
         return response
 
@@ -632,7 +652,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                               'close_price': _event.close_price,
                               'event_time': _event.event_time}
                 # logger.info(f"OnTickerUpdate.event: {_event.symbol}, ticker_24h: {ticker_24h}")
-                json_format.ParseDict(ticker_24h, response)
+                json_format.ParseDict(ticker_24h, response, ignore_unknown_fields=True)
                 yield response
                 _queue.task_done()
 
@@ -813,7 +833,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                                                origin_client_order_id=request.new_client_order_id,
                                                receive_window=None,
                                                response_type=False)
-            json_format.ParseDict(res, response)
+            json_format.ParseDict(res, response, ignore_unknown_fields=True)
             logger.debug(f"CreateLimitOrder: for {open_client.name}:{request.symbol}: created: {res.get('orderId')}")
         return response
 
@@ -842,7 +862,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            json_format.ParseDict(res, response)
+            json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 
     async def TransferToMaster(self, request: api_pb2.MarketRequest,

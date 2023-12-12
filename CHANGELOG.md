@@ -1,3 +1,9 @@
+## v1.4.3 2023-12-12
+### Fix
+*  For limit order get status EXPIRED_IN_MATCH on Binance testnet #42
+    + Binance: in create Limit order parameters adding parameter "selfTradePreventionMode": "NONE"
+    + For method json_format.ParseDict(..., ignore_unknown_fields=True) parameter added
+
 ## v1.4.2 2023-12-11
 ### Update
 * Some minor improvements
