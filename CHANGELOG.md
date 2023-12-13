@@ -1,3 +1,9 @@
+## v1.4.4 2023-12-13
+### Update
+* Before send cancel order result checking if it was be executed and generating trade event
+* Rollback 1.4.3
+    - Binance: in create Limit order parameters adding parameter "selfTradePreventionMode": "NONE"
+
 ## v1.4.3 2023-12-12
 ### Fix
 *  For limit order get status EXPIRED_IN_MATCH on Binance testnet #42

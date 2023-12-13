@@ -316,19 +316,22 @@ class Martin(api_pb2_grpc.MartinServicer):
                                 f"{event.order_status}")
                     await _queue.put(weakref.ref(event)())
                 elif res.get('status') == 'PARTIALLY_FILLED':
-                    try:
-                        trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id)
-                    except asyncio.CancelledError:
-                        pass  # Task cancellation should not be logged as an error
-                    except Exception as _ex:
-                        logger.error(f"Fetch order trades for {open_client.name}: {request.symbol} exception: {_ex}")
-                    else:
-                        logger.debug(f"FetchOrder.trades: {trades}")
-                        for trade in trades:
-                            event = OrderTradesEvent(trade)
-                            await _queue.put(weakref.ref(event)())
+                    await self.create_trade_stream_event(_queue, client, open_client, request)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
+
+    async def create_trade_stream_event(self, _queue, client, open_client, request):
+        try:
+            trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id)
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
+        except Exception as _ex:
+            logger.error(f"Fetch order trades for {open_client.name}: {request.symbol} exception: {_ex}")
+        else:
+            logger.debug(f"FetchOrder.trades: {trades}")
+            for trade in trades:
+                event = OrderTradesEvent(trade)
+                await _queue.put(weakref.ref(event)())
 
     async def CancelAllOrders(self, request: api_pb2.MarketRequest,
                               _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse():
@@ -360,7 +363,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         else:
             raise UserWarning(f"Symbol {request.symbol} not exist")
         await self.rate_limit_control(open_client)
-        # logger.info(f"exchange_info_symbol: {exchange_info_symbol}")
+        # logger.debug(f"exchange_info_symbol: {exchange_info_symbol}")
         open_client.ts_rlc = time.time()
         filters_res = exchange_info_symbol.pop('filters', [])
         json_format.ParseDict(exchange_info_symbol, response, ignore_unknown_fields=True)
@@ -842,6 +845,7 @@ class Martin(api_pb2_grpc.MartinServicer):
         response = api_pb2.CancelOrderResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
+        _queue = client.on_order_update_queues.get(request.trade_id)
         try:
             res = await client.cancel_order(
                 request.trade_id,
@@ -862,6 +866,9 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
+            if float(res['executedQty']):
+                await self.create_trade_stream_event(_queue, client, open_client, request)
+                await asyncio.sleep(HEARTBEAT)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 

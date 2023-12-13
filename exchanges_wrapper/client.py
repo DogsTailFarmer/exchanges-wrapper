@@ -940,7 +940,7 @@ class Client:
 
         binance_res = {}
         if self.exchange == 'binance':
-            params = {"symbol": symbol, "selfTradePreventionMode": "NONE"}
+            params = {"symbol": symbol}
             if order_id:
                 params["orderId"] = order_id
             else:
