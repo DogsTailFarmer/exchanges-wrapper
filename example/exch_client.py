@@ -38,6 +38,7 @@ async def main(_exchange, _symbol):
         client_id_msg = await stub.OpenClientConnection(api_pb2.OpenClientConnectionRequest(
             trade_id=trade_id,
             account_name=_exchange,
+            symbol=SYMBOL,
             rate_limiter=RATE_LIMITER))
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
