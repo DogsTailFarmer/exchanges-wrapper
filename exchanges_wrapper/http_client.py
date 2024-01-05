@@ -1,5 +1,5 @@
 import asyncio
-import json
+import ujson as json
 from urllib.parse import urlencode, urlparse
 
 import aiohttp

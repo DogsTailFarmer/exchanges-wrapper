@@ -1,3 +1,11 @@
+## v1.4.5 2024-01-05
+### Fix
+* `exch_client.py` init error
+
+### Update
+* replacing json with ujson to improve performance
+* Dependency: Up requirements for crypto-ws-api==2.0.6
+
 ## v1.4.4 2023-12-13
 ### Update
 * Before send cancel order result checking if it was be executed and generating trade event

@@ -1,6 +1,6 @@
 import sys
 import asyncio
-import json
+import ujson as json
 import logging
 import time
 from decimal import Decimal

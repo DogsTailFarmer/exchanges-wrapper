@@ -7,7 +7,7 @@ import gc
 import traceback
 import asyncio
 import functools
-import json
+import ujson as json
 import logging.handlers
 import toml
 # noinspection PyPackageRequirements
@@ -579,20 +579,21 @@ class Martin(api_pb2_grpc.MartinServicer):
                 # logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
                 response.symbol = _event.symbol
                 response.interval = _event.kline_interval
-                candle = [_event.kline_start_time,
-                          _event.kline_open_price,
-                          _event.kline_high_price,
-                          _event.kline_low_price,
-                          _event.kline_close_price,
-                          _event.kline_base_asset_volume,
-                          _event.kline_close_time,
-                          _event.kline_quote_asset_volume,
-                          _event.kline_trades_number,
-                          _event.kline_taker_buy_base_asset_volume,
-                          _event.kline_taker_buy_quote_asset_volume,
-                          _event.kline_ignore
-                          ]
-                response.candle = json.dumps(candle)
+                response.candle = json.dumps(
+                    [_event.kline_start_time,
+                     _event.kline_open_price,
+                     _event.kline_high_price,
+                     _event.kline_low_price,
+                     _event.kline_close_price,
+                     _event.kline_base_asset_volume,
+                     _event.kline_close_time,
+                     _event.kline_quote_asset_volume,
+                     _event.kline_trades_number,
+                     _event.kline_taker_buy_base_asset_volume,
+                     _event.kline_taker_buy_quote_asset_volume,
+                     _event.kline_ignore
+                     ]
+                )
                 yield response
                 _queue.task_done()
 
