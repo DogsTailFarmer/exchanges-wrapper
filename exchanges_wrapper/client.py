@@ -1722,7 +1722,7 @@ class Client:
             )
             # print(f"fetch_account_trade_list.res: {res}")
             if res:
-                binance_res = bfx.account_trade_list(res)
+                binance_res = bfx.account_trade_list(res, order_id)
             # print(f"fetch_account_trade_list.res: {binance_res}")
         elif self.exchange == 'huobi':
             if limit == 100:
@@ -1762,7 +1762,10 @@ class Client:
                 method='POST',
                 signed=True,
             )
-            binance_res = bfx.account_trade_list(res)
+            if res:
+                binance_res = bfx.account_trade_list(res)
+            else:
+                binance_res = await self.fetch_account_trade_list(trade_id, symbol, order_id)
         elif self.exchange == 'huobi':
             res = await self.http.send_api_call(f"v1/order/orders/{order_id}/matchresults", signed=True)
             binance_res = hbp.account_trade_list(res)

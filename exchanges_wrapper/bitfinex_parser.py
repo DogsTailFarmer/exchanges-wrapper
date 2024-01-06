@@ -424,28 +424,29 @@ def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
     }
 
 
-def account_trade_list(res: []) -> []:
+def account_trade_list(res: [], order_id=None) -> []:
     binance_trade_list = []
     for trade in res:
-        price = str(trade[5])
-        qty = str(abs(trade[4]))
-        quote_qty = str(Decimal(price) * Decimal(qty))
-        binance_trade = {
-            "symbol": trade[1][1:].replace(':', ''),
-            "id": trade[0],
-            "orderId": trade[3],
-            "orderListId": -1,
-            "price": price,
-            "qty": qty,
-            "quoteQty": quote_qty,
-            "commission": str(abs(trade[9])),
-            "commissionAsset": trade[10],
-            "time": trade[2],
-            "isBuyer": trade[4] > 0,
-            "isMaker": trade[8] == 1,
-            "isBestMatch": True,
-        }
-        binance_trade_list.append(binance_trade)
+        if order_id is None or order_id == trade[3]:
+            price = str(trade[5])
+            qty = str(abs(trade[4]))
+            quote_qty = str(Decimal(price) * Decimal(qty))
+            binance_trade = {
+                "symbol": trade[1][1:].replace(':', ''),
+                "id": trade[0],
+                "orderId": trade[3],
+                "orderListId": -1,
+                "price": price,
+                "qty": qty,
+                "quoteQty": quote_qty,
+                "commission": str(abs(trade[9])),
+                "commissionAsset": trade[10],
+                "time": trade[2],
+                "isBuyer": trade[4] > 0,
+                "isMaker": trade[8] == 1,
+                "isBestMatch": True,
+            }
+            binance_trade_list.append(binance_trade)
     return binance_trade_list
 
 

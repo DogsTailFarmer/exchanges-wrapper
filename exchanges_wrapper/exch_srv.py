@@ -315,7 +315,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{event.order_id}:"
                                 f"{event.order_status}")
                     await _queue.put(weakref.ref(event)())
-                elif res.get('status') == 'PARTIALLY_FILLED':
+                else:
                     await self.create_trade_stream_event(_queue, client, open_client, request)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
@@ -867,7 +867,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            if float(res['executedQty']):
+            if float(res.get('executedQty', '0')) or not res:
                 await self.create_trade_stream_event(_queue, client, open_client, request)
                 await asyncio.sleep(HEARTBEAT)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)

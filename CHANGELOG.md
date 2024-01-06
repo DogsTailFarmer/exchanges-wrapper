@@ -1,3 +1,7 @@
+## v1.4.6 2024-01-06
+### Update
+* FetchOrder: Bitfinex: generate trades events for orders older than the last two weeks
+
 ## v1.4.5 2024-01-05
 ### Fix
 * `exch_client.py` init error
