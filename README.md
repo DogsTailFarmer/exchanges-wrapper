@@ -119,9 +119,7 @@ docker run -itP \
 * For [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/overview) serializing structured data see ```proto/exchanges_wrapper/api.proto```
 
 ## Donate
-*BNB*, *BUSD*, *USDT* (BEP20) 0x5b52c6ba862b11318616ee6cef64388618318b92
-
-*USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
+*USDT* (TRC20) TN8F3Dz8BU8VwECRh3LTKi7FrsU8eWfsZz
 
 ## Powered by exchanges-wrapper
 <a><img align="middle" src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50"></a>
