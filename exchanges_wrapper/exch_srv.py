@@ -17,7 +17,7 @@ import grpc
 from google.protobuf import json_format
 #
 from exchanges_wrapper import errors, api_pb2, api_pb2_grpc
-from exchanges_wrapper.client import Client, STATUS_TIMEOUT
+from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent, REST_RATE_LIMIT_INTERVAL
 from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE

@@ -1,3 +1,4 @@
+## 1.4.7  2024-01-25
 ### Fix
 * Bybit: filter LOT_SIZE.stepSize
 * Bitfinex: filter LOT_SIZE.stepSize
