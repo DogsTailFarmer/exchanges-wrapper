@@ -10,6 +10,7 @@ import functools
 import ujson as json
 import logging.handlers
 import toml
+from decimal import Decimal
 # noinspection PyPackageRequirements
 import grpc
 # noinspection PyPackageRequirements
@@ -221,6 +222,25 @@ class Martin(api_pb2_grpc.MartinServicer):
             server_time = res.get('serverTime')
             return api_pb2.FetchServerTimeResponse(server_time=server_time)
 
+    async def OneClickArrivalDeposit(self, request: api_pb2.MarketRequest,
+                                     _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse():
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
+        response = api_pb2.SimpleResponse()
+        tx_id = request.symbol
+        try:
+            res = await client.one_click_arrival_deposit(tx_id)
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
+        except Exception as ex:
+            logger.error(f"OneClickArrivalDeposit for {open_client.name}:{request.symbol} exception: {ex}")
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.UNKNOWN)
+        else:
+            response.success = True
+            response.result = json.dumps(str(res))
+        return response
+
     async def ResetRateLimit(self, request: api_pb2.OpenClientConnectionId,
                              _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
         Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
@@ -273,15 +293,9 @@ class Martin(api_pb2_grpc.MartinServicer):
                 response.items.append(new_order)
                 if client.exchange == 'bitfinex':
                     if order_id in client.active_orders:
-                        client.active_orders[order_id]['executedQty'] = order['executedQty']
+                        client.active_orders[order_id]['executedQty'] = Decimal(order['executedQty'])
                     else:
-                        client.active_orders[order_id] = {
-                            'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
-                            'origQty': order['origQty'],
-                            'executedQty': order['executedQty'],
-                            'lastEvent': (),
-                            'cancelled': False
-                        }
+                        client.active_order(order_id, order['origQty'], order['executedQty'])
             if client.exchange == 'bitfinex':
                 client.active_orders_clear(active_orders)
         response.rate_limiter = Martin.rate_limiter
@@ -791,8 +805,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                 return
             else:
                 event = vars(_event)
-                # logger.info(f"OnOrderUpdate: {event}")
                 event.pop('handlers', None)
+                # logger.info(f"OnOrderUpdate: {event}")
                 response.success = True
                 response.result = json.dumps(str(event))
                 yield response
@@ -867,9 +881,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            if float(res.get('executedQty', '0')) or not res:
+            if not res or res.get('executedQty', '0') != '0':
                 await self.create_trade_stream_event(_queue, client, open_client, request)
-                await asyncio.sleep(HEARTBEAT)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 

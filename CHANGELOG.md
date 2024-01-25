@@ -1,3 +1,14 @@
+### Fix
+* Bybit: filter LOT_SIZE.stepSize
+* Bitfinex: filter LOT_SIZE.stepSize
+
+### Added for new features
+* Binance: new method [`OneClickArrivalDeposit`](https://binance-docs.github.io/apidocs/spot/en/#one-click-arrival-deposit-apply-for-expired-address-deposit-user_data)
+
+### Update
+* Bitfinex: refine the order processing
+* Dependency: Up requirements for Python>=3.9
+
 ## v1.4.6 2024-01-06
 ### Update
 * FetchOrder: Bitfinex: generate trades events for orders older than the last two weeks

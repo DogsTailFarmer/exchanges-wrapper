@@ -144,6 +144,11 @@ class MartinStub(object):
                 request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
                 response_deserializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
                 )
+        self.OneClickArrivalDeposit = channel.unary_unary(
+                '/martin.Martin/OneClickArrivalDeposit',
+                request_serializer=exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
+                response_deserializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
+                )
 
 
 class MartinServicer(object):
@@ -305,6 +310,12 @@ class MartinServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def OneClickArrivalDeposit(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MartinServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -435,6 +446,11 @@ def add_MartinServicer_to_server(servicer, server):
             ),
             'CheckStream': grpc.unary_unary_rpc_method_handler(
                     servicer.CheckStream,
+                    request_deserializer=exchanges__wrapper_dot_api__pb2.MarketRequest.FromString,
+                    response_serializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.SerializeToString,
+            ),
+            'OneClickArrivalDeposit': grpc.unary_unary_rpc_method_handler(
+                    servicer.OneClickArrivalDeposit,
                     request_deserializer=exchanges__wrapper_dot_api__pb2.MarketRequest.FromString,
                     response_serializer=exchanges__wrapper_dot_api__pb2.SimpleResponse.SerializeToString,
             ),
@@ -885,6 +901,23 @@ class Martin(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/martin.Martin/CheckStream',
+            exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
+            exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def OneClickArrivalDeposit(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/martin.Martin/OneClickArrivalDeposit',
             exchanges__wrapper_dot_api__pb2.MarketRequest.SerializeToString,
             exchanges__wrapper_dot_api__pb2.SimpleResponse.FromString,
             options, channel_credentials,

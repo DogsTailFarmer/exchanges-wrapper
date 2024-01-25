@@ -36,6 +36,7 @@ service Martin {
   rpc FetchFundingWallet(FetchFundingWalletRequest) returns (FetchFundingWalletResponse) {}
   rpc TransferToMaster(MarketRequest) returns (SimpleResponse) {}
   rpc CheckStream (MarketRequest) returns (SimpleResponse) {}
+  rpc OneClickArrivalDeposit (MarketRequest) returns (SimpleResponse) {}
 }
 
 message OnBalanceUpdateResponse {

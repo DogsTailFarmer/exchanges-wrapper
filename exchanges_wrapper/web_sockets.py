@@ -389,32 +389,48 @@ class BfxPrivateEventsDataStream(EventsDataStream):
         await self.ws_listener(request)
 
     async def _handle_event(self, msg_data, *args):
-        # logger.debug(f"BitfinexPrivate: msg_data: {msg_data}")
+        event_type = msg_data[1]
+        event = msg_data[2]
+
         content = None
-        if msg_data[1] in ('wu', 'ws'):
-            content = bfx.on_funds_update(msg_data[2])
-        elif msg_data[1] == 'oc':
-            order_id = msg_data[2][0]
-            last_event = self.client.active_orders.get(order_id, {}).get('lastEvent', ())
-            content = bfx.on_order_update(msg_data[2], last_event)
-            if 'CANCELED' in msg_data[2][13]:
-                self.client.active_orders.get(order_id, {}).update({'cancelled': True})
-        elif msg_data[1] == 'te':
-            order_id = msg_data[2][3]
-            if self.client.active_orders.get(order_id) is None:
-                self.client.wss_buffer.setdefault(order_id, [])
-                self.client.wss_buffer[order_id].append(msg_data[2])
+        if event_type in ('wu', 'ws'):
+            content = bfx.on_funds_update(event)
+        elif event_type == 'on':
+            order_id = event[0]
+            self.client.active_order(order_id, quantity=str(abs(event[7])))
+            content = bfx.on_order_update(event, self.client.active_orders[order_id])
+
+        elif event_type in ('te', 'tu'):
+            order_id = event[3]
+
+            if order_id in self.client.active_orders and self.client.active_orders[order_id]["lastEvent"]:
+                if event[0] > self.client.active_orders[order_id]["lastEvent"][0]:
+                    self.client.active_orders[order_id].update({'lastEvent': event})
+                    self.client.active_orders[order_id]['executedQty'] += Decimal(str(abs(event[4])))
+                if event_type == 'tu':
+                    self.client.active_orders[order_id].update({'lastEvent': event})
             else:
-                orig_qty = Decimal(self.client.active_orders[order_id]['origQty'])
-                last_qty = str(abs(msg_data[2][4]))
-                executed_qty = self.client.active_orders[order_id]['executedQty']
-                self.client.active_orders[order_id]['executedQty'] = executed_qty = str(Decimal(executed_qty) +
-                                                                                        Decimal(last_qty))
-                if Decimal(executed_qty) >= orig_qty:
-                    self.client.active_orders[order_id]['lastEvent'] = (msg_data[2][0], last_qty, str(msg_data[2][5]))
-                else:
-                    executed_qty = self.client.active_orders.get(order_id, {}).get('executedQty', '0')
-                    content = bfx.on_order_trade(msg_data[2], executed_qty)
+                self.client.active_order(order_id, last_event=event)
+                self.client.active_orders[order_id]['executedQty'] += Decimal(str(abs(event[4])))
+
+            orig_qty = self.client.active_orders[order_id]['origQty']
+            executed_qty = self.client.active_orders[order_id]['executedQty']
+            if orig_qty and executed_qty < orig_qty:
+                content = bfx.on_order_trade(event, str(orig_qty), str(executed_qty))
+            elif oc_event := self.wss_event_buffer.pop(order_id, None):
+                content = bfx.on_order_update(oc_event, self.client.active_orders[order_id])
+
+        elif event_type == 'oc':
+            order_id = event[0]
+            orig_qty = str(abs(event[7]))
+            self.client.active_order(order_id, quantity=orig_qty)
+            executed_qty = self.client.active_orders[order_id]['executedQty']
+            if 'CANCELED' in event[13] or executed_qty >= Decimal(orig_qty):
+                self.client.active_orders.get(order_id, {}).update({'cancelled': True})
+                content = bfx.on_order_update(event, self.client.active_orders[order_id])
+            else:
+                self.wss_event_buffer[order_id] = event
+
         if content:
             await self.client.events.wrap_event(content).fire(self.trade_id)
 

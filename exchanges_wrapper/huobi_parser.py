@@ -452,7 +452,7 @@ def on_order_update(res: {}) -> {}:
         "t": res.get('tradeId'),
         "I": 123456789,
         "w": True,
-        "m": False,
+        "m": not res.get('aggressor'),
         "M": False,
         "O": res.get('orderCreateTime'),
         "Z": cumulative_quote_asset,

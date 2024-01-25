@@ -163,6 +163,9 @@ def order(res: {}, response_type=None) -> {}:
             "updateTime": update_time,
             "isWorking": is_working,
             "origQuoteOrderQty": orig_quote_order_qty,
+            "commission_amount": res.get('fee', "0"),
+            "commission_asset": res.get('feeCcy', ""),
+            "is_maker_side": False,
         }
     else:
         return {
@@ -460,7 +463,7 @@ def on_order_update(res: {}) -> {}:
         "t": int(res.get('tradeId') or -1),
         "I": 123456789,
         "w": True,
-        "m": False,
+        "m": bool(res.get('execType', 'T') == 'M'),
         "M": False,
         "O": int(res.get('cTime')),
         "Z": cumulative_quote_asset,

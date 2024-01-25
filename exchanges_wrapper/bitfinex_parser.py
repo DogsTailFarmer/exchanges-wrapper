@@ -101,7 +101,6 @@ def exchange_info(symbols_details: [], tickers: [], symbol_t) -> {}:
                 _tick_size = tick_size(market.get('price_precision'), _price)
                 _min_qty = float(market.get('minimum_order_size'))
                 _max_qty = float(market.get('maximum_order_size'))
-                _step_size = 0.00001
                 _min_notional = _min_qty * _price
 
                 _price_filter = {
@@ -114,7 +113,7 @@ def exchange_info(symbols_details: [], tickers: [], symbol_t) -> {}:
                     "filterType": "LOT_SIZE",
                     "minQty": str(_min_qty),
                     "maxQty": str(_max_qty),
-                    "stepSize": str(_step_size)
+                    "stepSize": str(10**(-_base_asset_precision))
                 }
                 _min_notional = {
                     "filterType": "MIN_NOTIONAL",
@@ -190,7 +189,7 @@ def account_information(res: []) -> {}:
     }
 
 
-def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
+def order(res: [], response_type=None, cancelled=False) -> {}:
     # print(f"order.order: {res}")
     symbol = res[3][1:].replace(':', '')
     order_id = res[0]
@@ -203,35 +202,16 @@ def order(res: [], response_type=None, wss_te=None, cancelled=False) -> {}:
     cummulative_quote_qty = str(Decimal(executed_qty) * Decimal(avg_fill_price))
     orig_quote_order_qty = str(Decimal(orig_qty) * Decimal(price))
     #
-    if 'CANCELED' in res[13]:
+    if 'CANCELED' in res[13] or cancelled:
         status = 'CANCELED'
     elif Decimal(orig_qty) > Decimal(executed_qty) > 0:
         status = 'PARTIALLY_FILLED'
     elif Decimal(executed_qty) >= Decimal(orig_qty):
         status = 'FILLED'
-    elif cancelled:
-        status = 'CANCELED'
     else:
         status = 'NEW'
     #
     _type = "LIMIT"
-    # https://docs.bitfinex.com/reference/ws-auth-trades
-    if wss_te:
-        executed_qty = Decimal(str(0))
-        cummulative_quote_qty = Decimal(str(0))
-        trades_id = []
-        for trade in wss_te:
-            trade_id = trade[0]
-            if trade_id not in trades_id:
-                trades_id.append(trade_id)
-                exec_amount = Decimal(str(abs(trade[4])))
-                exec_price = Decimal(str(trade[5]))
-                executed_qty += exec_amount
-                cummulative_quote_qty += exec_amount * exec_price
-        status = 'FILLED' if executed_qty >= Decimal(orig_qty) else 'PARTIALLY_FILLED'
-        executed_qty = str(executed_qty)
-        cummulative_quote_qty = str(cummulative_quote_qty)
-        _type = "MARKET"
 
     time_in_force = "GTC"
     side = 'BUY' if res[7] > 0 else 'SELL'
@@ -502,28 +482,34 @@ def on_balance_update(res: []) -> {}:
     }
 
 
-def on_order_update(res: [], last_event: tuple) -> {}:
-    # print(f"on_order_update.res: {res}")
+def on_order_update(res: [], _order: {}) -> {}:
+    # logger.info(f"on_order_update.res: {res}, order: {_order}")
     side = 'BUY' if res[7] > 0 else 'SELL'
     #
-    order_quantity = str(abs(res[7]))
-    cumulative_filled_quantity = str(Decimal(order_quantity) - Decimal(str(abs(res[6]))))
-    cumulative_quote_asset = str(Decimal(cumulative_filled_quantity) * Decimal(str(res[17])))
+    order_quantity = _order["origQty"]
+    cumulative_filled_quantity = _order["executedQty"]
+    cumulative_quote_asset = str(cumulative_filled_quantity * Decimal(str(res[17])))
     quote_order_qty = str(Decimal(order_quantity) * Decimal(str(res[16])))
     #
     trade_id = -1
     last_executed_quantity = "0"
     last_executed_price = "0"
-    if last_event:
-        trade_id = last_event[0]
-        last_executed_quantity = last_event[1]
-        last_executed_price = last_event[2]
+    is_maker = False
+    commission_amount = "0"
+    commission_asset = ""
+    if _event := _order['lastEvent']:
+        trade_id = _event[0]
+        last_executed_quantity = str(abs(_event[4]))
+        last_executed_price = str(_event[5])
+        is_maker = _event[8] == 1
+        commission_amount = str(_event[9]) if _event[9] else "0"
+        commission_asset = _event[10] or ""
     last_quote_asset_transacted = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
     if 'CANCELED' in res[13]:
         status = 'CANCELED'
-    elif Decimal(order_quantity) > Decimal(cumulative_filled_quantity) > 0:
+    elif order_quantity > cumulative_filled_quantity > 0:
         status = 'PARTIALLY_FILLED'
-    elif Decimal(cumulative_filled_quantity) >= Decimal(order_quantity):
+    elif cumulative_filled_quantity >= order_quantity:
         status = 'FILLED'
     else:
         status = 'NEW'
@@ -535,7 +521,7 @@ def on_order_update(res: [], last_event: tuple) -> {}:
         "S": side,
         "o": "LIMIT",
         "f": "GTC",
-        "q": order_quantity,
+        "q": str(order_quantity),
         "p": str(res[16]),
         "P": "0.00000000",
         "F": "0.00000000",
@@ -546,15 +532,15 @@ def on_order_update(res: [], last_event: tuple) -> {}:
         "r": "NONE",
         "i": res[0],
         "l": last_executed_quantity,
-        "z": cumulative_filled_quantity,
+        "z": str(cumulative_filled_quantity),
         "L": last_executed_price,
-        "n": '0.0',
-        "N": "NONE",
+        "n": commission_amount,
+        "N": commission_asset,
         "T": res[5],
         "t": trade_id,
         "I": 123456789,
         "w": True,
-        "m": False,
+        "m": is_maker,
         "M": False,
         "O": res[4],
         "Z": cumulative_quote_asset,
@@ -563,8 +549,8 @@ def on_order_update(res: [], last_event: tuple) -> {}:
     }
 
 
-def on_order_trade(res: [], executed_qty: str) -> {}:
-    # print(f"on_order_trade.res: {res}")
+def on_order_trade(res: [], orig_qty: str, executed_qty: str) -> {}:
+    # logger.info(f"on_order_trade.res: {res}, qty: {orig_qty}, filled: {executed_qty}")
     side = 'BUY' if res[4] > 0 else 'SELL'
     #
     status = 'PARTIALLY_FILLED'
@@ -572,6 +558,7 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
     last_executed_quantity = str(abs(res[4]))
     last_executed_price = str(res[5])
     last_quote_asset = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
+    quote_order_qty = str(Decimal(executed_qty) * Decimal(last_executed_price))
     return {
         "e": "executionReport",
         "E": res[2],
@@ -580,7 +567,7 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
         "S": side,
         "o": "LIMIT",
         "f": "GTC",
-        "q": "0.0",
+        "q": orig_qty,
         "p": str(res[7]),
         "P": "0.00000000",
         "F": "0.00000000",
@@ -593,7 +580,7 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
         "l": last_executed_quantity,
         "z": executed_qty,
         "L": last_executed_price,
-        "n": str(res[9]),
+        "n": str(res[9]) if res[9] else "0",
         "N": res[10],
         "T": res[2],
         "t": res[0],
@@ -602,7 +589,7 @@ def on_order_trade(res: [], executed_qty: str) -> {}:
         "m": res[8] == 1,
         "M": False,
         "O": res[2],
-        "Z": "0.0",
+        "Z": quote_order_qty,
         "Y": last_quote_asset,
         "Q": "0.0",
     }

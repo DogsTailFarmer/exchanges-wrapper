@@ -10,6 +10,7 @@ from collections import defaultdict
 import pyotp
 from expiringdict import ExpiringDict
 import uuid
+from decimal import Decimal
 
 from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX, ClientBybit
 from exchanges_wrapper.errors import ExchangePyError
@@ -219,19 +220,35 @@ class Client:
         symbol_info = self.symbols.get(symbol)
         return f"{symbol_info.get('baseAsset')}-{symbol_info.get('quoteAsset')}"
 
+    def active_order(self, order_id: int, quantity="0", executed_qty="0", last_event=None):
+        if last_event is None:
+            last_event = []
+        if order_id in self.active_orders and not self.active_orders[order_id]["origQty"]:
+            self.active_orders[order_id].update({'origQty': Decimal(quantity)})
+        elif order_id not in self.active_orders:
+            self.active_orders[order_id] = {
+                'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
+                'origQty': Decimal(quantity),
+                'executedQty': Decimal(executed_qty),
+                'lastEvent': last_event,  # trade_event: list
+                'cancelled': False
+            }
+        if last_event:
+            self.active_orders[order_id].update({'lastEvent': last_event})
+
     def active_orders_clear(self, active_orders: list = None):
         ts = int(time.time())
         self.active_orders = {key: val for key, val in self.active_orders.items() if val['lifeTime'] > ts}
         for order_id in active_orders:
             self.active_orders[order_id]['lifeTime'] = ts + 60 * STATUS_TIMEOUT
 
-    def refine_amount(self, symbol, amount: Union[str, decimal.Decimal], quote=False):
+    def refine_amount(self, symbol, amount: Union[str, Decimal], quote=False):
         if type(amount) is str:  # to save time for developers
-            amount = decimal.Decimal(amount)
+            amount = Decimal(amount)
         if self.loaded:
             precision = self.symbols[symbol]["baseAssetPrecision"]
             lot_size_filter = self.symbols[symbol]["filters"]["LOT_SIZE"]
-            step_size = decimal.Decimal(lot_size_filter["stepSize"])
+            step_size = Decimal(lot_size_filter["stepSize"])
             # noinspection PyStringFormat
             amount = (
                 (f"%.{precision}f" % truncate(amount if quote else (amount - amount % step_size), precision))
@@ -240,14 +257,14 @@ class Client:
             )
         return amount
 
-    def refine_price(self, symbol, price: Union[str, decimal.Decimal]):
+    def refine_price(self, symbol, price: Union[str, Decimal]):
         if isinstance(price, str):  # to save time for developers
-            price = decimal.Decimal(price)
+            price = Decimal(price)
 
         if self.loaded:
             precision = self.symbols[symbol]["baseAssetPrecision"]
             price_filter = self.symbols[symbol]["filters"]["PRICE_FILTER"]
-            price = price - (price % decimal.Decimal(price_filter["tickSize"]))
+            price = price - (price % Decimal(price_filter["tickSize"]))
             # noinspection PyStringFormat
             price = (
                 (f"%.{precision}f" % truncate(price, precision))
@@ -732,6 +749,16 @@ class Client:
     # endregion
 
     # region ACCOUNT ENDPOINTS
+    # binance-docs.github.io/apidocs/spot/en/#one-click-arrival-deposit-apply-for-expired-address-deposit-user_data
+    async def one_click_arrival_deposit(self, tx_id):
+        if self.exchange == 'binance':
+            params = {"txId": tx_id}
+            return await self.http.send_api_call(
+                "/sapi/v1/capital/deposit/credit-apply",
+                method="POST",
+                params=params,
+                signed=True,
+            )
 
     async def fetch_api_info(self):
         res, _ = await self.http.send_api_call("/v5/user/query-api", signed=True)
@@ -841,20 +868,10 @@ class Client:
                         **params,
                     )
             )
-            logger.debug(f"create_order.res: {res}")
+            logger.info(f"create_order.res: {res}")
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
-                order_id = res[4][0][0]
-                ahead_ws = self.wss_buffer.pop(order_id, [])
-                if ahead_ws:
-                    logger.debug(f"create_order.ahead_ws: {ahead_ws}")
-                binance_res = bfx.order(res[4][0], response_type=False, wss_te=ahead_ws)
-                self.active_orders[order_id] = {
-                    'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
-                    'origQty': quantity,
-                    'executedQty': "0",
-                    'lastEvent': (),
-                    'cancelled': False
-                }
+                self.active_order(res[4][0][0], quantity)
+                binance_res = bfx.order(res[4][0], response_type=False)
         elif self.exchange == 'huobi':
             params = {
                 'account-id': str(self.account_id),
@@ -1065,8 +1082,7 @@ class Client:
                 while timeout:
                     timeout -= 1
                     if self.active_orders.get(order_id, {}).get('cancelled', False):
-                        binance_res = bfx.order(res[4], response_type=True)
-                        binance_res.update({"status": 'CANCELED'})
+                        binance_res = bfx.order(res[4], response_type=True, cancelled=True)
                         break
                     await asyncio.sleep(0.1)
                 logger.debug(f"cancel_order.bitfinex {order_id}: timeout: {timeout}")

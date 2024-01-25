@@ -55,6 +55,14 @@ async def main(_exchange, _symbol):
         print(f"main.client_id: {client_id}")
         print(f"main.srv_version: {client_id_msg.srv_version}")
 
+    '''
+    _res = await stub.OneClickArrivalDeposit(api_pb2.MarketRequest(
+        trade_id=trade_id,
+        client_id=client_id,
+        symbol="place txId here"))
+    print(json_format.MessageToDict(_res))
+    '''
+
     # Sample async call server method
     _exchange_info_symbol = await stub.FetchExchangeInfoSymbol(api_pb2.MarketRequest(
         trade_id=trade_id,

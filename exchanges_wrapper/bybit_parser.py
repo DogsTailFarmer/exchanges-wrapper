@@ -67,7 +67,7 @@ def exchange_info(server_time: int, trading_symbol: list) -> dict:
             "filterType": "LOT_SIZE",
             "minQty": market['lotSizeFilter']['minOrderQty'],
             "maxQty": market['lotSizeFilter']['maxOrderQty'],
-            "stepSize": market['lotSizeFilter']['minOrderQty']
+            "stepSize": market['lotSizeFilter']['basePrecision']
         }
         _min_notional = {
             "filterType": "MIN_NOTIONAL",
