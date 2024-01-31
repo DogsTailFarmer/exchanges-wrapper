@@ -483,7 +483,7 @@ def on_balance_update(res: []) -> {}:
 
 
 def on_order_update(res: [], _order: {}) -> {}:
-    # logger.info(f"on_order_update.res: {res}, order: {_order}")
+    logger.info(f"on_order_update.res: {res}, order: {_order}")
     side = 'BUY' if res[7] > 0 else 'SELL'
     #
     order_quantity = _order["origQty"]
@@ -550,7 +550,7 @@ def on_order_update(res: [], _order: {}) -> {}:
 
 
 def on_order_trade(res: [], orig_qty: str, executed_qty: str) -> {}:
-    # logger.info(f"on_order_trade.res: {res}, qty: {orig_qty}, filled: {executed_qty}")
+    logger.info(f"on_order_trade.res: {res}, qty: {orig_qty}, filled: {executed_qty}")
     side = 'BUY' if res[4] > 0 else 'SELL'
     #
     status = 'PARTIALLY_FILLED'

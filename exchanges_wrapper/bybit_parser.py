@@ -403,7 +403,7 @@ def on_trade_update(res: dict) -> dict:
         "t": int(res.get("execId", -1)),
         "I": 123456789,
         "w": True,
-        "m": False,
+        "m": res.get("isMaker", False),
         "M": False,
         "O": int(res.get("execTime", res.get("createdTime"))),
         "Z": cumulative_quote_asset,

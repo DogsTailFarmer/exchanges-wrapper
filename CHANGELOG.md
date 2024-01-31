@@ -1,3 +1,7 @@
+## 1.4.7.post6  2024-01-25
+### Fix
+* Bitfinex: order processing
+
 ## 1.4.7  2024-01-25
 ### Fix
 * Bybit: filter LOT_SIZE.stepSize

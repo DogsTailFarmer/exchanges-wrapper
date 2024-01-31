@@ -806,7 +806,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             else:
                 event = vars(_event)
                 event.pop('handlers', None)
-                # logger.info(f"OnOrderUpdate: {event}")
+                if client.exchange == 'bitfinex':
+                    logger.info(f"OnOrderUpdate: {event}")
                 response.success = True
                 response.result = json.dumps(str(event))
                 yield response

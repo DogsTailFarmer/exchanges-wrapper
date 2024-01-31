@@ -95,7 +95,7 @@ class Client:
         self.rate_limits = None
         self.data_streams = defaultdict(set)
         self.active_orders = {}
-        self.wss_buffer = ExpiringDict(max_len=50, max_age_seconds=STATUS_TIMEOUT*2)
+        self.wss_buffer = ExpiringDict(max_len=50, max_age_seconds=STATUS_TIMEOUT*20)
         self.stream_queue = defaultdict(set)
         self.on_order_update_queues = {}
         self.account_id = None
@@ -221,20 +221,20 @@ class Client:
         return f"{symbol_info.get('baseAsset')}-{symbol_info.get('quoteAsset')}"
 
     def active_order(self, order_id: int, quantity="0", executed_qty="0", last_event=None):
-        if last_event is None:
-            last_event = []
-        if order_id in self.active_orders and not self.active_orders[order_id]["origQty"]:
-            self.active_orders[order_id].update({'origQty': Decimal(quantity)})
-        elif order_id not in self.active_orders:
+        if order_id not in self.active_orders:
             self.active_orders[order_id] = {
                 'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
                 'origQty': Decimal(quantity),
                 'executedQty': Decimal(executed_qty),
-                'lastEvent': last_event,  # trade_event: list
+                'lastEvent': last_event if last_event else [],
+                'eventIds': [],
                 'cancelled': False
             }
-        if last_event:
-            self.active_orders[order_id].update({'lastEvent': last_event})
+        elif last_event is not None:
+            self.active_orders[order_id]['lastEvent'] = last_event
+
+        if not self.active_orders[order_id]["origQty"]:
+            self.active_orders[order_id]["origQty"] = Decimal(quantity)
 
     def active_orders_clear(self, active_orders: list = None):
         ts = int(time.time())
@@ -868,7 +868,6 @@ class Client:
                         **params,
                     )
             )
-            logger.info(f"create_order.res: {res}")
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
                 self.active_order(res[4][0][0], quantity)
                 binance_res = bfx.order(res[4][0], response_type=False)

@@ -392,6 +392,9 @@ class BfxPrivateEventsDataStream(EventsDataStream):
         event_type = msg_data[1]
         event = msg_data[2]
 
+        if event_type in ('os', 'on', 'ou', 'oc', 'te', 'tu'):
+            logger.info(f"BitfinexPrivate: {event_type}: {event}")
+
         content = None
         if event_type in ('wu', 'ws'):
             content = bfx.on_funds_update(event)
@@ -404,21 +407,24 @@ class BfxPrivateEventsDataStream(EventsDataStream):
             order_id = event[3]
 
             if order_id in self.client.active_orders and self.client.active_orders[order_id]["lastEvent"]:
-                if event[0] > self.client.active_orders[order_id]["lastEvent"][0]:
-                    self.client.active_orders[order_id].update({'lastEvent': event})
+                if event[0] not in self.client.active_orders[order_id]["eventIds"]:
+                    self.client.active_order(order_id, last_event=event)
                     self.client.active_orders[order_id]['executedQty'] += Decimal(str(abs(event[4])))
-                if event_type == 'tu':
-                    self.client.active_orders[order_id].update({'lastEvent': event})
+                elif event_type == 'tu':
+                    self.client.active_order(order_id, last_event=event)
             else:
                 self.client.active_order(order_id, last_event=event)
                 self.client.active_orders[order_id]['executedQty'] += Decimal(str(abs(event[4])))
 
             orig_qty = self.client.active_orders[order_id]['origQty']
             executed_qty = self.client.active_orders[order_id]['executedQty']
-            if orig_qty and executed_qty < orig_qty:
+            if orig_qty and executed_qty < orig_qty and event[0] not in self.client.active_orders[order_id]["eventIds"]:
+                self.client.active_orders[order_id]["eventIds"].append(event[0])
                 content = bfx.on_order_trade(event, str(orig_qty), str(executed_qty))
             elif oc_event := self.wss_event_buffer.pop(order_id, None):
                 content = bfx.on_order_update(oc_event, self.client.active_orders[order_id])
+
+            logger.info(f"Active order: {order_id}: {self.client.active_orders[order_id]}")
 
         elif event_type == 'oc':
             order_id = event[0]
@@ -426,7 +432,7 @@ class BfxPrivateEventsDataStream(EventsDataStream):
             self.client.active_order(order_id, quantity=orig_qty)
             executed_qty = self.client.active_orders[order_id]['executedQty']
             if 'CANCELED' in event[13] or executed_qty >= Decimal(orig_qty):
-                self.client.active_orders.get(order_id, {}).update({'cancelled': True})
+                self.client.active_orders[order_id]['cancelled'] = True
                 content = bfx.on_order_update(event, self.client.active_orders[order_id])
             else:
                 self.wss_event_buffer[order_id] = event
