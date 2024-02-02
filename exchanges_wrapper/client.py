@@ -11,6 +11,7 @@ import pyotp
 from expiringdict import ExpiringDict
 import uuid
 from decimal import Decimal
+from urllib.parse import quote
 
 from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX, ClientBybit
 from exchanges_wrapper.errors import ExchangePyError
@@ -223,7 +224,6 @@ class Client:
     def active_order(self, order_id: int, quantity="0", executed_qty="0", last_event=None):
         if order_id not in self.active_orders:
             self.active_orders[order_id] = {
-                'lifeTime': int(time.time()) + 60 * STATUS_TIMEOUT,
                 'origQty': Decimal(quantity),
                 'executedQty': Decimal(executed_qty),
                 'lastEvent': last_event if last_event else [],
@@ -233,16 +233,18 @@ class Client:
         elif last_event is not None:
             self.active_orders[order_id]['lastEvent'] = last_event
 
+        self.active_orders[order_id]['lifeTime'] = int(time.time()) + 60 * STATUS_TIMEOUT
+
         if not self.active_orders[order_id]["origQty"]:
             self.active_orders[order_id]["origQty"] = Decimal(quantity)
 
-    def active_orders_clear(self, active_orders: list = None):
+    def active_orders_clear(self):
         ts = int(time.time())
-        self.active_orders = {key: val for key, val in self.active_orders.items() if val['lifeTime'] > ts}
-        for order_id in active_orders:
-            self.active_orders[order_id]['lifeTime'] = ts + 60 * STATUS_TIMEOUT
+        self.active_orders = {
+            key: val for key, val in self.active_orders.items() if val['lifeTime'] > ts
+        }
 
-    def refine_amount(self, symbol, amount: Union[str, Decimal], quote=False):
+    def refine_amount(self, symbol, amount: Union[str, Decimal], _quote=False):
         if type(amount) is str:  # to save time for developers
             amount = Decimal(amount)
         if self.loaded:
@@ -251,7 +253,7 @@ class Client:
             step_size = Decimal(lot_size_filter["stepSize"])
             # noinspection PyStringFormat
             amount = (
-                (f"%.{precision}f" % truncate(amount if quote else (amount - amount % step_size), precision))
+                (f"%.{precision}f" % truncate(amount if _quote else (amount - amount % step_size), precision))
                 .rstrip("0")
                 .rstrip(".")
             )
@@ -1591,12 +1593,22 @@ class Client:
             params = {"asset": symbol, "amount": quantity}
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = await self.http.send_api_call(
-                "/sapi/v1/sub-account/transfer/subToMaster",
-                "POST",
-                params=params,
-                signed=True
-            )
+            if self.master_email:
+                logger.info(f"Collect {quantity}{symbol} to {self.master_email} sub-account")
+                params["toEmail"] = quote(self.master_email)
+                binance_res = await self.http.send_api_call(
+                    "/sapi/v1/sub-account/transfer/subToSub",
+                    "POST",
+                    params=params,
+                    signed=True
+                )
+            else:
+                binance_res = await self.http.send_api_call(
+                    "/sapi/v1/sub-account/transfer/subToMaster",
+                    "POST",
+                    params=params,
+                    signed=True
+                )
         elif self.exchange == 'bitfinex':
             if self.master_email is None or self.two_fa is None:
                 raise ValueError("This query requires master_email and 2FA")

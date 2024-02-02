@@ -1,6 +1,6 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "1.4.0"
+# __version__ = "1.4.8"
 
 # region endpoint
 [endpoint]
@@ -76,6 +76,14 @@
     name = 'BinanceSub1'
     api_key = '*********** Place API key there ************'
     api_secret = '*********** Place secret API key there ************'
+    test_net = false
+
+[[accounts]]
+    exchange = 'binance'
+    name = 'BinanceSub2'
+    api_key = '*********** Place API key there ************'
+    api_secret = '*********** Place secret API key there ************'
+    master_email = 'sub1@mail.com'  # If set, 'BinanceSub1' use for collecting assets instead of Main
     test_net = false
 
 # Binance.us accounts

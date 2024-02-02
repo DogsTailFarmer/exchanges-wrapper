@@ -282,22 +282,19 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            # logger.info(f"FetchOpenOrders.res: {res}")
             open_client.ts_rlc = time.time()
             active_orders = []
             for order in res:
                 order_id = order['orderId']
                 active_orders.append(order_id)
                 new_order = json_format.ParseDict(order, response_order, ignore_unknown_fields=True)
-                # logger.debug(f"FetchOpenOrders.new_order: {new_order}")
                 response.items.append(new_order)
                 if client.exchange == 'bitfinex':
-                    if order_id in client.active_orders:
-                        client.active_orders[order_id]['executedQty'] = Decimal(order['executedQty'])
-                    else:
-                        client.active_order(order_id, order['origQty'], order['executedQty'])
+                    client.active_order(order_id, order['origQty'], order['executedQty'])
+
             if client.exchange == 'bitfinex':
-                client.active_orders_clear(active_orders)
+                client.active_orders_clear()
+
         response.rate_limiter = Martin.rate_limiter
         return response
 
@@ -806,8 +803,6 @@ class Martin(api_pb2_grpc.MartinServicer):
             else:
                 event = vars(_event)
                 event.pop('handlers', None)
-                if client.exchange == 'bitfinex':
-                    logger.info(f"OnOrderUpdate: {event}")
                 response.success = True
                 response.result = json.dumps(str(event))
                 yield response
@@ -882,13 +877,16 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            if not res or res.get('executedQty', '0') != '0':
+            if not res or Decimal(res.get('executedQty', '0')):
                 await self.create_trade_stream_event(_queue, client, open_client, request)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 
-    async def TransferToMaster(self, request: api_pb2.MarketRequest,
-                               _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+    async def TransferToMaster(
+            self,
+            request: api_pb2.MarketRequest,
+            _context: grpc.aio.ServicerContext
+    ) -> api_pb2.SimpleResponse:
         response = api_pb2.SimpleResponse()
         response.success = False
         open_client = OpenClient.get_client(request.client_id)
@@ -902,7 +900,6 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
         except Exception as ex:
             logger.error(f"TransferToMaster for {open_client.name}: {request.symbol} exception: {ex}")
-            # logger.debug(f"TransferToMaster for {open_client.name}: {request.symbol} error: {traceback.format_exc()}")
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:

@@ -392,8 +392,8 @@ class BfxPrivateEventsDataStream(EventsDataStream):
         event_type = msg_data[1]
         event = msg_data[2]
 
-        if event_type in ('os', 'on', 'ou', 'oc', 'te', 'tu'):
-            logger.info(f"BitfinexPrivate: {event_type}: {event}")
+        # if event_type in ('os', 'on', 'ou', 'oc', 'te', 'tu'):
+        #     logger.info(f"BitfinexPrivate: {event_type}: {event}")
 
         content = None
         if event_type in ('wu', 'ws'):
@@ -424,7 +424,7 @@ class BfxPrivateEventsDataStream(EventsDataStream):
             elif oc_event := self.wss_event_buffer.pop(order_id, None):
                 content = bfx.on_order_update(oc_event, self.client.active_orders[order_id])
 
-            logger.info(f"Active order: {order_id}: {self.client.active_orders[order_id]}")
+            # logger.info(f"Active order: {order_id}: {self.client.active_orders[order_id]}")
 
         elif event_type == 'oc':
             order_id = event[0]

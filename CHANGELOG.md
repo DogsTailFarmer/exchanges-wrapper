@@ -1,4 +1,8 @@
-## 1.4.7.post6  2024-01-25
+## 1.4.8  2024-02-02
+### Added for new features
+* Binance: `TransferToMaster` now can be used for collect assets on the sub-account
+
+## 1.4.7.post6  2024-01-31
 ### Fix
 * Bitfinex: order processing
 
