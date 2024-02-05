@@ -10,8 +10,7 @@ from collections import defaultdict
 import pyotp
 from expiringdict import ExpiringDict
 import uuid
-from decimal import Decimal
-from urllib.parse import quote
+from decimal import Decimal, ROUND_HALF_DOWN
 
 from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX, ClientBybit
 from exchanges_wrapper.errors import ExchangePyError
@@ -36,6 +35,10 @@ STATUS_TIMEOUT = 5  # sec, also use for lifetime limit for inactive order (Bitfi
 
 def truncate(f, n):
     return math.floor(f * 10 ** n) / 10 ** n
+
+
+def any2str(_x) -> str:
+    return f"{_x:.10f}".rstrip('0').rstrip('.')
 
 
 class Client:
@@ -333,7 +336,8 @@ class Client:
                 binance_res = bfx.exchange_info(symbols_details, tickers, symbol)
         elif self.exchange == 'huobi':
             server_time = await self.fetch_server_time()
-            trading_symbols = await self.http.send_api_call("v1/common/symbols")
+            params = {'symbols': symbol.lower()}
+            trading_symbol = await self.http.send_api_call("v1/settings/common/market-symbols", **params)
             if self.account_id is None:
                 accounts = await self.http.send_api_call("v1/account/accounts", signed=True)
                 for account in accounts:
@@ -341,7 +345,7 @@ class Client:
                         self.account_id = account.get('id')
                         break
                 self.account_uid = await self.http.send_api_call("v2/user/uid", signed=True)
-            binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbols, symbol)
+            binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbol[0])
         elif self.exchange == 'okx':
             params = {'instType': 'SPOT'}
             server_time = await self.fetch_server_time()
@@ -353,7 +357,7 @@ class Client:
             server_time = await self.fetch_server_time()
             instruments, _ = await self.http.send_api_call("/v5/market/instruments-info", **params)
             binance_res = bbt.exchange_info(server_time.get('serverTime'), instruments.get('list'))
-        # print(f"fetch_exchange_info: binance_res: {binance_res}")
+        # logger.info(f"fetch_exchange_info: binance_res: {binance_res}")
         return binance_res
 
     # MARKET DATA ENDPOINTS
@@ -1588,6 +1592,8 @@ class Client:
 
     # https://binance-docs.github.io/apidocs/spot/en/#transfer-to-master-for-sub-account
     async def transfer_to_master(self, symbol, quantity, receive_window=None):
+        quantity = any2str(Decimal(quantity).quantize(Decimal('0.01234567'), rounding=ROUND_HALF_DOWN))
+
         binance_res = {}
         if self.exchange == 'binance':
             params = {"asset": symbol, "amount": quantity}
@@ -1595,19 +1601,19 @@ class Client:
                 params["recvWindow"] = receive_window
             if self.master_email:
                 logger.info(f"Collect {quantity}{symbol} to {self.master_email} sub-account")
-                params["toEmail"] = quote(self.master_email)
+                params["toEmail"] = self.master_email
                 binance_res = await self.http.send_api_call(
                     "/sapi/v1/sub-account/transfer/subToSub",
                     "POST",
-                    params=params,
-                    signed=True
+                    signed=True,
+                    params=params
                 )
             else:
                 binance_res = await self.http.send_api_call(
                     "/sapi/v1/sub-account/transfer/subToMaster",
                     "POST",
-                    params=params,
-                    signed=True
+                    signed=True,
+                    params=params
                 )
         elif self.exchange == 'bitfinex':
             if self.master_email is None or self.two_fa is None:

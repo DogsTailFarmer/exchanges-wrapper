@@ -1,7 +1,8 @@
 import sys
 import asyncio
 import ujson as json
-import logging
+import logging.handlers
+from pathlib import Path
 import time
 from decimal import Decimal
 import gzip
@@ -15,9 +16,25 @@ import exchanges_wrapper.huobi_parser as hbp
 import exchanges_wrapper.okx_parser as okx
 import exchanges_wrapper.bybit_parser as bbt
 from crypto_ws_api.ws_session import generate_signature
+from exchanges_wrapper import LOG_PATH
 
-logger_ws = logger = logging.getLogger('exch_srv_logger')
+logger = logging.getLogger('exch_srv_logger')
+
+logger_ws = logging.getLogger(__name__)
 logger_ws.level = logging.INFO
+formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
+#
+fh = logging.handlers.RotatingFileHandler(Path(LOG_PATH, 'websockets.log'), maxBytes=1000000, backupCount=10)
+fh.setFormatter(formatter)
+fh.setLevel(logging.INFO)
+#
+sh = logging.StreamHandler()
+sh.setFormatter(formatter)
+sh.setLevel(logging.INFO)
+
+logger_ws.addHandler(fh)
+logger_ws.addHandler(sh)
+
 sys.tracebacklimit = 0
 
 
@@ -156,6 +173,10 @@ class EventsDataStream:
             else:
                 logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'huobi':
+
+            if not msg_data.get('ping') and not msg_data.get('action') == 'ping' and not msg_data.get('tick'):
+                logger.info(f"HTX msg_data: {msg_data}")
+
             if msg_data.get('ping'):
                 await self.websocket.send(json.dumps({"pong": msg_data.get('ping')}))
             elif msg_data.get('action') == 'ping':
@@ -362,14 +383,17 @@ class HbpPrivateEventsDataStream(EventsDataStream):
 
     async def _handle_event(self, msg_data, *args):
         content = None
+
+        logger.info(f"_handle_event: {msg_data.get('ch')}: {msg_data.get('data').get('accountId')}: {self.client.account_id}")
+
         if msg_data.get('data').get('accountId') == self.client.account_id:
             if msg_data.get('ch') == 'accounts.update#2':
                 content = hbp.on_funds_update(msg_data)
             elif msg_data.get('ch') == f"trade.clearing#{self.symbol.lower()}#0":
-                data = msg_data.get('data')
-                content = hbp.on_order_update(data)
+                logger.info(f"HTXPrivateEvents.data: {msg_data.get('data')}")
+                content = hbp.on_order_update(msg_data.get('data'))
         if content:
-            logger.debug(f"HbpPrivateEventsDataStream._handle_event.content: {content}")
+            logger.debug(f"HTXPrivateEvents.content: {content}")
             await self.client.events.wrap_event(content).fire(self.trade_id)
 
 
@@ -391,9 +415,6 @@ class BfxPrivateEventsDataStream(EventsDataStream):
     async def _handle_event(self, msg_data, *args):
         event_type = msg_data[1]
         event = msg_data[2]
-
-        # if event_type in ('os', 'on', 'ou', 'oc', 'te', 'tu'):
-        #     logger.info(f"BitfinexPrivate: {event_type}: {event}")
 
         content = None
         if event_type in ('wu', 'ws'):
@@ -423,8 +444,6 @@ class BfxPrivateEventsDataStream(EventsDataStream):
                 content = bfx.on_order_trade(event, str(orig_qty), str(executed_qty))
             elif oc_event := self.wss_event_buffer.pop(order_id, None):
                 content = bfx.on_order_update(oc_event, self.client.active_orders[order_id])
-
-            # logger.info(f"Active order: {order_id}: {self.client.active_orders[order_id]}")
 
         elif event_type == 'oc':
             order_id = event[0]

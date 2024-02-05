@@ -62,7 +62,6 @@ def exchange_info(server_time: int, trading_symbol: [], tickers: [], symbol_t) -
                 "baseAsset": _base_asset,
                 "baseAssetPrecision": _base_asset_precision,
                 "quoteAsset": _quote_asset,
-                "quotePrecision": _base_asset_precision,
                 "quoteAssetPrecision": _base_asset_precision,
                 "baseCommissionPrecision": 8,
                 "quoteCommissionPrecision": 8,

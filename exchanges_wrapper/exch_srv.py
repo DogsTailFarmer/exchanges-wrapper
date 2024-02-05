@@ -173,6 +173,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                     else:
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
+                    del main_client
+                    del main_account
             except UserWarning as ex:
                 _context.set_details(f"{ex}")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
@@ -287,8 +289,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             for order in res:
                 order_id = order['orderId']
                 active_orders.append(order_id)
-                new_order = json_format.ParseDict(order, response_order, ignore_unknown_fields=True)
-                response.items.append(new_order)
+                response.items.append(json_format.ParseDict(order, response_order, ignore_unknown_fields=True))
                 if client.exchange == 'bitfinex':
                     client.active_order(order_id, order['origQty'], order['executedQty'])
 
@@ -803,6 +804,7 @@ class Martin(api_pb2_grpc.MartinServicer):
             else:
                 event = vars(_event)
                 event.pop('handlers', None)
+                logger.debug(f"OnOrderUpdate: {open_client.name}: {event}")
                 response.success = True
                 response.result = json.dumps(str(event))
                 yield response

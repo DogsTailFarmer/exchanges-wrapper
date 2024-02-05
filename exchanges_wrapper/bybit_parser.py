@@ -88,7 +88,6 @@ def exchange_info(server_time: int, trading_symbol: list) -> dict:
             "baseAsset": market['baseCoin'],
             "baseAssetPrecision": len(market['lotSizeFilter']['basePrecision']) - 2,
             "quoteAsset": market['quoteCoin'],
-            "quotePrecision": 8,
             "quoteAssetPrecision": len(market['lotSizeFilter']['quotePrecision']) - 2,
             "baseCommissionPrecision": 8,
             "quoteCommissionPrecision": 8,

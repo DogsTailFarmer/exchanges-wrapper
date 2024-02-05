@@ -1,6 +1,6 @@
 import asyncio
 import ujson as json
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlparse, quote
 
 import aiohttp
 import logging
@@ -149,13 +149,12 @@ class ClientBinance(HttpClient):
             location = "params" if "params" in kwargs else "data"
             query_kwargs[location]["timestamp"] = str(int(time.time() * 1000))
             if "params" in kwargs:
-                content += urlencode(kwargs["params"])
+                content += urlencode(kwargs["params"], safe="@")
             if "data" in kwargs:
                 content += urlencode(kwargs["data"])
             query_kwargs[location]["signature"] = generate_signature(self.exchange, self.api_secret, content)
-        # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
+
         async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
-            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
             return await self.handle_errors(response)
 
 

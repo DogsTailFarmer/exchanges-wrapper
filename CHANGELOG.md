@@ -1,12 +1,21 @@
-## 1.4.8  2024-02-02
+## 1.4.9b2 2024-02-05
+### Fix
+* Binance: `TransferToMaster`: sentence `Email address should be encoded. e.g. alice@test.com should be encoded into
+alice%40test.com` from API docs the are False, must be `content += urlencode(kwargs["params"], safe="@")`
+
+### Update
+* HTX: changed deprecated endpoint "v1/common/symbols" to "v1/settings/common/market-symbols"
+* Binance: `GET /api/v3/exchangeInfo` from response remove deprecated `quotePrecision`
+
+## 1.4.8 2024-02-02
 ### Added for new features
 * Binance: `TransferToMaster` now can be used for collect assets on the sub-account
 
-## 1.4.7.post6  2024-01-31
+## 1.4.7.post6 2024-01-31
 ### Fix
 * Bitfinex: order processing
 
-## 1.4.7  2024-01-25
+## 1.4.7 2024-01-25
 ### Fix
 * Bybit: filter LOT_SIZE.stepSize
 * Bitfinex: filter LOT_SIZE.stepSize

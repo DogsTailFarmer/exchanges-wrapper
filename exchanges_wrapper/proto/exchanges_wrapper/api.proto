@@ -353,22 +353,21 @@ message FetchExchangeInfoSymbolResponse {
   string baseAsset = 3;
   uint32 baseAssetPrecision = 4;
   string quoteAsset = 5;
-  uint32 quotePrecision = 6;
-  uint32 quoteAssetPrecision = 7;
-  uint32 baseCommissionPrecision = 8;
-  uint32 quoteCommissionPrecision = 9;
-  repeated string orderTypes = 10;
-  bool icebergAllowed = 11;
-  bool ocoAllowed = 12;
-  bool quoteOrderQtyMarketAllowed = 13;
-  bool allowTrailingStop = 14;
-  bool cancelReplaceAllowed = 15;
-  bool isSpotTradingAllowed = 16;
-  bool isMarginTradingAllowed = 17;
-  Filters filters = 18;
-  repeated string permissions = 19;
-  string defaultSelfTradePreventionMode = 20;
-  repeated string allowedSelfTradePreventionModes = 21;
+  uint32 quoteAssetPrecision = 6;
+  uint32 baseCommissionPrecision = 7;
+  uint32 quoteCommissionPrecision = 8;
+  repeated string orderTypes = 9;
+  bool icebergAllowed = 10;
+  bool ocoAllowed = 11;
+  bool quoteOrderQtyMarketAllowed = 12;
+  bool allowTrailingStop = 13;
+  bool cancelReplaceAllowed = 14;
+  bool isSpotTradingAllowed = 15;
+  bool isMarginTradingAllowed = 16;
+  Filters filters = 17;
+  repeated string permissions = 18;
+  string defaultSelfTradePreventionMode = 19;
+  repeated string allowedSelfTradePreventionModes = 20;
 }
 
 message FetchOrderRequest{

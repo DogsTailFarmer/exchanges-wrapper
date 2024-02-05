@@ -22,76 +22,60 @@ def fetch_server_time(res: {}) -> {}:
     return {'serverTime': res}
 
 
-def exchange_info(server_time: int, trading_symbol: [], symbol_t) -> {}:
-    symbols = []
-    for market in trading_symbol:
-        if not market.get('underlying'):
-            _symbol = str(market.get("symbol")).upper()
-            if _symbol == symbol_t:
-                _base_asset = str(market.get("base-currency")).upper()
-                _quote_asset = str(market.get("quote-currency")).upper()
-                _base_asset_precision = market.get('amount-precision')
-                # Filters var
-                _tick_size = 10**(-market.get('price-precision'))
-                _min_qty = market.get('min-order-amt')
-                _max_qty = market.get('max-order-amt')
-                _step_size = 10**(-market.get('amount-precision'))
-                _min_notional = market.get('min-order-value')
+def exchange_info(server_time: int, _symbol_params) -> {}:
+    _tick_size = str(10**(-_symbol_params.get('pp')))
+    _price_filter = {
+        "filterType": "PRICE_FILTER",
+        "minPrice": _tick_size,
+        "maxPrice": "100000000",
+        "tickSize": _tick_size
+    }
+    _lot_size = {
+        "filterType": "LOT_SIZE",
+        "minQty": str(_symbol_params.get('minoa')),
+        "maxQty": str(_symbol_params.get('maxoa')),
+        "stepSize": str(10**(-_symbol_params.get('ap')))
+    }
+    _min_notional = {
+        "filterType": "MIN_NOTIONAL",
+        "minNotional": str(_symbol_params.get('minov')),
+        "applyToMarket": True,
+        "avgPriceMins": 5
+    }
+    _percent_price = {
+        "filterType": "PERCENT_PRICE",
+        "multiplierUp": "5",
+        "multiplierDown": "0.2",
+        "avgPriceMins": 5
+    }
 
-                _price_filter = {
-                    "filterType": "PRICE_FILTER",
-                    "minPrice": str(_tick_size),
-                    "maxPrice": "100000000",
-                    "tickSize": str(_tick_size)
-                }
-                _lot_size = {
-                    "filterType": "LOT_SIZE",
-                    "minQty": str(_min_qty),
-                    "maxQty": str(_max_qty),
-                    "stepSize": str(_step_size)
-                }
-                _min_notional = {
-                    "filterType": "MIN_NOTIONAL",
-                    "minNotional": str(_min_notional),
-                    "applyToMarket": True,
-                    "avgPriceMins": 5
-                }
-                _percent_price = {
-                    "filterType": "PERCENT_PRICE",
-                    "multiplierUp": "5",
-                    "multiplierDown": "0.2",
-                    "avgPriceMins": 5
-                }
-
-                symbol = {
-                    "symbol": _symbol,
-                    "status": "TRADING",
-                    "baseAsset": _base_asset,
-                    "baseAssetPrecision": _base_asset_precision,
-                    "quoteAsset": _quote_asset,
-                    "quotePrecision": _base_asset_precision,
-                    "quoteAssetPrecision": _base_asset_precision,
-                    "baseCommissionPrecision": 8,
-                    "quoteCommissionPrecision": 8,
-                    "orderTypes": ["LIMIT", "MARKET"],
-                    "icebergAllowed": False,
-                    "ocoAllowed": False,
-                    "quoteOrderQtyMarketAllowed": False,
-                    "allowTrailingStop": False,
-                    "cancelReplaceAllowed": False,
-                    "isSpotTradingAllowed": True,
-                    "isMarginTradingAllowed": False,
-                    "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
-                    "permissions": ["SPOT"],
-                }
-                symbols.append(symbol)
+    symbol = {
+        "symbol": _symbol_params.get("symbol").upper(),
+        "status": "TRADING",
+        "baseAsset": _symbol_params.get("bc").upper(),
+        "baseAssetPrecision": _symbol_params.get("ap"),
+        "quoteAsset": _symbol_params.get("qc").upper(),
+        "quoteAssetPrecision": _symbol_params.get("vp"),
+        "baseCommissionPrecision": 8,
+        "quoteCommissionPrecision": 8,
+        "orderTypes": ["LIMIT", "MARKET"],
+        "icebergAllowed": False,
+        "ocoAllowed": False,
+        "quoteOrderQtyMarketAllowed": False,
+        "allowTrailingStop": False,
+        "cancelReplaceAllowed": False,
+        "isSpotTradingAllowed": True,
+        "isMarginTradingAllowed": False,
+        "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
+        "permissions": ["SPOT"],
+    }
 
     return {
         "timezone": "UTC",
         "serverTime": server_time,
         "rateLimits": [],
         "exchangeFilters": [],
-        "symbols": symbols,
+        "symbols": [symbol],
     }
 
 
