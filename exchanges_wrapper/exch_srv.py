@@ -322,10 +322,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             if _queue and request.filled_update_call:
                 if res.get('status') == 'FILLED':
                     event = OrderUpdateEvent(res)
-                    logger.info(f"FetchOrder.event: {open_client.name}:{event.symbol}:{event.order_id}:"
-                                f"{event.order_status}")
                     await _queue.put(weakref.ref(event)())
-                else:
+                elif request.order_id:
                     await self.create_trade_stream_event(_queue, client, open_client, request)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response

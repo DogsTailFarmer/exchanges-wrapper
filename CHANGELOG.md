@@ -1,3 +1,11 @@
+## 1.4.9 2024-02-07
+### Fix
+* Some minor fixes
+
+## 1.4.9b5 2024-02-07
+### Update
+* Dependency: Up requirements for `grpcio` and `grpcio-tools` to 1.60.1
+
 ## 1.4.9b3 2024-02-07
 ### Update
 * Bitfinex: refining order processing
