@@ -173,8 +173,6 @@ class Martin(api_pb2_grpc.MartinServicer):
                     else:
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
-                    del main_client
-                    del main_account
             except UserWarning as ex:
                 _context.set_details(f"{ex}")
                 _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
