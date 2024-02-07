@@ -290,10 +290,10 @@ class Martin(api_pb2_grpc.MartinServicer):
                 order_id = order['orderId']
                 active_orders.append(order_id)
                 response.items.append(json_format.ParseDict(order, response_order, ignore_unknown_fields=True))
-                if client.exchange == 'bitfinex':
+                if client.exchange in ('bitfinex', 'huobi'):
                     client.active_order(order_id, order['origQty'], order['executedQty'])
 
-            if client.exchange == 'bitfinex':
+            if client.exchange in ('bitfinex', 'huobi'):
                 client.active_orders_clear()
 
         response.rate_limiter = Martin.rate_limiter

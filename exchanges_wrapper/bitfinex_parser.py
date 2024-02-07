@@ -548,49 +548,59 @@ def on_order_update(res: [], _order: {}) -> {}:
     }
 
 
-def on_order_trade(res: [], orig_qty: str, executed_qty: str) -> {}:
-    # logger.info(f"on_order_trade.res: {res}, qty: {orig_qty}, filled: {executed_qty}")
-    side = 'BUY' if res[4] > 0 else 'SELL'
+def on_order_trade(_order: {}) -> {}:
+    # logger.info(f"on_order_trade._order: {_order}")
+    event = _order['lastEvent']
+    orig_qty = _order['origQty']
+    executed_qty = _order['executedQty']
     #
-    status = 'PARTIALLY_FILLED'
+    order_price = Decimal(str(event[7]))
+    quote_order_qty = str(Decimal(executed_qty) * order_price)
+    cumulative_quote_asset = str(executed_qty * order_price)
     #
-    last_executed_quantity = str(abs(res[4]))
-    last_executed_price = str(res[5])
+    last_executed_quantity = str(abs(event[4]))
+    last_executed_price = str(event[5])
     last_quote_asset = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
-    quote_order_qty = str(Decimal(executed_qty) * Decimal(last_executed_price))
+    #
+    status = 'NEW'
+    if orig_qty > executed_qty > 0:
+        status = 'PARTIALLY_FILLED'
+    elif executed_qty >= orig_qty:
+        status = 'FILLED'
+
     return {
         "e": "executionReport",
-        "E": res[2],
-        "s": res[1][1:].replace(':', ''),
-        "c": str(res[11]),
-        "S": side,
+        "E": event[2],
+        "s": event[1][1:].replace(':', ''),
+        "c": str(event[11]),
+        "S": 'BUY' if event[4] > 0 else 'SELL',
         "o": "LIMIT",
         "f": "GTC",
-        "q": orig_qty,
-        "p": str(res[7]),
+        "q": str(orig_qty),
+        "p": str(order_price),
         "P": "0.00000000",
         "F": "0.00000000",
         "g": -1,
-        "C": "NEW",
+        "C": "",
         "x": "TRADE",
         "X": status,
         "r": "NONE",
-        "i": res[3],
+        "i": event[3],
         "l": last_executed_quantity,
-        "z": executed_qty,
+        "z": str(executed_qty),
         "L": last_executed_price,
-        "n": str(res[9]) if res[9] else "0",
-        "N": res[10],
-        "T": res[2],
-        "t": res[0],
+        "n": str(event[9]) if event[9] else "0",
+        "N": event[10],
+        "T": event[2],
+        "t": event[0],
         "I": 123456789,
         "w": True,
-        "m": res[8] == 1,
+        "m": event[8] == 1,
         "M": False,
-        "O": res[2],
-        "Z": quote_order_qty,
+        "O": event[2],
+        "Z": cumulative_quote_asset,
         "Y": last_quote_asset,
-        "Q": "0.0",
+        "Q": quote_order_qty,
     }
 
 

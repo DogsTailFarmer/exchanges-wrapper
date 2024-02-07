@@ -1,3 +1,7 @@
+## 1.4.9b3 2024-02-07
+### Update
+* Bitfinex: refining order processing
+
 ## 1.4.9b2 2024-02-05
 ### Fix
 * Binance: `TransferToMaster`: sentence `Email address should be encoded. e.g. alice@test.com should be encoded into

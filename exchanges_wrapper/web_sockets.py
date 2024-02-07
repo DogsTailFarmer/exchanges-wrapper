@@ -50,6 +50,7 @@ class EventsDataStream:
         self._order_book = None
         self._price = None
         self.tasks_list = []
+        self.wss_started = False
 
     async def start(self):
         async for self.websocket in websockets.client.connect(self.endpoint, logger=logger_ws):
@@ -107,6 +108,8 @@ class EventsDataStream:
                   and msg_data.get("success")):
                 _task = asyncio.ensure_future(self.bybit_heartbeat(ch_type or "private"))
                 self.tasks_list.append(_task)
+                if msg_data["op"] == "subscribe" and msg_data["success"] and not msg_data["ret_msg"]:
+                    self.wss_started = True
                 return
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and not msg_data.get("success")):
@@ -123,6 +126,8 @@ class EventsDataStream:
                 await self._handle_event(msg_data.get('data')[0], symbol, ch_type)
             elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
                 return
+            elif msg_data.get("event") == "subscribe" and msg_data.get('arg', {}).get('channel') == 'orders':
+                self.wss_started = True
             elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
                 logger.warning(f"Reconnecting OKX WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
                 raise ConnectionClosed(None, None)
@@ -160,6 +165,7 @@ class EventsDataStream:
                     logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
                 elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
                     chan_id = msg_data.get('chanId')
+                    self.wss_started = True
                     logger.info(f"bitfinex, user stream chan_id: {chan_id}")
 
             # data handling
@@ -173,10 +179,6 @@ class EventsDataStream:
             else:
                 logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'huobi':
-
-            if not msg_data.get('ping') and not msg_data.get('action') == 'ping' and not msg_data.get('tick'):
-                logger.info(f"HTX msg_data: {msg_data}")
-
             if msg_data.get('ping'):
                 await self.websocket.send(json.dumps({"pong": msg_data.get('ping')}))
             elif msg_data.get('action') == 'ping':
@@ -195,7 +197,9 @@ class EventsDataStream:
                         await self._handle_event(msg_data, symbol, ch_type)
                 else:
                     await self._handle_event(msg_data, symbol, ch_type)
-            elif msg_data.get('action') == 'req' and msg_data.get('code') == 200 and msg_data.get('ch') == 'auth':
+            elif msg_data.get('action') in ('req', 'sub') and msg_data.get('code') == 200:
+                if msg_data.get('ch') == f"trade.clearing#{symbol.lower()}#0":
+                    self.wss_started = True
                 return
             elif (msg_data.get('action') == 'sub' and
                   msg_data.get('code') == 500 and
@@ -368,30 +372,48 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "params": _params
         }
         await self.websocket.send(json.dumps(request))
-        await self._handle_messages(await self.websocket.recv())
+        await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
+        #
         request = {
             "action": "sub",
             "ch": "accounts.update#2"
         }
         await self.websocket.send(json.dumps(request))
-        await self._handle_messages(await self.websocket.recv())
+        await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
+        #
+        request = {
+            "action": "sub",
+            "ch": f"orders#{self.symbol.lower()}"
+        }
+        await self.websocket.send(json.dumps(request))
+        await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
+        #
         request = {
             "action": "sub",
             "ch": f"trade.clearing#{self.symbol.lower()}#0"
         }
-        await self.ws_listener(request)
+        await self.ws_listener(request, symbol=self.symbol)
 
     async def _handle_event(self, msg_data, *args):
         content = None
+        _data = msg_data.get('data')
+        if _data.get('symbol') == self.symbol.lower():
+            if msg_data['ch'] == 'accounts.update#2':
+                content = hbp.on_funds_update(_data)
+            elif (msg_data['ch'] == f"orders#{self.symbol.lower()}"
+                  and _data['eventType'] in ('creation', 'cancellation')):
+                order_id = _data['orderId']
+                self.client.active_order(order_id, quantity=_data['orderSize'])
+                if _data.get('eventType') == 'cancellation':
+                    self.client.active_orders[order_id]['cancelled'] = True
+            elif msg_data['ch'] == f"trade.clearing#{self.symbol.lower()}#0":
+                order_id = _data['orderId']
+                self.client.active_order(order_id, last_event=_data)
+                if _data['tradeId'] not in self.client.active_orders[order_id]["eventIds"]:
+                    self.client.active_orders[order_id]["eventIds"].append(_data['tradeId'])
+                    self.client.active_orders[order_id]['executedQty'] += Decimal(_data['tradeVolume'])
+                    content = hbp.on_order_update(self.client.active_orders[order_id])
 
-        logger.info(f"_handle_event: {msg_data.get('ch')}: {msg_data.get('data').get('accountId')}: {self.client.account_id}")
-
-        if msg_data.get('data').get('accountId') == self.client.account_id:
-            if msg_data.get('ch') == 'accounts.update#2':
-                content = hbp.on_funds_update(msg_data)
-            elif msg_data.get('ch') == f"trade.clearing#{self.symbol.lower()}#0":
-                logger.info(f"HTXPrivateEvents.data: {msg_data.get('data')}")
-                content = hbp.on_order_update(msg_data.get('data'))
         if content:
             logger.debug(f"HTXPrivateEvents.content: {content}")
             await self.client.events.wrap_event(content).fire(self.trade_id)
@@ -427,21 +449,12 @@ class BfxPrivateEventsDataStream(EventsDataStream):
         elif event_type in ('te', 'tu'):
             order_id = event[3]
 
-            if order_id in self.client.active_orders and self.client.active_orders[order_id]["lastEvent"]:
-                if event[0] not in self.client.active_orders[order_id]["eventIds"]:
-                    self.client.active_order(order_id, last_event=event)
-                    self.client.active_orders[order_id]['executedQty'] += Decimal(str(abs(event[4])))
-                elif event_type == 'tu':
-                    self.client.active_order(order_id, last_event=event)
-            else:
-                self.client.active_order(order_id, last_event=event)
-                self.client.active_orders[order_id]['executedQty'] += Decimal(str(abs(event[4])))
+            self.client.active_order(order_id, last_event=event)
 
-            orig_qty = self.client.active_orders[order_id]['origQty']
-            executed_qty = self.client.active_orders[order_id]['executedQty']
-            if orig_qty and executed_qty < orig_qty and event[0] not in self.client.active_orders[order_id]["eventIds"]:
+            if event[0] not in self.client.active_orders[order_id]["eventIds"]:
                 self.client.active_orders[order_id]["eventIds"].append(event[0])
-                content = bfx.on_order_trade(event, str(orig_qty), str(executed_qty))
+                self.client.active_orders[order_id]['executedQty'] += Decimal(str(abs(event[4])))
+                content = bfx.on_order_trade(self.client.active_orders[order_id])
             elif oc_event := self.wss_event_buffer.pop(order_id, None):
                 content = bfx.on_order_update(oc_event, self.client.active_orders[order_id])
 
@@ -566,6 +579,7 @@ class UserEventsDataStream(EventsDataStream):
     async def async_init(self):
         self.listen_key = (await self.client.create_listen_key())["listenKey"]
         self.endpoint = f"{self.endpoint}/ws/{self.listen_key}"
+        self.wss_started = True
         return self
 
     def __await__(self):

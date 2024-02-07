@@ -366,9 +366,8 @@ def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
     }
 
 
-def on_funds_update(res: {}) -> {}:
+def on_funds_update(data: {}) -> {}:
     event_time = int(time.time() * 1000)
-    data = res.get('data')
     binance_funds = {
         'e': 'outboundAccountPosition',
         'E': event_time,
@@ -387,34 +386,32 @@ def on_funds_update(res: {}) -> {}:
     return binance_funds
 
 
-def on_order_update(res: {}) -> {}:
-    # print(f"on_order_update.res: {res}")
-    order_quantity = res.get('orderSize', res.get('orderValue'))
-    order_price = res.get('orderPrice', res.get('tradePrice'))
+def on_order_update(_order: {}) -> {}:
+    event = _order['lastEvent']
+    order_quantity = event.get('orderSize', event.get('orderValue'))
+    order_price = event.get('orderPrice', event.get('tradePrice'))
     quote_order_qty = str(Decimal(order_quantity) * Decimal(order_price))
-    cumulative_filled_quantity = "0"
-    cumulative_quote_asset = "0"
+    cumulative_filled_quantity = _order['executedQty']
+    cumulative_quote_asset = str(Decimal(cumulative_filled_quantity) * Decimal(order_price))
     #
-    last_executed_quantity = res.get('tradeVolume')
-    last_executed_price = res.get('tradePrice')
+    last_executed_quantity = event.get('tradeVolume')
+    last_executed_price = event.get('tradePrice')
     last_quote_asset_transacted = str(Decimal(last_executed_quantity) * Decimal(last_executed_price))
     #
-    if res.get('orderStatus') in ('canceled', 'partial-canceled'):
+    if event.get('orderStatus') in ('canceled', 'partial-canceled'):
         status = 'CANCELED'
-    elif res.get('orderStatus') == 'partial-filled':
+    elif event.get('orderStatus') == 'partial-filled':
         status = 'PARTIALLY_FILLED'
-    elif res.get('orderStatus') == 'filled':
+    elif event.get('orderStatus') == 'filled':
         status = 'FILLED'
-        cumulative_filled_quantity = order_quantity
-        cumulative_quote_asset = quote_order_qty
     else:
         status = 'NEW'
     return {
         "e": "executionReport",
         "E": int(time.time() * 1000),
-        "s": res.get('symbol').upper(),
-        "c": res.get('clientOrderId'),
-        "S": res.get('orderSide').upper(),
+        "s": event.get('symbol').upper(),
+        "c": event.get('clientOrderId'),
+        "S": event.get('orderSide').upper(),
         "o": "LIMIT",
         "f": "GTC",
         "q": order_quantity,
@@ -426,19 +423,19 @@ def on_order_update(res: {}) -> {}:
         "x": "TRADE",
         "X": status,
         "r": "NONE",
-        "i": res.get('orderId'),
+        "i": event.get('orderId'),
         "l": last_executed_quantity,
-        "z": cumulative_filled_quantity,
+        "z": str(cumulative_filled_quantity),
         "L": last_executed_price,
-        "n": res.get('transactFee'),
-        "N": res.get('feeCurrency').upper(),
-        "T": res.get('tradeTime'),
-        "t": res.get('tradeId'),
+        "n": event.get('transactFee'),
+        "N": event.get('feeCurrency').upper(),
+        "T": event.get('tradeTime'),
+        "t": event.get('tradeId'),
         "I": 123456789,
         "w": True,
-        "m": not res.get('aggressor'),
+        "m": not event.get('aggressor'),
         "M": False,
-        "O": res.get('orderCreateTime'),
+        "O": event.get('orderCreateTime'),
         "Z": cumulative_quote_asset,
         "Y": last_quote_asset_transacted,
         "Q": quote_order_qty,

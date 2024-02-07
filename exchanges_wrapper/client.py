@@ -174,15 +174,20 @@ class Client:
             user_data_stream = BBTPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
-            await asyncio.sleep(1)
             asyncio.ensure_future(user_data_stream.start())
+            timeout = STATUS_TIMEOUT / 0.1
+            while not user_data_stream.wss_started:
+                timeout -= 1
+                if not timeout:
+                    logger.warning(f"{self.exchange} user WSS start timeout reached for {_trade_id}")
+                    break
+                await asyncio.sleep(0.05)
 
     async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
         if self.exchange == 'binance':
             market_data_stream = MarketEventsDataStream(self, self.endpoint_ws_public, self.exchange, _trade_id)
             self.data_streams[_trade_id] |= {market_data_stream}
-            await asyncio.sleep(1)
             asyncio.ensure_future(market_data_stream.start())
             # start_list.append(market_data_stream.start())
         else:
@@ -195,7 +200,6 @@ class Client:
                 #
                 market_data_stream = MarketEventsDataStream(self, _endpoint, self.exchange, _trade_id, channel)
                 self.data_streams[_trade_id] |= {market_data_stream}
-                await asyncio.sleep(1)
                 asyncio.ensure_future(market_data_stream.start())
 
     async def stop_events_listener(self, _trade_id):
@@ -229,7 +233,7 @@ class Client:
             self.active_orders[order_id] = {
                 'origQty': Decimal(quantity),
                 'executedQty': Decimal(executed_qty),
-                'lastEvent': last_event if last_event else [],
+                'lastEvent': last_event if last_event else None,
                 'eventIds': [],
                 'cancelled': False
             }
@@ -238,7 +242,7 @@ class Client:
 
         self.active_orders[order_id]['lifeTime'] = int(time.time()) + 60 * STATUS_TIMEOUT
 
-        if not self.active_orders[order_id]["origQty"]:
+        if not self.active_orders[order_id]["origQty"] and Decimal(quantity):
             self.active_orders[order_id]["origQty"] = Decimal(quantity)
 
     def active_orders_clear(self):
@@ -888,22 +892,20 @@ class Client:
             }
             if new_client_order_id:
                 params["client-order-id"] = str(new_client_order_id)
-            count = 0
-            res = None
-            while count < STATUS_TIMEOUT:
-                res = await self.http.send_api_call(
-                    "v1/order/orders/place",
-                    method="POST",
-                    signed=True,
-                    timeout=STATUS_TIMEOUT,
-                    **params,
-                )
-                if res:
-                    break
-                count += 1
-                logger.debug(f"RateLimitReached for {symbol}, count {count}, try one else")
+            res = await self.http.send_api_call(
+                "v1/order/orders/place",
+                method="POST",
+                signed=True,
+                timeout=STATUS_TIMEOUT,
+                **params,
+            )
             if res:
+                timeout = STATUS_TIMEOUT / 0.1
+                while not self.active_orders.get(int(res)) and timeout:
+                    timeout -= 1
+                    await asyncio.sleep(0.1)
                 binance_res = await self.fetch_order(trade_id, symbol, order_id=res, response_type=False)
+                self.active_order(int(res), quantity, binance_res['executedQty'])
         elif self.exchange == 'okx':
             params = {
                 "instId": self.symbol_to_okx(symbol),
@@ -941,7 +943,6 @@ class Client:
             if res:
                 res["ts"] = ts
                 binance_res = bbt.place_order_response(res, params)
-
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-order-user_data
@@ -1097,13 +1098,13 @@ class Client:
                 method="POST",
                 signed=True
             )
-            order_cancelled = False
-            timeout = STATUS_TIMEOUT
-            while res and not order_cancelled and timeout:
-                timeout -= 1
+            if res:
+                timeout = STATUS_TIMEOUT / 0.1
+                while not self.active_orders.get(order_id, {}).get('cancelled', False) and timeout:
+                    timeout -= 1
+                    await asyncio.sleep(0.1)
                 binance_res = await self.fetch_order(trade_id, symbol, order_id=res, response_type=True)
-                order_cancelled = binance_res.get('status') == 'CANCELED'
-                await asyncio.sleep(1)
+
         elif self.exchange == 'okx':
             _symbol = self.symbol_to_okx(symbol)
             _queue = asyncio.Queue()

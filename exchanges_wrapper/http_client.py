@@ -1,6 +1,6 @@
 import asyncio
 import ujson as json
-from urllib.parse import urlencode, urlparse, quote
+from urllib.parse import urlencode, urlparse
 
 import aiohttp
 import logging
