@@ -1,3 +1,8 @@
+## 1.4.10 2024-02-09
+### Fix
+* Generate trading events on the partial filled missing event
+* Dependency: Rollback `grpcio` and `grpcio-tools` to 1.48.2
+
 ## 1.4.9 2024-02-07
 ### Fix
 * Some minor fixes

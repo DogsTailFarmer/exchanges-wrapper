@@ -324,11 +324,11 @@ class Martin(api_pb2_grpc.MartinServicer):
                     event = OrderUpdateEvent(res)
                     await _queue.put(weakref.ref(event)())
                 elif request.order_id:
-                    await self.create_trade_stream_event(_queue, client, open_client, request)
+                    await self.create_trade_stream_event(_queue, client, open_client, request, res)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 
-    async def create_trade_stream_event(self, _queue, client, open_client, request):
+    async def create_trade_stream_event(self, _queue, client, open_client, request, order):
         try:
             trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id)
         except asyncio.CancelledError:
@@ -338,6 +338,13 @@ class Martin(api_pb2_grpc.MartinServicer):
         else:
             logger.debug(f"FetchOrder.trades: {trades}")
             for trade in trades:
+                trade |= {
+                    'clientOrderId': order['clientOrderId'],
+                    'orderPrice': order['price'],
+                    'origQty': order['origQty'],
+                    'executedQty': order['executedQty'],
+                    'cummulativeQuoteQty': order['cummulativeQuoteQty'],
+                }
                 event = OrderTradesEvent(trade)
                 await _queue.put(weakref.ref(event)())
 
@@ -875,8 +882,8 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_details(f"{ex}")
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
-            if not res or Decimal(res.get('executedQty', '0')):
-                await self.create_trade_stream_event(_queue, client, open_client, request)
+            if Decimal(res.get('executedQty', '0')):
+                await self.create_trade_stream_event(_queue, client, open_client, request, res)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 

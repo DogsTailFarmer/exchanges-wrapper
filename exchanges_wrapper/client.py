@@ -240,10 +240,13 @@ class Client:
         elif last_event is not None:
             self.active_orders[order_id]['lastEvent'] = last_event
 
-        self.active_orders[order_id]['lifeTime'] = int(time.time()) + 60 * STATUS_TIMEOUT
-
-        if not self.active_orders[order_id]["origQty"] and Decimal(quantity):
+        if Decimal(quantity) and not self.active_orders[order_id]["origQty"]:
             self.active_orders[order_id]["origQty"] = Decimal(quantity)
+
+        if Decimal(executed_qty) and self.active_orders[order_id]["executedQty"] < Decimal(executed_qty):
+            self.active_orders[order_id]["executedQty"] = Decimal(executed_qty)
+
+        self.active_orders[order_id]['lifeTime'] = int(time.time()) + 60 * STATUS_TIMEOUT
 
     def active_orders_clear(self):
         ts = int(time.time())
@@ -961,7 +964,7 @@ class Client:
         elif self.exchange in ('binance', 'huobi', 'okx', 'bybit') and not order_id and not origin_client_order_id:
             raise ValueError("This query requires an order_id or an origin_client_order_id")
 
-        binance_res = {}
+        b_res = {}
         if self.exchange == 'binance':
             params = {"symbol": symbol}
             if order_id:
@@ -970,7 +973,7 @@ class Client:
                 params["origClientOrderId"] = origin_client_order_id
             if receive_window:
                 params["recvWindow"] = receive_window
-            binance_res = (
+            b_res = (
                     await self.user_wss_session.handle_request(
                         trade_id,
                         "order.status",
@@ -998,7 +1001,8 @@ class Client:
                 **params
             )
             if res:
-                binance_res = bfx.order(res[0], response_type=response_type)
+                b_res = bfx.order(res[0], response_type=response_type)
+                self.active_order(b_res['orderId'], b_res['origQty'], b_res['executedQty'])
         elif self.exchange == 'huobi':
             if origin_client_order_id:
                 params = {'clientOrderId': str(origin_client_order_id)}
@@ -1006,14 +1010,15 @@ class Client:
             else:
                 res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
             if res:
-                binance_res = hbp.order(res, response_type=response_type)
+                b_res = hbp.order(res, response_type=response_type)
+                self.active_order(b_res['orderId'], b_res['origQty'], b_res['executedQty'])
         elif self.exchange == 'okx':
             params = {'instId': self.symbol_to_okx(symbol),
                       'ordId': str(order_id),
                       'clOrdId': str(origin_client_order_id)}
             res = await self.http.send_api_call("/api/v5/trade/order", signed=True, **params)
             if res:
-                binance_res = okx.order(res[0], response_type=response_type)
+                b_res = okx.order(res[0], response_type=response_type)
         elif self.exchange == 'bybit':
             params = {
                 'category': 'spot',
@@ -1023,9 +1028,9 @@ class Client:
             }
             res, _ = await self.http.send_api_call("/v5/order/history", signed=True, **params)
             if res["list"]:
-                binance_res = bbt.order(res["list"][0], response_type=response_type)
-        logger.debug(f"fetch_order.binance_res: {binance_res}")
-        return binance_res
+                b_res = bbt.order(res["list"][0], response_type=response_type)
+        logger.debug(f"fetch_order.b_res: {b_res}")
+        return b_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-order-trade
     async def cancel_order(  # lgtm [py/similar-function]
@@ -1789,9 +1794,9 @@ class Client:
         if not order_id:
             raise ValueError("This query (fetch_order_trade_list) requires an order_id")
         self.assert_symbol(symbol)
-        binance_res = []
+        b_res = []
         if self.exchange == 'binance':
-            binance_res = await self.fetch_account_trade_list(trade_id, symbol, order_id=order_id)
+            b_res = await self.fetch_account_trade_list(trade_id, symbol, order_id=order_id)
         elif self.exchange == 'bitfinex':
             res = await self.http.send_api_call(
                 f"v2/auth/r/order/{self.symbol_to_bfx(symbol)}:{order_id}/trades",
@@ -1799,19 +1804,19 @@ class Client:
                 signed=True,
             )
             if res:
-                binance_res = bfx.account_trade_list(res)
+                b_res = bfx.account_trade_list(res)
             else:
-                binance_res = await self.fetch_account_trade_list(trade_id, symbol, order_id)
+                b_res = await self.fetch_account_trade_list(trade_id, symbol, order_id)
         elif self.exchange == 'huobi':
             res = await self.http.send_api_call(f"v1/order/orders/{order_id}/matchresults", signed=True)
-            binance_res = hbp.account_trade_list(res)
+            b_res = hbp.account_trade_list(res)
         elif self.exchange == 'okx':
             params = {'instType': "SPOT",
                       'instId': self.symbol_to_okx(symbol),
                       'ordId': str(order_id),
                       }
             res = await self.http.send_api_call("/api/v5/trade/fills", signed=True, **params)
-            binance_res = okx.order_trade_list(res)
+            b_res = okx.order_trade_list(res)
         elif self.exchange == 'bybit':
             res = await self.fetch_order(trade_id, symbol, order_id)
             if res:
@@ -1822,10 +1827,10 @@ class Client:
                     'endTime': res.get('updateTime') + 500,
                 }
                 res, _ = await self.http.send_api_call("/v5/account/transaction-log", signed=True, **params)
-                binance_res = bbt.order_trade_list(res['list'], str(order_id))
+                b_res = bbt.order_trade_list(res['list'], str(order_id))
 
-        logger.debug(f"fetch_order_trade_list.binance_res: {binance_res}")
-        return binance_res
+        logger.debug(f"fetch_order_trade_list.b_res: {b_res}")
+        return b_res
 
     # endregion
 
