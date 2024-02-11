@@ -1176,7 +1176,9 @@ class Client:
                     )
             )
         elif self.exchange == 'bitfinex':
-            params = {'all': 1}
+            orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
+            orders_id = [order.get('orderId') for order in orders]
+            params = {'id': orders_id}
             res = (
                     await self.user_wss_session.handle_request(trade_id, "oc_multi", _params=params)
                     or await self.http.send_api_call(

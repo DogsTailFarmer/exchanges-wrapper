@@ -1,3 +1,7 @@
+## 1.4.11 2024-02-11
+### Fix
+* Bitfinex: use `symbol` parameter for cancel all order
+
 ## 1.4.10 2024-02-09
 ### Fix
 * Generate trading events on the partial filled missing event
