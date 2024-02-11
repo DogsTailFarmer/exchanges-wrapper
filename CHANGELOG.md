@@ -1,3 +1,7 @@
+## 1.4.11.post1 2024-02-11
+### Fix
+* Bitfinex: setting original order quantity for placed order when first getting event is `te` type
+
 ## 1.4.11 2024-02-11
 ### Fix
 * Bitfinex: use `symbol` parameter for cancel all order

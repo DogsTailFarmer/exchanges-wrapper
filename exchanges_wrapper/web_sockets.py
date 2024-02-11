@@ -448,8 +448,8 @@ class BfxPrivateEventsDataStream(EventsDataStream):
 
         elif event_type in ('te', 'tu'):
             order_id = event[3]
-
-            self.client.active_order(order_id, last_event=event)
+            qty = self.client.active_orders.pop(event[11], {}).get('origQty', '0')
+            self.client.active_order(order_id, quantity=qty, last_event=event)
 
             if event[0] not in self.client.active_orders[order_id]["eventIds"]:
                 self.client.active_orders[order_id]["eventIds"].append(event[0])

@@ -871,7 +871,7 @@ class Client:
             }
             if new_client_order_id:
                 params["cid"] = new_client_order_id
-
+                self.active_order(new_client_order_id, quantity)
             res = (
                     await self.user_wss_session.handle_request(trade_id, "on", _params=params)
                     or await self.http.send_api_call(
