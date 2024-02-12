@@ -1,6 +1,6 @@
 crypto-ws-api==2.0.6
 grpcio==1.48.2
-grpcio-tools==1.48.2
+grpcio-tools==1.60.1
 pyotp==2.9.0
 simplejson==3.19.2
 toml~=0.10.2
