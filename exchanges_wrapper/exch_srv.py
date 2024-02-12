@@ -344,6 +344,7 @@ class Martin(api_pb2_grpc.MartinServicer):
                     'origQty': order['origQty'],
                     'executedQty': order['executedQty'],
                     'cummulativeQuoteQty': order['cummulativeQuoteQty'],
+                    'status': order['status'],
                 }
                 event = OrderTradesEvent(trade)
                 await _queue.put(weakref.ref(event)())

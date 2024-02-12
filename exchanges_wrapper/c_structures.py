@@ -45,8 +45,8 @@ class OrderUpdateEvent:
 
 class OrderTradesEvent:
     def __init__(self, event_data: {}):
-        self.symbol = event_data["clientOrderId"]
-        self.client_order_id = event_data["symbol"]
+        self.symbol = event_data["symbol"]
+        self.client_order_id = event_data["clientOrderId"]
         self.side = "BUY" if event_data["isBuyer"] else "SELL"
         self.order_type = "LIMIT"
         self.time_in_force = "GTC"
@@ -61,9 +61,7 @@ class OrderTradesEvent:
         self.order_id = event_data["orderId"]
         self.last_executed_quantity = event_data["qty"]
         self.cumulative_filled_quantity = event_data["executedQty"]
-        self.order_status = "PARTIALLY_FILLED"
-        if Decimal(self.cumulative_filled_quantity) >= Decimal(self.order_quantity):
-            self.order_status = "FILLED"
+        self.order_status = event_data["status"]
         self.last_executed_price = event_data["price"]
         self.commission_amount = event_data["commission"]
         self.commission_asset = event_data["commissionAsset"]

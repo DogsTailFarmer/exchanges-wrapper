@@ -562,8 +562,6 @@ class BBTPrivateEventsDataStream(EventsDataStream):
             event = msg_data[0]
             if event.get('orderStatus') in ("Cancelled", "PartiallyFilledCanceled"):
                 self.client.wss_buffer[f"oc-{event.get('orderId')}"] = bbt.order(event, response_type=True)
-            elif event.get('orderStatus') == "Filled":
-                content = bbt.on_trade_update(event)
         elif ch_type == 'wallet':
             event = msg_data[0]
             content = bbt.on_funds_update(event)

@@ -1,3 +1,9 @@
+## 1.4.12 2024-02-12
+### Fix
+* `c_structures.OrderTradesEvent`: some fields are mixed up
+* Bybit: generating a redundant order fill event
+* `create_trade_stream_event`: using actual order status instead of estimated status
+
 ## 1.4.11.post1 2024-02-11
 ### Fix
 * Bitfinex: setting original order quantity for placed order when first getting event is `te` type
