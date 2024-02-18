@@ -1,3 +1,7 @@
+## 1.4.13 2024-02-18
+### Fix
+* `FetchOrder()`: conditions for generating a trading event(s)
+
 ## 1.4.12 2024-02-12
 ### Fix
 * `c_structures.OrderTradesEvent`: some fields are mixed up

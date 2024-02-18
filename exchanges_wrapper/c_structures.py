@@ -7,42 +7,6 @@ REST_RATE_LIMIT_INTERVAL = {
 }
 
 
-class OrderUpdateEvent:
-    def __init__(self, event_data: {}):
-        self.symbol = event_data["symbol"]
-        self.client_order_id = event_data["clientOrderId"]
-        self.side = event_data["side"]
-        self.order_type = event_data["type"]
-        self.time_in_force = event_data["timeInForce"]
-        self.order_quantity = event_data["origQty"]
-        self.order_price = event_data["price"]
-        self.stop_price = event_data.get("stopPrice")
-        self.iceberg_quantity = event_data.get("icebergQty")
-        self.order_list_id = event_data["orderListId"]
-        self.original_client_id = event_data["clientOrderId"]
-        self.execution_type = "TRADE"
-        self.order_status = event_data["status"]
-        self.order_reject_reason = "NONE"
-        self.order_id = event_data["orderId"]
-        self.last_executed_quantity = self.cumulative_filled_quantity = event_data["executedQty"]
-        self.commission_amount = event_data.get("commission_amount", "0.0")
-        self.commission_asset = event_data.get("commission_asset", "")
-        self.transaction_time = event_data.get("updateTime", event_data.get("transactTime"))
-        self.trade_id = -1
-        self.ignore_a = int()
-        self.in_order_book = True
-        self.is_maker_side = event_data.get("is_maker_side", False)
-        self.ignore_b = False
-        self.order_creation_time = event_data.get("time", self.transaction_time)
-        self.quote_asset_transacted = event_data["cummulativeQuoteQty"]
-        self.quote_order_quantity = event_data.get(
-            "origQuoteOrderQty", str(Decimal(self.order_quantity) * Decimal(self.order_price))
-        )
-        self.last_executed_price = str(Decimal(self.quote_asset_transacted) /
-                                       Decimal(self.cumulative_filled_quantity))
-        self.last_quote_asset_transacted = str(Decimal(self.last_executed_quantity) * Decimal(self.last_executed_price))
-
-
 class OrderTradesEvent:
     def __init__(self, event_data: {}):
         self.symbol = event_data["symbol"]

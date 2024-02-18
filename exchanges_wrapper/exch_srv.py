@@ -19,7 +19,7 @@ from google.protobuf import json_format
 from exchanges_wrapper import errors, api_pb2, api_pb2_grpc
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
-from exchanges_wrapper.c_structures import OrderUpdateEvent, OrderTradesEvent, REST_RATE_LIMIT_INTERVAL
+from exchanges_wrapper.c_structures import OrderTradesEvent, REST_RATE_LIMIT_INTERVAL
 from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
 #
 HEARTBEAT = 1  # Sec
@@ -319,12 +319,9 @@ class Martin(api_pb2_grpc.MartinServicer):
                          f" {request.order_id}({request.client_order_id}) exception: {_ex}")
         else:
             open_client.ts_rlc = time.time()
-            if _queue and request.filled_update_call:
-                if res.get('status') == 'FILLED':
-                    event = OrderUpdateEvent(res)
-                    await _queue.put(weakref.ref(event)())
-                elif request.order_id:
-                    await self.create_trade_stream_event(_queue, client, open_client, request, res)
+            if _queue and request.filled_update_call and Decimal(res.get('executedQty', '0')):
+                request.order_id = res.get('orderId')
+                await self.create_trade_stream_event(_queue, client, open_client, request, res)
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
         return response
 
@@ -981,7 +978,6 @@ async def event_handler(_queue, client, trade_id, _event_type, event):
 
 def is_port_in_use(port: int) -> bool:
     import socket
-    # with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
 
