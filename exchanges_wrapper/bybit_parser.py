@@ -516,14 +516,11 @@ def order_trade_list(res: [], order_id: str) -> []:
                 "price": price,
                 "qty": str(qty),
                 "quoteQty": quote_qty,
+                "commission": str(fee) if fee else '0',
+                "commissionAsset": trade['currency'] if fee else '',
                 "time": int(trade['transactionTime']),
                 "isBuyer": trade['side'] == 'Buy',
                 "isMaker": True,
                 "isBestMatch": True,
             }
-
-        if fee:
-            trade_rows[trade_id]["commission"] = str(fee)
-            trade_rows[trade_id]["commissionAsset"] = str(trade['currency'])
-
     return list(trade_rows.values())

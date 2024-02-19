@@ -1,3 +1,9 @@
+## 1.4.14 2024-02-19
+### Fix
+* Exception in fetch_order: 'KeyError': 'commission'
+* `fetch_order_trade_list()`: variables type inconsistent
+* HTX: correcting order Status depending on cumulative_filled_quantity
+
 ## 1.4.13 2024-02-18
 ### Fix
 * `FetchOrder()`: conditions for generating a trading event(s)

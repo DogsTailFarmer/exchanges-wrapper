@@ -508,22 +508,22 @@ def funding_wallet(res: []) -> []:
 def order_trade_list(res: []) -> []:
     binance_trade_list = []
     for trade in res:
-        price = trade.get('fillPx')
-        qty = trade.get('fillSz')
+        price = trade['fillPx']
+        qty = trade['fillSz']
         quote_qty = str(Decimal(price) * Decimal(qty))
         binance_trade = {
-            "symbol": trade.get('instId').replace('-', ''),
-            "id": trade.get('tradeId'),
-            "orderId": trade.get('ordId'),
+            "symbol": trade['instId'].replace('-', ''),
+            "id": int(trade['tradeId']),
+            "orderId": int(trade['ordId']),
             "orderListId": -1,
             "price": price,
             "qty": qty,
             "quoteQty": quote_qty,
-            "commission": str(abs(float(trade.get('fee')))),
-            "commissionAsset": trade.get('feeCcy'),
-            "time": trade.get('ts'),
-            "isBuyer": trade.get('side') == 'buy',
-            "isMaker": trade.get('execType') == 'M',
+            "commission": str(abs(float(trade['fee']))),
+            "commissionAsset": trade['feeCcy'],
+            "time": trade['ts'],
+            "isBuyer": trade['side'] == 'buy',
+            "isMaker": trade['execType'] == 'M',
             "isBestMatch": True,
         }
         binance_trade_list.append(binance_trade)

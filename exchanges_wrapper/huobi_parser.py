@@ -400,10 +400,10 @@ def on_order_update(_order: {}) -> {}:
     #
     if event.get('orderStatus') in ('canceled', 'partial-canceled'):
         status = 'CANCELED'
-    elif event.get('orderStatus') == 'partial-filled':
-        status = 'PARTIALLY_FILLED'
-    elif event.get('orderStatus') == 'filled':
+    elif event.get('orderStatus') == 'filled' and cumulative_filled_quantity >= Decimal(order_quantity):
         status = 'FILLED'
+    elif event.get('orderStatus') == 'partial-filled' or cumulative_filled_quantity > 0:
+        status = 'PARTIALLY_FILLED'
     else:
         status = 'NEW'
     return {
@@ -445,22 +445,22 @@ def on_order_update(_order: {}) -> {}:
 def account_trade_list(res: []) -> []:
     binance_trade_list = []
     for trade in res:
-        price = trade.get('price')
-        qty = trade.get('filled-amount')
+        price = trade['price']
+        qty = trade['filled-amount']
         quote_qty = str(Decimal(price) * Decimal(qty))
         binance_trade = {
-            "symbol": trade.get('symbol').upper(),
-            "id": trade.get('trade-id'),
-            "orderId": trade.get('order-id'),
+            "symbol": trade['symbol'].upper(),
+            "id": trade['trade-id'],
+            "orderId": int(trade['order-id']),
             "orderListId": -1,
             "price": price,
             "qty": qty,
             "quoteQty": quote_qty,
-            "commission": trade.get('filled-fees'),
-            "commissionAsset": trade.get('fee-currency'),
-            "time": trade.get('created-at'),
-            "isBuyer": 'buy' in trade.get('type'),
-            "isMaker": trade.get('role') == 'maker',
+            "commission": trade['filled-fees'],
+            "commissionAsset": trade['fee-currency'],
+            "time": trade['created-at'],
+            "isBuyer": 'buy' in trade['type'],
+            "isMaker": trade['role'] == 'maker',
             "isBestMatch": True,
         }
         binance_trade_list.append(binance_trade)
