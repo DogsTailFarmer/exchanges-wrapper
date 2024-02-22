@@ -1,3 +1,7 @@
+## 1.4.15 2024-02-2
+### Fix
+* `HTX`: order Status set on cumulative_filled_quantity value only and `status` from event is ignored
+
 ## 1.4.14 2024-02-19
 ### Fix
 * Exception in fetch_order: 'KeyError': 'commission'

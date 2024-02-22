@@ -400,7 +400,7 @@ def on_order_update(_order: {}) -> {}:
     #
     if event.get('orderStatus') in ('canceled', 'partial-canceled'):
         status = 'CANCELED'
-    elif event.get('orderStatus') == 'filled' and cumulative_filled_quantity >= Decimal(order_quantity):
+    elif cumulative_filled_quantity >= Decimal(order_quantity):
         status = 'FILLED'
     elif event.get('orderStatus') == 'partial-filled' or cumulative_filled_quantity > 0:
         status = 'PARTIALLY_FILLED'
