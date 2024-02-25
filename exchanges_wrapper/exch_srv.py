@@ -832,7 +832,8 @@ class Martin(api_pb2_grpc.MartinServicer):
                 iceberg_quantity=None,
                 response_type=ResponseType.RESULT.value,
                 receive_window=None,
-                test=False)
+                test=False
+            )
         except errors.HTTPError as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol}:{request.new_client_order_id}"
                          f" exception: {ex}")
@@ -845,11 +846,14 @@ class Martin(api_pb2_grpc.MartinServicer):
             _context.set_code(grpc.StatusCode.UNKNOWN)
         else:
             if not res and client.exchange in ('binance', 'huobi', 'okx'):
-                res = await client.fetch_order(symbol=request.symbol,
-                                               order_id=None,
-                                               origin_client_order_id=request.new_client_order_id,
-                                               receive_window=None,
-                                               response_type=False)
+                res = await client.fetch_order(
+                    trade_id=request.trade_id,
+                    symbol=request.symbol,
+                    order_id=None,
+                    origin_client_order_id=request.new_client_order_id,
+                    receive_window=None,
+                    response_type=False
+                )
             json_format.ParseDict(res, response, ignore_unknown_fields=True)
             logger.debug(f"CreateLimitOrder: for {open_client.name}:{request.symbol}: created: {res.get('orderId')}")
         return response
