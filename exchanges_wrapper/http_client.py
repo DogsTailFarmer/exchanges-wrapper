@@ -38,17 +38,15 @@ class HttpClient:
             raise ExchangeError(f"An issue occurred on exchange's side: {response.status}: {response.url}:"
                                 f" {response.reason}")
         if response.status == 429:
-            logger.error(f"handle_errors RateLimitReached:response.url: {response.url}")
+            logger.error(f"API RateLimitReached: {response.url}")
             self.rate_limit_reached = self.exchange in ('binance', 'okx')
             raise RateLimitReached(RateLimitReached.message)
+
         try:
             payload = await response.json()
         except aiohttp.ContentTypeError:
             payload = None
-        if self.exchange == 'binance' and payload and "code" in payload:
-            # as defined here: https://github.com/binance/binance-spot-api-docs/blob/
-            # master/errors.md#error-codes-for-binance-2019-09-25
-            raise ExchangeError(payload["msg"])
+
         if response.status >= 400:
             logger.debug(f"handle_errors.response: {response.text}")
             if response.status == 400 and payload and payload.get("error", str()) == "ERR_RATE_LIMIT":
@@ -59,16 +57,18 @@ class HttpClient:
                 raise IPAddressBanned(IPAddressBanned.message)
             else:
                 raise HTTPError(f"Malformed request: status: {response.status}, reason: {response.reason}")
-        if self.exchange in ('binance', 'bitfinex'):
-            return payload
-        elif self.exchange == 'bybit' and payload and payload.get('retCode') == 0:
+
+        if self.exchange == 'bybit' and payload and payload.get('retCode') == 0:
             return payload.get('result'), payload.get('time')
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
             return payload.get('data', payload.get('tick'))
         elif self.exchange == 'okx' and payload and payload.get('code') == '0':
             return payload.get('data', [])
+        elif (self.exchange not in ('binance', 'bitfinex') or
+              (self.exchange == 'binance' and payload and "code" in payload)):
+            raise ExchangeError(f"API request failed: {response.status}:{response.reason}:{payload}")
         else:
-            raise HTTPError(f"API request failed: {response.status}:{response.reason}:{payload}")
+            return payload
 
     async def send_api_call(self,
                             path,

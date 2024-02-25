@@ -1,4 +1,11 @@
-## 1.4.15 2024-02-2
+## 1.4.16 2024-02-25
+### Fix
+* `CreateLimitOrder()`: Missed `trade_id` parameter in fetch_order() call
+
+### Update
+* Refine error handling in `http_client`
+
+## 1.4.15 2024-02-02
 ### Fix
 * `HTX`: order Status set on cumulative_filled_quantity value only and `status` from event is ignored
 
