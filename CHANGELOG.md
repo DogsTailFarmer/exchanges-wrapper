@@ -1,3 +1,9 @@
+## 1.4.17 2024-03-04
+### Update
+* `CreateLimitOrder()` and `FetchOpenOrders`: Exception handling reduced to one type
+* Dependency: Up requirements for `grpcio` and `grpcio-tools` to 1.62.0
+* Dependency: Up requirements for aiohttp==3.9.3
+
 ## 1.4.16 2024-02-25
 ### Fix
 * `CreateLimitOrder()`: Missed `trade_id` parameter in fetch_order() call

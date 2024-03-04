@@ -1097,6 +1097,8 @@ class Client:
                         break
                     await asyncio.sleep(0.1)
                 logger.debug(f"cancel_order.bitfinex {order_id}: timeout: {timeout}")
+            else:
+                logger.warning(f"cancel_order.bitfinex {order_id}: res: {res}")
         elif self.exchange == 'huobi':
             res = await self.http.send_api_call(
                 f"v1/order/orders/{order_id}/submitcancel",

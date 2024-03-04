@@ -834,6 +834,13 @@ class Martin(api_pb2_grpc.MartinServicer):
                 receive_window=None,
                 test=False
             )
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
+        except (errors.RateLimitReached, errors.QueryCanceled) as ex:
+            Martin.rate_limit_reached_time = time.time()
+            logger.warning(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
+            _context.set_details(f"{ex}")
+            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
         except errors.HTTPError as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol}:{request.new_client_order_id}"
                          f" exception: {ex}")
