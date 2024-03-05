@@ -16,7 +16,7 @@ import grpc
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
 #
-from exchanges_wrapper import errors, api_pb2, api_pb2_grpc
+from exchanges_wrapper import errors, api_pb2, api_grpc
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.c_structures import OrderTradesEvent, REST_RATE_LIMIT_INTERVAL
@@ -137,7 +137,7 @@ class OpenClient:
 
 
 # noinspection PyPep8Naming,PyMethodMayBeStatic
-class Martin(api_pb2_grpc.MartinServicer):
+class Martin(api_grpc.MartinBase):
     rate_limit_reached_time = None
     rate_limiter = None
 
@@ -999,7 +999,10 @@ async def serve() -> None:
     if is_port_in_use(port):
         raise SystemExit(f"gRPC server port {port} already used")
     server = grpc.aio.server()
-    api_pb2_grpc.add_MartinServicer_to_server(Martin(), server)
+
+    server.add_generic_rpc_handlers([Martin()])
+
+    # api_grpc.add_MartinServicer_to_server(Martin(), server)
     server.add_insecure_port(listen_addr)
     logger.info(f"Starting server v:{__version__} on {listen_addr}")
     await server.start()
