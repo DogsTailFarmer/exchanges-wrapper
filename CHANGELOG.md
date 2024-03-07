@@ -1,3 +1,7 @@
+## 2.0.0b1 2024-03-xx
+### Update
+* Migrate from grpcio to grpclib + python-betterproto
+
 ## 1.4.17 2024-03-04
 ### Update
 * `CreateLimitOrder()` and `FetchOpenOrders`: Exception handling reduced to one type

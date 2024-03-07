@@ -2,8 +2,8 @@
 Protocol buffer definition for exchanges-wrapper exch_srv.py
 https://grpc.io/docs/languages/python/quickstart/
 For compile use next commands
-pip install grpclib protobuf
-protoc -I proto --plugin=grpc_python_plugin --python_out=. --grpclib_python_out=. proto/exchanges_wrapper/api.proto
+pip install --pre "betterproto[compiler]"
+/exchanges_wrapper$ protoc -I . --python_betterproto_out=. proto/martin.proto
 */
 
 syntax = "proto3";
@@ -11,37 +11,41 @@ syntax = "proto3";
 package martin;
 
 service Martin {
-  rpc OpenClientConnection (OpenClientConnectionRequest) returns (OpenClientConnectionId) {}
-  rpc FetchServerTime (OpenClientConnectionId) returns (FetchServerTimeResponse) {}
-  rpc FetchOpenOrders (MarketRequest) returns (FetchOpenOrdersResponse) {}
   rpc CancelAllOrders (MarketRequest) returns (SimpleResponse) {}
+  rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {}
+  rpc CheckStream (MarketRequest) returns (SimpleResponse) {}
+  rpc CreateLimitOrder (CreateLimitOrderRequest) returns (CreateLimitOrderResponse) {}
+  rpc FetchAccountInformation (OpenClientConnectionId) returns (JSONResponse) {}
+  rpc FetchAccountTradeList (AccountTradeListRequest) returns (JSONResponse) {}
   rpc FetchExchangeInfoSymbol (MarketRequest) returns (FetchExchangeInfoSymbolResponse) {}
-  rpc FetchAccountInformation (OpenClientConnectionId) returns (FetchAccountBalanceResponse) {}
+  rpc FetchFundingWallet(FetchFundingWalletRequest) returns (JSONResponse) {}
+  rpc FetchKlines (FetchKlinesRequest) returns (JSONResponse) {}
+  rpc FetchOpenOrders (MarketRequest) returns (FetchOpenOrdersResponse) {}
+  rpc FetchOrder (FetchOrderRequest) returns (FetchOrderResponse) {}
   rpc FetchOrderBook (MarketRequest) returns (FetchOrderBookResponse) {}
+  rpc FetchServerTime (OpenClientConnectionId) returns (FetchServerTimeResponse) {}
   rpc FetchSymbolPriceTicker (MarketRequest) returns (FetchSymbolPriceTickerResponse) {}
   rpc FetchTickerPriceChangeStatistics (MarketRequest) returns (FetchTickerPriceChangeStatisticsResponse) {}
-  rpc FetchKlines (FetchKlinesRequest) returns (FetchKlinesResponse) {}
-  rpc FetchAccountTradeList (AccountTradeListRequest) returns (AccountTradeListResponse) {}
-  rpc OnTickerUpdate (MarketRequest) returns (stream OnTickerUpdateResponse) {}
-  rpc OnOrderBookUpdate (MarketRequest) returns (stream FetchOrderBookResponse) {}
-  rpc StopStream (MarketRequest) returns (SimpleResponse) {}
-  rpc StartStream (StartStreamRequest) returns (SimpleResponse) {}
-  rpc OnFundsUpdate (OnFundsUpdateRequest) returns (stream OnFundsUpdateResponse) {}
-  rpc OnBalanceUpdate (MarketRequest) returns (stream OnBalanceUpdateResponse) {}
-  rpc OnOrderUpdate (MarketRequest) returns (stream SimpleResponse) {}
-  rpc CreateLimitOrder (CreateLimitOrderRequest) returns (CreateLimitOrderResponse) {}
-  rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {}
-  rpc FetchOrder (FetchOrderRequest) returns (FetchOrderResponse) {}
-  rpc ResetRateLimit (OpenClientConnectionId) returns (SimpleResponse) {}
+  rpc OnBalanceUpdate (MarketRequest) returns (stream StreamResponse) {}
+  rpc OnFundsUpdate (OnFundsUpdateRequest) returns (stream StreamResponse) {}
   rpc OnKlinesUpdate(FetchKlinesRequest) returns (stream OnKlinesUpdateResponse) {}
-  rpc FetchFundingWallet(FetchFundingWalletRequest) returns (FetchFundingWalletResponse) {}
-  rpc TransferToMaster(MarketRequest) returns (SimpleResponse) {}
-  rpc CheckStream (MarketRequest) returns (SimpleResponse) {}
+  rpc OnOrderBookUpdate (MarketRequest) returns (stream FetchOrderBookResponse) {}
+  rpc OnOrderUpdate (MarketRequest) returns (stream SimpleResponse) {}
+  rpc OnTickerUpdate (MarketRequest) returns (stream OnTickerUpdateResponse) {}
   rpc OneClickArrivalDeposit (MarketRequest) returns (SimpleResponse) {}
+  rpc OpenClientConnection (OpenClientConnectionRequest) returns (OpenClientConnectionId) {}
+  rpc ResetRateLimit (OpenClientConnectionId) returns (SimpleResponse) {}
+  rpc StartStream (StartStreamRequest) returns (SimpleResponse) {}
+  rpc StopStream (MarketRequest) returns (SimpleResponse) {}
+  rpc TransferToMaster(MarketRequest) returns (SimpleResponse) {}
 }
 
-message OnBalanceUpdateResponse {
-  string balance = 1;
+message JSONResponse {
+  repeated string items = 1;
+}
+
+message StreamResponse {
+  string event = 1;
 }
 
 message FetchFundingWalletRequest{
@@ -50,18 +54,6 @@ message FetchFundingWalletRequest{
   string asset = 3;
   bool need_btc_valuation = 4;
   int64 receive_window = 5;
-}
-
-message FetchFundingWalletResponse {
-  message Balances {
-    string asset = 1;
-    string free = 2;
-    string locked = 3;
-    string freeze = 4;
-    string withdrawing = 5;
-    string btc_valuation = 6;
-  }
-  repeated Balances balances = 1;
 }
 
 message CancelOrderResponse{
@@ -153,10 +145,6 @@ message OnOrderUpdateResponse{
   string quote_order_quantity = 30;
 }
 
-message OnFundsUpdateResponse {
-  string funds = 1;
-}
-
 message OnFundsUpdateRequest {
   int64 client_id = 1;
   string trade_id = 2;
@@ -171,29 +159,9 @@ message SimpleResponse {
 }
 
 message OnTickerUpdateResponse {
-  string symbol = 1;
-  string open_price = 2;
-  string close_price = 3;
-  uint64 event_time = 4;
-}
-
-message AccountTradeListResponse {
-  message Trade {
-    string symbol = 1;
-    uint64 id = 2;
-    uint64 orderId = 3;
-    sint32 orderListId = 4;
-    string price = 5;
-    string qty = 6;
-    string quoteQty = 7;
-    string commission = 8;
-    string commissionAsset = 9;
-    uint64 time = 10;
-    bool isBuyer = 11;
-    bool isMaker = 12;
-    bool isBestMatch = 13;
-  }
-  repeated Trade items = 1;
+  string openPrice = 1;
+  string lastPrice = 2;
+  uint64 closeTime = 3;
 }
 
 message AccountTradeListRequest {
@@ -202,10 +170,6 @@ message AccountTradeListRequest {
   string symbol = 3;
   uint32 limit = 4;
   int64 start_time = 5;
-}
-
-message FetchKlinesResponse {
-  repeated string klines = 1;
 }
 
 message OnKlinesUpdateResponse {
@@ -255,15 +219,6 @@ message FetchOrderBookResponse {
   uint64 lastUpdateId = 1;
   repeated string bids = 2;
   repeated string asks = 3;
-}
-
-message FetchAccountBalanceResponse {
-  message Balances {
-    string asset = 1;
-    string free = 2;
-    string locked = 3;
-  }
-  repeated Balances balances = 1;
 }
 
 message FetchExchangeInfoSymbolResponse {
@@ -405,29 +360,7 @@ message FetchOrderResponse {
 
 message FetchOpenOrdersResponse {
   int32 rate_limiter = 1;
-  message Order {
-    string symbol = 1;
-    uint64 orderId = 2;
-    sint32 orderListId = 3;
-    string clientOrderId = 4;
-    string price = 5;
-    string origQty = 6;
-    string executedQty = 7;
-    string cummulativeQuoteQty = 8;
-    string status = 9;
-    string timeInForce = 10;
-    string type = 11;
-    string side = 12;
-    string stopPrice = 13;
-    string icebergQty = 14;
-    uint64 time = 15;
-    uint64 updateTime = 16;
-    bool isWorking = 17;
-    string origQuoteOrderQty = 18;
-    sint64 workingTime = 19;
-    string selfTradePreventionMode = 20;
-  }
-  repeated Order items = 2;
+  repeated string orders = 2;
 }
 
 message MarketRequest {

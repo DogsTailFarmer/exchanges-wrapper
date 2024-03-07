@@ -110,7 +110,7 @@ class EventWrapper:
 
 
 class AggregateTradeWrapper(EventWrapper):
-    def __init__(self, event_data, handlers):  # lgtm [py/similar-function]
+    def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
         self.event_time = event_data["E"]
@@ -126,7 +126,7 @@ class AggregateTradeWrapper(EventWrapper):
 
 
 class TradeWrapper(EventWrapper):
-    def __init__(self, event_data, handlers):  # lgtm [py/similar-function]
+    def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
         self.event_time = event_data["E"]
@@ -168,7 +168,7 @@ class KlineWrapper(EventWrapper):
 
 
 class SymbolMiniTickerWrapper(EventWrapper):
-    def __init__(self, event_data, handlers):  # lgtm [py/similar-function]
+    def __init__(self, event_data, handlers):
         super().__init__(event_data, handlers)
         self.event_type = event_data["e"]
         self.event_time = event_data["E"]

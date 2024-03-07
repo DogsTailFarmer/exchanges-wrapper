@@ -11,16 +11,11 @@ import ujson as json
 import logging.handlers
 import toml
 from decimal import Decimal
-# noinspection PyPackageRequirements
-import grpc
-# noinspection PyPackageRequirements
-from google.protobuf import json_format
-#
-from exchanges_wrapper import errors, api_pb2, api_grpc
+
+from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE, errors, mr, Server, Status, GRPCError
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
-from exchanges_wrapper.c_structures import OrderTradesEvent, REST_RATE_LIMIT_INTERVAL
-from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE
+from exchanges_wrapper.lib import OrderTradesEvent, REST_RATE_LIMIT_INTERVAL, FILTER_TYPE_MAP
 #
 HEARTBEAT = 1  # Sec
 MAX_QUEUE_SIZE = 100
@@ -40,6 +35,10 @@ root_logger = logging.getLogger()
 root_logger.setLevel(min([fh.level, sh.level]))
 root_logger.addHandler(fh)
 root_logger.addHandler(sh)
+
+logging.basicConfig()
+logging.getLogger('hpack').setLevel(logging.INFO)
+logging.getLogger('grpclib').setLevel(logging.INFO)
 
 
 def get_account(_account_name: str) -> ():
@@ -137,7 +136,7 @@ class OpenClient:
 
 
 # noinspection PyPep8Naming,PyMethodMayBeStatic
-class Martin(api_grpc.MartinBase):
+class Martin(mr.MartinBase):
     rate_limit_reached_time = None
     rate_limiter = None
 
@@ -149,8 +148,7 @@ class Martin(api_grpc.MartinBase):
                 sleep_duration = rate_limit_interval - ts_diff
                 await asyncio.sleep(sleep_duration)
 
-    async def OpenClientConnection(self, request: api_pb2.OpenClientConnectionRequest,
-                                   _context: grpc.aio.ServicerContext) -> api_pb2.OpenClientConnectionId:
+    async def open_client_connection(self, request: mr.OpenClientConnectionRequest) -> mr.OpenClientConnectionId:
         logger.info(f"OpenClientConnection start trade: {request.account_name}:{request.trade_id}")
         client_id = OpenClient.get_id(request.account_name)
         if client_id:
@@ -174,13 +172,11 @@ class Martin(api_grpc.MartinBase):
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
             except UserWarning as ex:
-                _context.set_details(f"{ex}")
-                _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-                return api_pb2.OpenClientConnectionId(
-                    client_id=client_id,
-                    srv_version=__version__,
-                    exchange=request.account_name
-                )
+                # _context.set_details(f"{ex}")
+                # _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+                print(f"OpenClientConnection: {ex}")
+                raise GRPCError(status=Status.FAILED_PRECONDITION, message=str(ex))
+
         try:
             await open_client.client.load(request.symbol)
         except asyncio.CancelledError:
@@ -188,26 +184,19 @@ class Martin(api_grpc.MartinBase):
         except Exception as ex:
             logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
             logger.debug(f"Exception traceback: {traceback.format_exc()}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
             await OpenClient.get_client(client_id).client.session.close()
             OpenClient.remove_client(request.account_name)
-            return api_pb2.OpenClientConnectionId(
-                client_id=client_id,
-                srv_version=__version__,
-                exchange=request.account_name
-            )
+            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
 
         # Set rate_limiter
         Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
-        return api_pb2.OpenClientConnectionId(
+        return mr.OpenClientConnectionId(
             client_id=client_id,
             srv_version=__version__,
             exchange=open_client.client.exchange
         )
 
-    async def FetchServerTime(self, request: api_pb2.OpenClientConnectionId,
-                              _context: grpc.aio.ServicerContext) -> api_pb2.FetchServerTimeResponse:
+    async def fetch_server_time(self, request: mr.OpenClientConnectionId) -> mr.FetchServerTimeResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         await self.rate_limit_control(open_client)
@@ -215,18 +204,16 @@ class Martin(api_grpc.MartinBase):
             res = await client.fetch_server_time()
         except Exception as ex:
             logger.error(f"FetchServerTime for {open_client.name} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.UNKNOWN)
+            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
         else:
             open_client.ts_rlc = time.time()
             server_time = res.get('serverTime')
-            return api_pb2.FetchServerTimeResponse(server_time=server_time)
+            return mr.FetchServerTimeResponse(server_time=server_time)
 
-    async def OneClickArrivalDeposit(self, request: api_pb2.MarketRequest,
-                                     _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse():
+    async def one_click_arrival_deposit(self, request: mr.MarketRequest) -> mr.SimpleResponse():
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.SimpleResponse()
+        response = mr.SimpleResponse()
         tx_id = request.symbol
         try:
             res = await client.one_click_arrival_deposit(tx_id)
@@ -234,15 +221,13 @@ class Martin(api_grpc.MartinBase):
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
             logger.error(f"OneClickArrivalDeposit for {open_client.name}:{request.symbol} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.UNKNOWN)
+            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
         else:
             response.success = True
             response.result = json.dumps(str(res))
         return response
 
-    async def ResetRateLimit(self, request: api_pb2.OpenClientConnectionId,
-                             _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+    async def reset_rate_limit(self, request: mr.OpenClientConnectionId) -> mr.SimpleResponse:
         Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
         _success = False
         client = OpenClient.get_client(request.client_id).client
@@ -254,14 +239,12 @@ class Martin(api_grpc.MartinBase):
                 _success = True
         elif client.http.rate_limit_reached:
             Martin.rate_limit_reached_time = time.time()
-        return api_pb2.SimpleResponse(success=_success)
+        return mr.SimpleResponse(success=_success)
 
-    async def FetchOpenOrders(self, request: api_pb2.MarketRequest,
-                              _context: grpc.aio.ServicerContext) -> api_pb2.FetchOpenOrdersResponse:
+    async def fetch_open_orders(self, request: mr.MarketRequest) -> mr.FetchOpenOrdersResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.FetchOpenOrdersResponse()
-        response_order = api_pb2.FetchOpenOrdersResponse.Order()
+        response = mr.FetchOpenOrdersResponse()
         await self.rate_limit_control(open_client)
         try:
             res = await client.fetch_open_orders(request.trade_id, request.symbol)
@@ -270,24 +253,21 @@ class Martin(api_grpc.MartinBase):
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
             logger.warning(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
         except errors.HTTPError as ex:
             logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            raise GRPCError(status=Status.FAILED_PRECONDITION, message=str(ex))
         except Exception as ex:
             logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
             logger.debug(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {traceback.format_exc()}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.UNKNOWN)
+            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
         else:
             open_client.ts_rlc = time.time()
             active_orders = []
             for order in res:
                 order_id = order['orderId']
                 active_orders.append(order_id)
-                response.items.append(json_format.ParseDict(order, response_order, ignore_unknown_fields=True))
+                response.orders.append(json.dumps(order))
                 if client.exchange in ('bitfinex', 'huobi'):
                     client.active_order(order_id, order['origQty'], order['executedQty'])
 
@@ -297,12 +277,11 @@ class Martin(api_grpc.MartinBase):
         response.rate_limiter = Martin.rate_limiter
         return response
 
-    async def FetchOrder(self, request: api_pb2.FetchOrderRequest,
-                         _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderResponse:
+    async def fetch_order(self, request: mr.FetchOrderRequest) -> mr.FetchOrderResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = client.on_order_update_queues.get(request.trade_id)
-        response = api_pb2.FetchOrderResponse()
+        response = mr.FetchOrderResponse()
         await self.rate_limit_control(open_client)
         try:
             res = await client.fetch_order(
@@ -322,7 +301,7 @@ class Martin(api_grpc.MartinBase):
             if _queue and request.filled_update_call and Decimal(res.get('executedQty', '0')):
                 request.order_id = res.get('orderId')
                 await self.create_trade_stream_event(_queue, client, open_client, request, res)
-            json_format.ParseDict(res, response, ignore_unknown_fields=True)
+            response.from_pydict(res)
         return response
 
     async def create_trade_stream_event(self, _queue, client, open_client, request, order):
@@ -346,11 +325,10 @@ class Martin(api_grpc.MartinBase):
                 event = OrderTradesEvent(trade)
                 await _queue.put(weakref.ref(event)())
 
-    async def CancelAllOrders(self, request: api_pb2.MarketRequest,
-                              _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse():
+    async def cancel_all_orders(self, request: mr.MarketRequest) -> mr.SimpleResponse():
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.SimpleResponse()
+        response = mr.SimpleResponse()
         try:
             res = await client.cancel_all_orders(request.trade_id, request.symbol)
         except asyncio.CancelledError:
@@ -358,122 +336,67 @@ class Martin(api_grpc.MartinBase):
         except Exception as ex:
             logger.error(f"CancelAllOrder for {open_client.name}:{request.symbol} exception: {ex}")
             logger.debug(f"CancelAllOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.UNKNOWN)
+            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
         else:
             response.success = True
             response.result = json.dumps(str(res))
         return response
 
-    async def FetchExchangeInfoSymbol(self, request: api_pb2.MarketRequest,
-                                      _context: grpc.aio.ServicerContext) -> api_pb2.FetchExchangeInfoSymbolResponse:
+    async def fetch_exchange_info_symbol(self, request: mr.MarketRequest) -> mr.FetchExchangeInfoSymbolResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.FetchExchangeInfoSymbolResponse()
+        response = mr.FetchExchangeInfoSymbolResponse()
         exchange_info = await client.fetch_exchange_info(request.symbol)
         if exchange_info_symbol := exchange_info.get('symbols'):
             exchange_info_symbol = exchange_info_symbol[0]
         else:
             raise UserWarning(f"Symbol {request.symbol} not exist")
         await self.rate_limit_control(open_client)
-        # logger.debug(f"exchange_info_symbol: {exchange_info_symbol}")
         open_client.ts_rlc = time.time()
         filters_res = exchange_info_symbol.pop('filters', [])
-        json_format.ParseDict(exchange_info_symbol, response, ignore_unknown_fields=True)
-        # logger.info(f"filters: {filters_res}")
-        filters = response.filters
-        for _filter in filters_res:
-            filter_type = _filter.get('filterType')
-            if filter_type == 'PRICE_FILTER':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.PriceFilter()
-                filters.price_filter.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif 'PERCENT_PRICE' in filter_type:
-                if filter_type == 'PERCENT_PRICE_BY_SIDE':
-                    _filter['multiplierUp'] = _filter['askMultiplierUp']
-                    _filter['multiplierDown'] = _filter['bidMultiplierDown']
-                    del _filter['bidMultiplierUp']
-                    del _filter['bidMultiplierDown']
-                    del _filter['askMultiplierUp']
-                    del _filter['askMultiplierDown']
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.PercentPrice()
-                filters.percent_price.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif filter_type == 'LOT_SIZE':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.LotSize()
-                filters.lot_size.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif filter_type == 'MIN_NOTIONAL':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MinNotional()
-                filters.min_notional.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif filter_type == 'NOTIONAL':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.Notional()
-                filters.notional.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif filter_type == 'ICEBERG_PARTS':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.IcebergParts()
-                filters.iceberg_parts.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif filter_type == 'MARKET_LOT_SIZE':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MarketLotSize()
-                filters.market_lot_size.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif filter_type == 'MAX_NUM_ORDERS':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxNumOrders()
-                filters.max_num_orders.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif filter_type == 'MAX_NUM_ICEBERG_ORDERS':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxNumIcebergOrders()
-                filters.max_num_iceberg_orders.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
-            elif filter_type == 'MAX_POSITION':
-                new_filter_template = api_pb2.FetchExchangeInfoSymbolResponse.Filters.MaxPosition()
-                filters.max_position.CopyFrom(
-                    json_format.ParseDict(_filter, new_filter_template, ignore_unknown_fields=True)
-                )
+        response.from_pydict(exchange_info_symbol)
+        response.filters = self.process_filters(filters_res)
         return response
 
-    async def FetchAccountInformation(self, request: api_pb2.OpenClientConnectionId,
-                                      _context: grpc.aio.ServicerContext
-                                      ) -> api_pb2.FetchAccountBalanceResponse:
+    def process_filters(self, filters_res):
+        filters = mr.FetchExchangeInfoSymbolResponseFilters()
+        for _filter in filters_res:
+            filter_type = _filter.get('filterType')
+            if filter_type == 'PERCENT_PRICE_BY_SIDE':
+                filter_type = _filter['filterType'] = 'PERCENT_PRICE'
+                _filter['multiplierUp'] = _filter['askMultiplierUp']
+                _filter['multiplierDown'] = _filter['bidMultiplierDown']
+                del _filter['bidMultiplierUp']
+                del _filter['bidMultiplierDown']
+                del _filter['askMultiplierUp']
+                del _filter['askMultiplierDown']
+            if filter_class := FILTER_TYPE_MAP.get(filter_type):
+                filter_instance = filter_class()
+                filter_instance.from_pydict(_filter)
+                setattr(filters, filter_type.lower(), filter_instance)
+        return filters
+
+    async def fetch_account_information(self, request: mr.OpenClientConnectionId) -> mr.JsonResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.FetchAccountBalanceResponse()
-        response_balance = api_pb2.FetchAccountBalanceResponse.Balances()
+        response = mr.JsonResponse()
         await self.rate_limit_control(open_client)
         account_information = await client.fetch_account_information(request.trade_id, receive_window=None)
         open_client.ts_rlc = time.time()
         # Send only balances
         res = account_information.get('balances', [])
         # Create consolidated list of asset balances from SPOT and Funding wallets
-        balances = []
-        for i in res:
-            _free = float(i.get('free'))
-            _locked = float(i.get('locked'))
-            if _free or _locked:
-                balances.append({'asset': i.get('asset'), 'free': i.get('free'), 'locked': i.get('locked')})
-        # logger.info(f"account_information.balances: {balances}")
-        for balance in balances:
-            new_balance = json_format.ParseDict(balance, response_balance, ignore_unknown_fields=True)
-            response.balances.extend([new_balance])
+        balances = [
+            {'asset': i['asset'], 'free': i['free'], 'locked': i['locked']}
+            for i in res if float(i['free']) or float(i['locked'])
+        ]
+        response.items = list(map(json.dumps, balances))
         return response
 
-    async def FetchFundingWallet(self, request: api_pb2.FetchFundingWalletRequest,
-                                 _context: grpc.aio.ServicerContext) -> api_pb2.FetchFundingWalletResponse:
+    async def fetch_funding_wallet(self, request: mr.FetchFundingWalletRequest) -> mr.JsonResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.FetchFundingWalletResponse()
-        response_balance = api_pb2.FetchFundingWalletResponse.Balances()
+        response = mr.JsonResponse()
         await self.rate_limit_control(open_client)
         res = []
         if (client.exchange in ('bitfinex', 'okx', 'bybit') or
@@ -485,59 +408,46 @@ class Martin(api_grpc.MartinBase):
             except AttributeError:
                 logger.error("Can't get Funding Wallet balances")
         open_client.ts_rlc = time.time()
-        logger.debug(f"funding_wallet: {res}")
-        for balance in res:
-            new_balance = json_format.ParseDict(balance, response_balance, ignore_unknown_fields=True)
-            response.balances.extend([new_balance])
+        response.items = list(map(json.dumps, res))
         return response
 
-    async def FetchOrderBook(self, request: api_pb2.MarketRequest,
-                             _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
+    async def fetch_order_book(self, request: mr.MarketRequest) -> mr.FetchOrderBookResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.FetchOrderBookResponse()
+        response = mr.FetchOrderBookResponse()
         await self.rate_limit_control(open_client)
         limit = 1 if client.exchange in ('bitfinex', 'okx') else 5
         res = await client.fetch_order_book(symbol=request.symbol, limit=limit)
         open_client.ts_rlc = time.time()
-        res_bids = res.get('bids', [])
-        res_asks = res.get('asks', [])
-        response.lastUpdateId = res.get('lastUpdateId')
-        for bid in res_bids:
-            response.bids.append(json.dumps(bid))
-        for ask in res_asks:
-            response.asks.append(json.dumps(ask))
-        return response
+        res['bids'] = [json.dumps(v) for v in res.get('bids', [])]
+        res['asks'] = [json.dumps(v) for v in res.get('asks', [])]
+        return response.from_pydict(res)
 
-    async def FetchSymbolPriceTicker(
-            self, request: api_pb2.MarketRequest,
-            _context: grpc.aio.ServicerContext) -> api_pb2.FetchSymbolPriceTickerResponse:
+    async def fetch_symbol_price_ticker(self, request: mr.MarketRequest) -> mr.FetchSymbolPriceTickerResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.FetchSymbolPriceTickerResponse()
+        response = mr.FetchSymbolPriceTickerResponse()
         await self.rate_limit_control(open_client)
         res = await client.fetch_symbol_price_ticker(symbol=request.symbol)
         open_client.ts_rlc = time.time()
-        json_format.ParseDict(res, response, ignore_unknown_fields=True)
-        return response
+        return response.from_pydict(res)
 
-    async def FetchTickerPriceChangeStatistics(
-            self, request: api_pb2.MarketRequest,
-            _context: grpc.aio.ServicerContext) -> api_pb2.FetchTickerPriceChangeStatisticsResponse:
+    async def fetch_ticker_price_change_statistics(
+            self,
+            request: mr.MarketRequest
+    ) -> mr.FetchTickerPriceChangeStatisticsResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.FetchTickerPriceChangeStatisticsResponse()
+        response = mr.FetchTickerPriceChangeStatisticsResponse()
         await self.rate_limit_control(open_client)
         res = await client.fetch_ticker_price_change_statistics(symbol=request.symbol)
         open_client.ts_rlc = time.time()
-        json_format.ParseDict(res, response, ignore_unknown_fields=True)
-        return response
+        return response.from_pydict(res)
 
-    async def FetchKlines(self, request: api_pb2.FetchKlinesRequest,
-                          _context: grpc.aio.ServicerContext) -> api_pb2.FetchKlinesResponse:
+    async def fetch_klines(self, request: mr.FetchKlinesRequest) -> mr.JsonResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.FetchKlinesResponse()
+        response = mr.JsonResponse()
         await self.rate_limit_control(open_client)
         try:
             res = await client.fetch_klines(symbol=request.symbol, interval=request.interval,
@@ -547,15 +457,12 @@ class Martin(api_grpc.MartinBase):
         except Exception as _ex:
             logger.error(f"FetchKlines for {request.symbol} interval: {request.interval}, exception: {_ex}")
         else:
-            # logger.info(f"FetchKlines.res: {res}")
             open_client.ts_rlc = time.time()
-            for candle in res:
-                response.klines.append(json.dumps(candle))
+            response.items = list(map(json.dumps, res))
         return response
 
-    async def OnKlinesUpdate(self, request: api_pb2.FetchKlinesRequest,
-                             _context: grpc.aio.ServicerContext) -> api_pb2.OnKlinesUpdateResponse:
-        response = api_pb2.OnKlinesUpdateResponse()
+    async def on_klines_update(self, request: mr.FetchKlinesRequest) -> mr.OnKlinesUpdateResponse:
+        response = mr.OnKlinesUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -582,7 +489,6 @@ class Martin(api_grpc.MartinBase):
                 event_handler, _queue, client, request.trade_id, _event_type),
                 _event_type, exchange, request.trade_id)
         while True:
-            response.Clear()
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
@@ -610,12 +516,10 @@ class Martin(api_grpc.MartinBase):
                 yield response
                 _queue.task_done()
 
-    async def FetchAccountTradeList(self, request: api_pb2.AccountTradeListRequest,
-                                    _context: grpc.aio.ServicerContext) -> api_pb2.AccountTradeListResponse:
+    async def fetch_account_trade_list(self, request: mr.AccountTradeListRequest) -> mr.JsonResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.AccountTradeListResponse()
-        response_trade = api_pb2.AccountTradeListResponse.Trade()
+        response = mr.JsonResponse()
         await self.rate_limit_control(open_client)
         try:
             res = await client.fetch_account_trade_list(
@@ -633,14 +537,11 @@ class Martin(api_grpc.MartinBase):
         else:
             # logger.info(f"FetchAccountTradeList: {res}")
             open_client.ts_rlc = time.time()
-            for trade in res:
-                trade_order = json_format.ParseDict(trade, response_trade, ignore_unknown_fields=True)
-                response.items.append(trade_order)
+            response.items = list(map(json.dumps, res))
         return response
 
-    async def OnTickerUpdate(self, request: api_pb2.MarketRequest,
-                             _context: grpc.aio.ServicerContext) -> api_pb2.OnTickerUpdateResponse:
-        response = api_pb2.OnTickerUpdateResponse()
+    async def on_ticker_update(self, request: mr.MarketRequest) -> mr.OnTickerUpdateResponse:
+        response = mr.OnTickerUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -657,25 +558,24 @@ class Martin(api_grpc.MartinBase):
         client.events.register_event(functools.partial(event_handler, _queue, client, request.trade_id, _event_type),
                                      _event_type, client.exchange, request.trade_id)
         while True:
-            response.Clear()
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnTickerUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
-                ticker_24h = {'symbol': _event.symbol,
-                              'open_price': _event.open_price,
-                              'close_price': _event.close_price,
-                              'event_time': _event.event_time}
-                # logger.info(f"OnTickerUpdate.event: {_event.symbol}, ticker_24h: {ticker_24h}")
-                json_format.ParseDict(ticker_24h, response, ignore_unknown_fields=True)
+                response.from_pydict(
+                    {
+                        'openPrice': _event.open_price,
+                        'lastPrice': _event.close_price,
+                        'closeTime': _event.event_time
+                    }
+                )
                 yield response
                 _queue.task_done()
 
-    async def OnOrderBookUpdate(self, request: api_pb2.MarketRequest,
-                                _context: grpc.aio.ServicerContext) -> api_pb2.FetchOrderBookResponse:
-        response = api_pb2.FetchOrderBookResponse()
+    async def on_order_book_update(self, request: mr.MarketRequest) -> mr.FetchOrderBookResponse:
+        response = mr.FetchOrderBookResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.LifoQueue(MAX_QUEUE_SIZE * 5)
@@ -692,7 +592,6 @@ class Martin(api_grpc.MartinBase):
         client.events.register_event(functools.partial(event_handler, _queue, client, request.trade_id, _event_type),
                                      _event_type, client.exchange, request.trade_id)
         while True:
-            response.Clear()
             _event = await _queue.get()
             while not _queue.empty():
                 _queue.get_nowait()
@@ -702,15 +601,14 @@ class Martin(api_grpc.MartinBase):
                 logger.info(f"OnOrderBookUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
-                response.lastUpdateId = _event.last_update_id
-                [response.bids.append(json.dumps(bid)) for bid in _event.bids]
-                [response.asks.append(json.dumps(ask)) for ask in _event.asks]
+                response.last_update_id = _event.last_update_id
+                response.bids = list(map(json.dumps, _event.bids))
+                response.asks = list(map(json.dumps, _event.asks))
                 yield response
                 _queue.task_done()
 
-    async def OnFundsUpdate(self, request: api_pb2.OnFundsUpdateRequest,
-                            _context: grpc.aio.ServicerContext) -> api_pb2.OnFundsUpdateResponse:
-        response = api_pb2.OnFundsUpdateResponse()
+    async def on_funds_update(self, request: mr.OnFundsUpdateRequest) -> mr.StreamResponse:
+        response = mr.StreamResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -719,21 +617,18 @@ class Martin(api_grpc.MartinBase):
             event_handler, _queue, client, request.trade_id, 'outboundAccountPosition'),
             'outboundAccountPosition')
         while True:
-            response.Clear()
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
                 logger.info(f"OnFundsUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             else:
-                # logger.debug(f"OnFundsUpdate: {client.exchange}:{_event.balances.items()}")
-                response.funds = json.dumps(_event.balances)
+                response.event = json.dumps(_event.balances)
                 yield response
                 _queue.task_done()
 
-    async def OnBalanceUpdate(self, request: api_pb2.MarketRequest,
-                              _context: grpc.aio.ServicerContext) -> api_pb2.OnBalanceUpdateResponse:
-        response = api_pb2.OnBalanceUpdateResponse()
+    async def on_balance_update(self, request: mr.MarketRequest) -> mr.StreamResponse:
+        response = mr.StreamResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -743,7 +638,6 @@ class Martin(api_grpc.MartinBase):
                 event_handler, _queue, client, request.trade_id, 'balanceUpdate'), 'balanceUpdate')
         _events = []
         while True:
-            response.Clear()
             _events.clear()
             try:
                 _event = await asyncio.wait_for(_queue.get(), timeout=HEARTBEAT * 30)
@@ -761,8 +655,8 @@ class Martin(api_grpc.MartinBase):
                     try:
                         balances = await client.fetch_ledgers(request.symbol)
                     except Exception as _ex:
-                        logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}:"
-                                       f" {_ex}: {traceback.format_exc()}")
+                        logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
+                        logger.debug(f"OnBalanceUpdate: {traceback.format_exc()}")
                     else:
                         open_client.ts_rlc = time.time()
                         [_events.append(client.events.wrap_event(balance)) for balance in balances]
@@ -775,18 +669,14 @@ class Martin(api_grpc.MartinBase):
                         "balance_delta": _event.balance_delta,
                         "clear_time": _event.clear_time
                     }
-
-                    logger.debug(f"OnBalanceUpdate: {open_client.name}:{request.symbol}: {balance}")
-
-                    response.balance = json.dumps(balance)
+                    response.event = json.dumps(balance)
                     yield response
 
                 if _get_event_from_queue:
                     _queue.task_done()
 
-    async def OnOrderUpdate(self, request: api_pb2.MarketRequest,
-                            _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        response = api_pb2.SimpleResponse()
+    async def on_order_update(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+        response = mr.SimpleResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -796,7 +686,6 @@ class Martin(api_grpc.MartinBase):
             event_handler, _queue, client, request.trade_id, 'executionReport'),
             'executionReport')
         while True:
-            response.Clear()
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
@@ -807,16 +696,14 @@ class Martin(api_grpc.MartinBase):
                 event.pop('handlers', None)
                 logger.debug(f"OnOrderUpdate: {open_client.name}: {event}")
                 response.success = True
-                response.result = json.dumps(str(event))
+                response.result = json.dumps(event)
                 yield response
                 _queue.task_done()
 
-    async def CreateLimitOrder(self, request: api_pb2.CreateLimitOrderRequest,
-                               _context: grpc.aio.ServicerContext) -> api_pb2.CreateLimitOrderResponse:
-        response = api_pb2.CreateLimitOrderResponse()
+    async def create_limit_order(self, request: mr.CreateLimitOrderRequest) -> mr.CreateLimitOrderResponse:
+        response = mr.CreateLimitOrderResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        # logger.info(f"CreateLimitOrder: quantity: {request.quantity}, price: {request.price}")
         try:
             res = await client.create_order(
                 request.trade_id,
@@ -839,18 +726,15 @@ class Martin(api_grpc.MartinBase):
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
             logger.warning(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
         except errors.HTTPError as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol}:{request.new_client_order_id}"
                          f" exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            raise GRPCError(status=Status.FAILED_PRECONDITION, message=str(ex))
         except Exception as ex:
             logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
             logger.debug(f"CreateLimitOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.UNKNOWN)
+            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
         else:
             if not res and client.exchange in ('binance', 'huobi', 'okx'):
                 res = await client.fetch_order(
@@ -861,13 +745,12 @@ class Martin(api_grpc.MartinBase):
                     receive_window=None,
                     response_type=False
                 )
-            json_format.ParseDict(res, response, ignore_unknown_fields=True)
+            response.from_pydict(res)
             logger.debug(f"CreateLimitOrder: for {open_client.name}:{request.symbol}: created: {res.get('orderId')}")
         return response
 
-    async def CancelOrder(self, request: api_pb2.CancelOrderRequest,
-                          _context: grpc.aio.ServicerContext) -> api_pb2.CancelOrderResponse:
-        response = api_pb2.CancelOrderResponse()
+    async def cancel_order(self, request: mr.CancelOrderRequest) -> mr.CancelOrderResponse:
+        response = mr.CancelOrderResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = client.on_order_update_queues.get(request.trade_id)
@@ -884,24 +767,18 @@ class Martin(api_grpc.MartinBase):
         except errors.RateLimitReached as ex:
             Martin.rate_limit_reached_time = time.time()
             logger.warning(f"CancelOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
         except Exception as ex:
             logger.error(f"CancelOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.UNKNOWN)
+            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
         else:
             if Decimal(res.get('executedQty', '0')):
                 await self.create_trade_stream_event(_queue, client, open_client, request, res)
-            json_format.ParseDict(res, response, ignore_unknown_fields=True)
+            response.from_pydict(res)
         return response
 
-    async def TransferToMaster(
-            self,
-            request: api_pb2.MarketRequest,
-            _context: grpc.aio.ServicerContext
-    ) -> api_pb2.SimpleResponse:
-        response = api_pb2.SimpleResponse()
+    async def transfer_to_master(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+        response = mr.SimpleResponse()
         response.success = False
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -910,12 +787,10 @@ class Martin(api_grpc.MartinBase):
             res = await client.transfer_to_master(symbol=request.symbol, quantity=request.amount)
         except errors.HTTPError as ex:
             logger.error(f"TransferToMaster for {open_client.name}: {request.symbol} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
         except Exception as ex:
             logger.error(f"TransferToMaster for {open_client.name}: {request.symbol} exception: {ex}")
-            _context.set_details(f"{ex}")
-            _context.set_code(grpc.StatusCode.UNKNOWN)
+            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
         else:
             open_client.ts_rlc = time.time()
             if res and res.get("txnId"):
@@ -923,29 +798,28 @@ class Martin(api_grpc.MartinBase):
             response.result = json.dumps(res)
         return response
 
-    async def StartStream(self, request: api_pb2.StartStreamRequest,
-                          _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
+    async def start_stream(self, request: mr.StartStreamRequest) -> mr.SimpleResponse:
         if request.update_max_queue_size:
             global MAX_QUEUE_SIZE
             MAX_QUEUE_SIZE += int(MAX_QUEUE_SIZE / 10)
             logger.info(f"MAX_QUEUE_SIZE was updated: new value is {MAX_QUEUE_SIZE}")
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = api_pb2.SimpleResponse()
+        response = mr.SimpleResponse()
         _market_stream_count = 0
         while _market_stream_count < request.market_stream_count:
             await asyncio.sleep(HEARTBEAT)
-            _market_stream_count = sum(len(k) for k in ([list(i.get(request.trade_id, []))
-                                                         for i in list(client.events.registered_streams.values())]))
+            _market_stream_count = sum(
+                len(v[request.trade_id]) for v in client.events.registered_streams.values() if request.trade_id in v
+            )
         logger.info(f"Start WS streams for {open_client.name}")
         await client.start_market_events_listener(request.trade_id)
         await client.start_user_events_listener(request.trade_id, request.symbol)
         response.success = True
         return response
 
-    async def StopStream(self, request: api_pb2.MarketRequest,
-                         _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        response = api_pb2.SimpleResponse()
+    async def stop_stream(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+        response = mr.SimpleResponse()
         if open_client := OpenClient.get_client(request.client_id):
             client = open_client.client
             logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
@@ -955,15 +829,13 @@ class Martin(api_grpc.MartinBase):
             response.success = False
         return response
 
-    async def CheckStream(self, request: api_pb2.MarketRequest,
-                          _context: grpc.aio.ServicerContext) -> api_pb2.SimpleResponse:
-        response = api_pb2.SimpleResponse()
+    async def check_stream(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+        response = mr.SimpleResponse()
         if open_client := OpenClient.get_client(request.client_id):
             client = open_client.client
             response.success = bool(client.data_streams.get(request.trade_id))
         else:
             response.success = False
-        if not response.success:
             logger.warning(f"CheckStream request failed for {request.symbol}")
         return response
 
@@ -993,39 +865,25 @@ def is_port_in_use(port: int) -> bool:
         return s.connect_ex(('localhost', port)) == 0
 
 
-async def serve() -> None:
-    port = 50051
-    listen_addr = f"localhost:{port}"
-    if is_port_in_use(port):
-        raise SystemExit(f"gRPC server port {port} already used")
-    server = grpc.aio.server()
-
-    server.add_generic_rpc_handlers([Martin()])
-
-    # api_grpc.add_MartinServicer_to_server(Martin(), server)
-    server.add_insecure_port(listen_addr)
-    logger.info(f"Starting server v:{__version__} on {listen_addr}")
-    await server.start()
-    await server.wait_for_termination()
-
-
-async def stop_tasks(loop):
-    for task in asyncio.all_tasks(loop):
+async def stop_tasks():
+    for task in asyncio.all_tasks():
         if all(item in task.get_name() for item in ['keepalive', 'heartbeat']) and not task.done():
             task.cancel()
 
 
-def main():
-    loop = asyncio.new_event_loop()
-    loop.create_task(serve())
+async def main(host: str = '127.0.0.1', port: int = 50051):
     try:
-        loop.run_forever()
+        if is_port_in_use(port):
+            raise SystemExit(f"gRPC server port {port} already used")
+        server = Server([Martin()])
+        await server.start(host, port)
+        logger.info(f"Starting server v:{__version__} on {host}:{port}")
+        await server.wait_closed()
     except KeyboardInterrupt:
         pass
     finally:
-        loop.run_until_complete(stop_tasks(loop))
-        loop.close()
+        await stop_tasks()
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
