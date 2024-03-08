@@ -110,7 +110,6 @@ class EventsDataStream:
                 self.tasks_list.append(_task)
                 if msg_data["op"] == "subscribe" and msg_data["success"] and not msg_data["ret_msg"]:
                     self.wss_started = True
-                return
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and not msg_data.get("success")):
                 logger.warning(f"Reconnecting ByBit WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
@@ -200,7 +199,6 @@ class EventsDataStream:
             elif msg_data.get('action') in ('req', 'sub') and msg_data.get('code') == 200:
                 if msg_data.get('ch') == f"trade.clearing#{symbol.lower()}#0":
                     self.wss_started = True
-                return
             elif (msg_data.get('action') == 'sub' and
                   msg_data.get('code') == 500 and
                   msg_data.get('message') == '系统异常:'):

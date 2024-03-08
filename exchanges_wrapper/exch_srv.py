@@ -171,8 +171,6 @@ class Martin(mr.MartinBase):
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
             except UserWarning as ex:
-                # _context.set_details(f"{ex}")
-                # _context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
                 print(f"OpenClientConnection: {ex}")
                 raise GRPCError(status=Status.FAILED_PRECONDITION, message=str(ex))
 
@@ -534,7 +532,6 @@ class Martin(mr.MartinBase):
         except Exception as _ex:
             logger.error(f"FetchAccountTradeList for {open_client.name}: {request.symbol} exception: {_ex}")
         else:
-            # logger.info(f"FetchAccountTradeList: {res}")
             open_client.ts_rlc = time.time()
             response.items = list(map(json.dumps, res))
         return response
