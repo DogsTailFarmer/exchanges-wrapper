@@ -38,7 +38,6 @@ root_logger.addHandler(sh)
 
 logging.basicConfig()
 logging.getLogger('hpack').setLevel(logging.INFO)
-logging.getLogger('grpclib').setLevel(logging.INFO)
 
 
 def get_account(_account_name: str) -> ():
