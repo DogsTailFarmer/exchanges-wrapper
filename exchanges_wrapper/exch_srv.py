@@ -12,7 +12,8 @@ import logging.handlers
 import toml
 from decimal import Decimal
 
-from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE, errors, mr, Server, Status, GRPCError
+import exchanges_wrapper.martin as mr
+from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE, errors, Server, Status, GRPCError
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.lib import OrderTradesEvent, REST_RATE_LIMIT_INTERVAL, FILTER_TYPE_MAP
