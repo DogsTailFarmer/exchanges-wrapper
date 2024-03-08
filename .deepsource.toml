@@ -1,7 +1,7 @@
 version = 1
 
 exclude_patterns = [
-  "/martin/**",
+  "exchanges_wrapper/martin/__init__.py",
 ]
 
 [[analyzers]]
