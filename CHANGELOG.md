@@ -1,3 +1,7 @@
+## 2.0.0.post1 2024-03-10
+### Fix
+* Incomplete description of dependencies
+
 ## 2.0.0 2024-03-09
 ### Update
 * Example
