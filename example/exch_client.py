@@ -3,21 +3,14 @@
 """
 Client example for exchanges-wrapper, examples of use of server methods are given
 """
-
+import ast
 import asyncio
 import toml
 import uuid
 import simplejson as json
-# noinspection PyPackageRequirements
-import grpc
-# noinspection PyPackageRequirements
-from google.protobuf import json_format
-from exchanges_wrapper import api_pb2, api_pb2_grpc
 
-# For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
-CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
-                   ('grpc.enable_retries', 0),
-                   ('grpc.keepalive_timeout_ms', 10000)]
+from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
+
 RATE_LIMITER = 5
 FILE_CONFIG = 'ms_cfg.toml'
 config = toml.load(FILE_CONFIG)
@@ -28,25 +21,24 @@ SYMBOL = 'BTCUSDT'
 async def main(_exchange, _symbol):
     print(f"main.account_name: {_exchange}")
     # Create connection to the grpc powered server
-    channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
-    stub = api_pb2_grpc.MartinStub(channel)
+    channel = Channel('127.0.0.1', 50051)
+    stub = mr.MartinStub(channel)
     trade_id = str(uuid.uuid4().hex)
     client_id = None
     # Register client and get client_id for reuse connection
     # Example of exception handling by grpc connection
     try:
-        client_id_msg = await stub.OpenClientConnection(api_pb2.OpenClientConnectionRequest(
+        client_id_msg = await stub.open_client_connection(mr.OpenClientConnectionRequest(
             trade_id=trade_id,
             account_name=_exchange,
             symbol=SYMBOL,
             rate_limiter=RATE_LIMITER))
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
-    except grpc.RpcError as ex:
-        # noinspection PyUnresolvedReferences
-        status_code = ex.code()
-        # noinspection PyUnresolvedReferences
-        print(f"Exception on register client: {status_code.name}, {ex.details()}")
+    except GRPCError as ex:
+        channel.close()
+        status_code = ex.status
+        print(f"Exception on register client: {status_code.name}, {ex.message}")
         return
     else:
         client_id = client_id_msg.client_id
@@ -56,12 +48,12 @@ async def main(_exchange, _symbol):
         print(f"main.srv_version: {client_id_msg.srv_version}")
 
     # Sample async call server method
-    _exchange_info_symbol = await stub.FetchExchangeInfoSymbol(api_pb2.MarketRequest(
+    _exchange_info_symbol = await stub.fetch_exchange_info_symbol(mr.MarketRequest(
         trade_id=trade_id,
         client_id=client_id,
         symbol=_symbol))
     # Unpack result
-    exchange_info_symbol = json_format.MessageToDict(_exchange_info_symbol)
+    exchange_info_symbol = _exchange_info_symbol.to_pydict()
     print("\n".join(f"{k}\t{v}" for k, v in exchange_info_symbol.items()))
 
     # Sample async functon call
@@ -78,14 +70,15 @@ async def main(_exchange, _symbol):
     # Start WSS
     # The values of market_stream_count directly depend on the number of market
     # ws streams used in the strategy and declared above
-    await stub.StartStream(api_pb2.StartStreamRequest(
+    await stub.start_stream(mr.StartStreamRequest(
         trade_id=trade_id,
         client_id=client_id,
         symbol=_symbol,
         market_stream_count=1))
     await asyncio.sleep(RATE_LIMITER)
     # Before stop program call StopStream() method
-    await stub.StopStream(api_pb2.MarketRequest(trade_id=trade_id, client_id=client_id, symbol=_symbol))
+    await stub.stop_stream(mr.MarketRequest(trade_id=trade_id, client_id=client_id, symbol=_symbol))
+    channel.close()
 
 
 async def on_ticker_update(_stub, _client_id, _symbol, trade_id):
@@ -97,14 +90,11 @@ async def on_ticker_update(_stub, _client_id, _symbol, trade_id):
     :param _symbol:
     :return: {}
     """
-    async for ticker in _stub.OnTickerUpdate(api_pb2.MarketRequest(
+    async for ticker in _stub.on_ticker_update(mr.MarketRequest(
             trade_id=trade_id,
             client_id=_client_id,
             symbol=_symbol)):
-        ticker_24h = {'openPrice': ticker.open_price,
-                      'lastPrice': ticker.close_price,
-                      'closeTime': ticker.event_time}
-        print(f"on_ticker_update: {ticker.symbol} {ticker_24h}")
+        print(f"on_ticker_update: {ticker.to_pydict()}")
 
 
 async def on_order_update(_stub, _client_id, _symbol, trade_id):
@@ -116,11 +106,11 @@ async def on_order_update(_stub, _client_id, _symbol, trade_id):
     :param _symbol:
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/user-data-stream.md#order-update
     """
-    async for event in _stub.OnOrderUpdate(api_pb2.MarketRequest(
+    async for event in _stub.on_order_update(mr.MarketRequest(
             trade_id=trade_id,
             client_id=_client_id,
             symbol=_symbol)):
-        print(eval(json.loads(event.result)))
+        print(json.loads(event.result))
 
 
 async def on_balance_update(_stub, _client_id, _symbol, trade_id):
@@ -132,11 +122,11 @@ async def on_balance_update(_stub, _client_id, _symbol, trade_id):
     :param trade_id:
     :return:
     """
-    async for res in _stub.OnBalanceUpdate(api_pb2.MarketRequest(
+    async for res in _stub.on_balance_update(mr.MarketRequest(
             trade_id=trade_id,
             client_id=_client_id,
             symbol=_symbol)):
-        print(res.balance)
+        print(json.loads(res.event))
 
 
 async def fetch_open_orders(_stub, _client_id, _symbol):
@@ -147,8 +137,8 @@ async def fetch_open_orders(_stub, _client_id, _symbol):
     :param _symbol:
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
     """
-    _active_orders = await _stub.FetchOpenOrders(api_pb2.MarketRequest(client_id=_client_id, symbol=_symbol))
-    active_orders = json_format.MessageToDict(_active_orders).get('items', [])
+    _active_orders = await _stub.fetch_open_orders(mr.MarketRequest(client_id=_client_id, symbol=_symbol))
+    active_orders = list(map(json.loads, _active_orders.orders))
     print(f"active_orders: {active_orders}")
     return active_orders
 
@@ -164,12 +154,12 @@ async def fetch_order(_stub, _client_id, _symbol, _id: int, _filled_update_call:
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-order-user_data
     """
     try:
-        res = await _stub.FetchOrder(api_pb2.FetchOrderRequest(
+        res = await _stub.fetch_order(mr.FetchOrderRequest(
             client_id=_client_id,
             symbol=_symbol,
             order_id=_id,
             filled_update_call=_filled_update_call))
-        result = json_format.MessageToDict(res)
+        result = res.to_pydict()
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
     except Exception as _ex:
@@ -189,10 +179,10 @@ async def cancel_all_orders(_stub, _client_id, _symbol):
     :return:
      https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-all-open-orders-on-a-symbol-trade
     """
-    res = await _stub.CancelAllOrders(api_pb2.MarketRequest(
+    res = await _stub.cancel_all_orders(mr.MarketRequest(
         client_id=_client_id,
         symbol=_symbol))
-    result = eval(json.loads(res.result))
+    result = ast.literal_eval(json.loads(res.result))
     print(f"cancel_all_orders.result: {result}")
 
 
@@ -204,13 +194,13 @@ async def fetch_account_information(_stub, _client_id):
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-information-user_data
     """
     try:
-        res = await _stub.FetchAccountInformation(api_pb2.OpenClientConnectionId(client_id=_client_id))
+        res = await _stub.fetch_account_information(mr.OpenClientConnectionId(client_id=_client_id))
     except asyncio.CancelledError:
         pass
     except Exception as _ex:
         print(f"Exception fetch_account_information: {_ex}")
     else:
-        balances = json_format.MessageToDict(res).get('balances', [])
+        balances = list(map(json.loads, res.items))
         print(f"fetch_account_information.balances: {balances}")
 
 
@@ -222,14 +212,14 @@ async def fetch_funding_wallet(_stub, _client_id):
     :return: https://binance-docs.github.io/apidocs/spot/en/#funding-wallet-user_data
     """
     try:
-        res = await _stub.FetchFundingWallet(api_pb2.FetchFundingWalletRequest(
+        res = await _stub.fetch_funding_wallet(mr.FetchFundingWalletRequest(
             client_id=_client_id))
     except asyncio.CancelledError:
         pass
     except Exception as _ex:
         print(f"fetch_funding_wallet: {_ex}")
     else:
-        funding_wallet = json_format.MessageToDict(res).get('balances', [])
+        funding_wallet = list(map(json.loads, res.items))
         print(f"fetch_funding_wallet.funding_wallet: {funding_wallet}")
 
 
@@ -241,10 +231,10 @@ async def fetch_order_book(_stub, _client_id, _symbol):
     :param _symbol:
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#order-book
     """
-    _order_book = await _stub.FetchOrderBook(api_pb2.MarketRequest(
+    _order_book = await _stub.fetch_order_book(mr.MarketRequest(
         client_id=_client_id,
         symbol=_symbol))
-    order_book = json_format.MessageToDict(_order_book)
+    order_book = _order_book.to_pydict()
     print(f"fetch_order_book.order_book: {order_book}")
 
 
@@ -256,10 +246,10 @@ async def fetch_symbol_price_ticker(_stub, _client_id, _symbol):
     :param _symbol:
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-price-ticker
     """
-    _price = await _stub.FetchSymbolPriceTicker(api_pb2.MarketRequest(
+    _price = await _stub.fetch_symbol_price_ticker(mr.MarketRequest(
         client_id=_client_id,
         symbol=_symbol))
-    price = json_format.MessageToDict(_price)
+    price = _price.to_pydict()
     print(f"fetch_symbol_price_ticker.price: {price}")
 
 
@@ -272,10 +262,10 @@ async def fetch_ticker_price_change_statistics(_stub, _client_id, _symbol):
     :return:
      https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#24hr-ticker-price-change-statistics
     """
-    _ticker = await _stub.FetchTickerPriceChangeStatistics(api_pb2.MarketRequest(
+    _ticker = await _stub.fetch_ticker_price_change_statistics(mr.MarketRequest(
         client_id=_client_id,
         symbol=_symbol))
-    ticker = json_format.MessageToDict(_ticker)
+    ticker = _ticker.to_pydict()
     print(f"fetch_ticker_price_change_statistics.ticker: {ticker}")
 
 
@@ -289,12 +279,12 @@ async def fetch_klines(_stub, _client_id, _symbol, _interval, _limit):
     :param _limit: Default 500; max 1000.
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#klinecandlestick-data
     """
-    res = await _stub.FetchKlines(api_pb2.FetchKlinesRequest(
+    res = await _stub.fetch_klines(mr.FetchKlinesRequest(
         client_id=_client_id,
         symbol=_symbol,
         interval=_interval,
         limit=_limit))
-    kline = json_format.MessageToDict(res)
+    kline = list(map(json.loads, res.items))
     print(f"fetch_klines.kline: {kline}")
 
 
@@ -308,17 +298,16 @@ async def fetch_account_trade_list(_stub, _client_id, _symbol, _limit, _start_ti
     :param _start_time_ms: int: optional, minimum time of fills to return, in Unix time (ms since 1970-01-01)
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-trade-list-user_data
     """
-    _trades = await _stub.FetchAccountTradeList(api_pb2.AccountTradeListRequest(
+    _trades = await _stub.fetch_account_trade_list(mr.AccountTradeListRequest(
         client_id=_client_id,
         symbol=_symbol,
         limit=_limit,
         start_time=_start_time_ms)
     )
-    trades = json_format.MessageToDict(_trades).get('items', [])
+    trades = list(map(json.loads, _trades.items))
     print(f"fetch_account_trade_list.trades: {trades}")
 
 
-# noinspection PyUnresolvedReferences
 async def transfer2master(_stub, symbol: str, amount: str):
     """
     Send request to transfer asset from subaccount to main account
@@ -332,12 +321,12 @@ async def transfer2master(_stub, symbol: str, amount: str):
     :return:
     """
     try:
-        res = await _stub.TransferToMaster(api_pb2.MarketRequest, symbol=symbol, amount=amount)
+        res = await _stub.transfer_to_master(mr.MarketRequest, symbol=symbol, amount=amount)
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
-    except grpc.RpcError as ex:
-        status_code = ex.code()
-        print(f"Exception transfer {symbol} to main account: {status_code.name}, {ex.details()}")
+    except GRPCError as ex:
+        status_code = ex.status
+        print(f"Exception transfer {symbol} to main account: {status_code.name}, {ex.message}")
     except Exception as _ex:
         print(f"Exception transfer {symbol} to main account: {_ex}")
     else:
@@ -348,7 +337,6 @@ async def transfer2master(_stub, symbol: str, amount: str):
 
 
 # Server exception handling example for methods where it's realized
-# noinspection PyUnresolvedReferences
 async def create_limit_order(_stub, _client_id, _symbol, _id: int, buy: bool, amount: str, price: str):
     """
     Send in a new Limit order.
@@ -362,7 +350,7 @@ async def create_limit_order(_stub, _client_id, _symbol, _id: int, buy: bool, am
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#new-order--trade
     """
     try:
-        res = await _stub.CreateLimitOrder(api_pb2.CreateLimitOrderRequest(
+        res = await _stub.create_limit_order(mr.CreateLimitOrderRequest(
             client_id=_client_id,
             symbol=_symbol,
             buy_side=buy,
@@ -370,13 +358,13 @@ async def create_limit_order(_stub, _client_id, _symbol, _id: int, buy: bool, am
             price=price,
             new_client_order_id=_id
         ))
-        result = json_format.MessageToDict(res)
+        result = res.to_pydict()
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
-    except grpc.RpcError as ex:
-        status_code = ex.code()
-        print(f"Exception creating order {_id}: {status_code.name}, {ex.details()}")
-        if status_code == grpc.StatusCode.FAILED_PRECONDITION:
+    except GRPCError as ex:
+        status_code = ex.status
+        print(f"Exception creating order {_id}: {status_code.name}, {ex.message}")
+        if status_code == Status.FAILED_PRECONDITION:
             print("Do something. See except declare in exch_srv.CreateLimitOrder()")
     except Exception as _ex:
         print(f"Exception creating order {_id}: {_ex}")
@@ -385,7 +373,6 @@ async def create_limit_order(_stub, _client_id, _symbol, _id: int, buy: bool, am
 
 
 # Server exception handling example for methods where it's realized
-# noinspection PyUnresolvedReferences
 async def cancel_order(_stub, _client_id, _symbol, _id: int):
     """
     Cancel an active order.
@@ -396,16 +383,16 @@ async def cancel_order(_stub, _client_id, _symbol, _id: int):
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-order-trade
     """
     try:
-        res = await _stub.CancelOrder(api_pb2.CancelOrderRequest(
+        res = await _stub.cancel_order(mr.CancelOrderRequest(
             client_id=_client_id,
             symbol=_symbol,
             order_id=_id))
-        result = json_format.MessageToDict(res)
+        result = res.to_pydict()
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
-    except grpc.RpcError as ex:
-        status_code = ex.code()
-        print(f"Exception on cancel order for {_id}: {status_code.name}, {ex.details()}")
+    except GRPCError as ex:
+        status_code = ex.status
+        print(f"Exception on cancel order for {_id}: {status_code.name}, {ex.message}")
     except Exception as _ex:
         print(f"Exception on cancel order call for {_id}:\n{_ex}")
     else:

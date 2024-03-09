@@ -1,3 +1,7 @@
+## 2.0.0 2024-03-09
+### Update
+* Example
+
 ## 2.0.0b2 2024-03-08
 ### Update
 * Migrate `gRPC` from [grpcio](https://grpc.io/) to [grpclib](https://github.com/vmagamedov/grpclib) + [python-betterproto](https://github.com/danielgtaylor/python-betterproto)
