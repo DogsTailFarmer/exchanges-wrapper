@@ -1,5 +1,5 @@
 from decimal import Decimal
-import martin as mr
+import exchanges_wrapper.martin as mr
 
 REST_RATE_LIMIT_INTERVAL = {
     "bitfinex": {

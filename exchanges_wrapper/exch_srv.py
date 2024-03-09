@@ -868,7 +868,7 @@ async def stop_tasks():
             task.cancel()
 
 
-async def main(host: str = '127.0.0.1', port: int = 50051):
+async def amain(host: str = '127.0.0.1', port: int = 50051):
     try:
         if is_port_in_use(port):
             raise SystemExit(f"gRPC server port {port} already used")
@@ -882,5 +882,9 @@ async def main(host: str = '127.0.0.1', port: int = 50051):
         await stop_tasks()
 
 
+def main():
+    asyncio.run(amain())
+
+
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
