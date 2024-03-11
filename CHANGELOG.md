@@ -1,3 +1,7 @@
+## 2.0.1 2024-03-11
+### Added for new features
+* `gRPC` proto: `OpenClientConnectionId` add `real_market` field
+
 ## 2.0.0.post1 2024-03-10
 ### Fix
 * Incomplete description of dependencies

@@ -393,6 +393,7 @@ message OpenClientConnectionId {
   string srv_version = 3;
   int32 rate_limiter = 4;
   string exchange = 5;
+  bool real_market = 6;
 }
 
 message FetchServerTimeRequest {

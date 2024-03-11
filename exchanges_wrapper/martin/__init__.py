@@ -436,6 +436,7 @@ class OpenClientConnectionId(betterproto.Message):
     srv_version: str = betterproto.string_field(3)
     rate_limiter: int = betterproto.int32_field(4)
     exchange: str = betterproto.string_field(5)
+    real_market: bool = betterproto.bool_field(6)
 
 
 @dataclass(eq=False, repr=False)

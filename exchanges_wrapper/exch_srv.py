@@ -191,7 +191,8 @@ class Martin(mr.MartinBase):
         return mr.OpenClientConnectionId(
             client_id=client_id,
             srv_version=__version__,
-            exchange=open_client.client.exchange
+            exchange=open_client.client.exchange,
+            real_market=open_client.real_market
         )
 
     async def fetch_server_time(self, request: mr.OpenClientConnectionId) -> mr.FetchServerTimeResponse:
