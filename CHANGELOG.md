@@ -1,3 +1,8 @@
+## 2.0.2 2024-03-xx
+### Update
+* `on_order_book_update`: skip partially empty event
+* `fetch_order_trade_list`: `ByBit`: remove `endTime` limit
+
 ## 2.0.1 2024-03-11
 ### Added for new features
 * `gRPC` proto: `OpenClientConnectionId` add `real_market` field

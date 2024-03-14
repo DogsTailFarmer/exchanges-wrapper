@@ -1794,7 +1794,7 @@ class Client:
         logger.debug(f"fetch_account_trade_list.binance_res: {binance_res}")
         return binance_res
 
-    async def fetch_order_trade_list(self, trade_id, symbol, order_id):
+    async def fetch_order_trade_list(self, trade_id, symbol, order_id, order=None):
         if not order_id:
             raise ValueError("This query (fetch_order_trade_list) requires an order_id")
         self.assert_symbol(symbol)
@@ -1821,19 +1821,14 @@ class Client:
                       }
             res = await self.http.send_api_call("/api/v5/trade/fills", signed=True, **params)
             b_res = okx.order_trade_list(res)
-        elif self.exchange == 'bybit':
-            res = await self.fetch_order(trade_id, symbol, order_id)
-            if res:
-                params = {
-                    'accountType': "UNIFIED",
-                    'category': "spot",
-                    'startTime':  res.get('time'),
-                    'endTime': res.get('updateTime') + 500,
-                }
-                res, _ = await self.http.send_api_call("/v5/account/transaction-log", signed=True, **params)
-                b_res = bbt.order_trade_list(res['list'], str(order_id))
-
-        logger.debug(f"fetch_order_trade_list.b_res: {b_res}")
+        elif self.exchange == 'bybit' and order:
+            params = {
+                'accountType': "UNIFIED",
+                'category': "spot",
+                'startTime':  order.get('time') - 1000,
+            }
+            res, _ = await self.http.send_api_call("/v5/account/transaction-log", signed=True, **params)
+            b_res = bbt.order_trade_list(res['list'], str(order_id))
         return b_res
 
     # endregion

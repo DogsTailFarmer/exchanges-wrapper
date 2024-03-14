@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import sys
+
 from exchanges_wrapper import __version__
 import time
 import weakref
@@ -128,7 +130,11 @@ class OpenClient:
 
     @classmethod
     def get_client(cls, _id):
-        return next((client for client in cls.open_clients if id(client) == _id), None)
+        res = next((client for client in cls.open_clients if id(client) == _id), None)
+        if res is None:
+            print(f"No client exist from: {sys._getframe().f_back.f_code.co_name}")
+            # raise GRPCError(status=Status.UNKNOWN, message="No client exist")
+        return res
 
     @classmethod
     def remove_client(cls, _account_name):
@@ -305,13 +311,13 @@ class Martin(mr.MartinBase):
 
     async def create_trade_stream_event(self, _queue, client, open_client, request, order):
         try:
-            trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id)
+            trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id, order)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as _ex:
             logger.error(f"Fetch order trades for {open_client.name}: {request.symbol} exception: {_ex}")
         else:
-            logger.debug(f"FetchOrder.trades: {trades}")
+            logger.debug(f"FetchOrder.trades: {open_client.name}: {request.symbol}: {trades}")
             for trade in trades:
                 trade |= {
                     'clientOrderId': order['clientOrderId'],
@@ -599,10 +605,11 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnOrderBookUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
-                response.last_update_id = _event.last_update_id
-                response.bids = list(map(json.dumps, _event.bids))
-                response.asks = list(map(json.dumps, _event.asks))
-                yield response
+                if _event.bids and _event.asks:
+                    response.last_update_id = _event.last_update_id
+                    response.bids = list(map(json.dumps, _event.bids))
+                    response.asks = list(map(json.dumps, _event.asks))
+                    yield response
                 _queue.task_done()
 
     async def on_funds_update(self, request: mr.OnFundsUpdateRequest) -> mr.StreamResponse:
@@ -867,6 +874,8 @@ async def stop_tasks():
     for task in asyncio.all_tasks():
         if all(item in task.get_name() for item in ['keepalive', 'heartbeat']) and not task.done():
             task.cancel()
+    for oc in OpenClient.open_clients:
+        await oc.client.session.close()
 
 
 async def amain(host: str = '127.0.0.1', port: int = 50051):

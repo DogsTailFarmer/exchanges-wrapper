@@ -483,15 +483,18 @@ def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, uid=None) 
 def funding_wallet(res: []) -> []:
     balances = []
     for balance in res:
+        _free = Decimal(balance["transferBalance"])
+        _wallet = Decimal(balance["walletBalance"])
         _binance_res = {
             "asset": balance["coin"],
-            "free": balance["transferBalance"],
+            "free": str(_free),
             "locked": "0",
-            "freeze": str(Decimal(balance["walletBalance"]) - Decimal(balance["transferBalance"])),
+            "freeze": str(_wallet - _free),
             "withdrawing": "0",
             "btcValuation": "0.0",
         }
-        balances.append(_binance_res)
+        if _free or _wallet:
+            balances.append(_binance_res)
     return balances
 
 
