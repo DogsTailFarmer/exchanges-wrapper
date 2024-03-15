@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import sys
 
 from exchanges_wrapper import __version__
 import time
@@ -15,7 +14,7 @@ import toml
 from decimal import Decimal
 
 import exchanges_wrapper.martin as mr
-from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE, errors, Server, Status, GRPCError
+from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE, errors, Server, Status, GRPCError, graceful_exit
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.lib import OrderTradesEvent, REST_RATE_LIMIT_INTERVAL, FILTER_TYPE_MAP
@@ -129,11 +128,11 @@ class OpenClient:
         )
 
     @classmethod
-    def get_client(cls, _id):
+    def get_client(cls, _id, raise_ex=True):
         res = next((client for client in cls.open_clients if id(client) == _id), None)
-        if res is None:
-            print(f"No client exist from: {sys._getframe().f_back.f_code.co_name}")
-            # raise GRPCError(status=Status.UNKNOWN, message="No client exist")
+        if res is None and raise_ex:
+            logger.warning(f"No client exist: {_id}")
+            raise GRPCError(status=Status.UNAVAILABLE, message="No client exist")
         return res
 
     @classmethod
@@ -201,37 +200,6 @@ class Martin(mr.MartinBase):
             real_market=open_client.real_market
         )
 
-    async def fetch_server_time(self, request: mr.OpenClientConnectionId) -> mr.FetchServerTimeResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
-        await self.rate_limit_control(open_client)
-        try:
-            res = await client.fetch_server_time()
-        except Exception as ex:
-            logger.error(f"FetchServerTime for {open_client.name} exception: {ex}")
-            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
-        else:
-            open_client.ts_rlc = time.time()
-            server_time = res.get('serverTime')
-            return mr.FetchServerTimeResponse(server_time=server_time)
-
-    async def one_click_arrival_deposit(self, request: mr.MarketRequest) -> mr.SimpleResponse():
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
-        response = mr.SimpleResponse()
-        tx_id = request.symbol
-        try:
-            res = await client.one_click_arrival_deposit(tx_id)
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
-        except Exception as ex:
-            logger.error(f"OneClickArrivalDeposit for {open_client.name}:{request.symbol} exception: {ex}")
-            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
-        else:
-            response.success = True
-            response.result = json.dumps(str(res))
-        return response
-
     async def reset_rate_limit(self, request: mr.OpenClientConnectionId) -> mr.SimpleResponse:
         Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
         _success = False
@@ -246,118 +214,144 @@ class Martin(mr.MartinBase):
             Martin.rate_limit_reached_time = time.time()
         return mr.SimpleResponse(success=_success)
 
-    async def fetch_open_orders(self, request: mr.MarketRequest) -> mr.FetchOpenOrdersResponse:
+    async def send_request(self, client_method_name, request, rate_limit=False, **kwargs):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = mr.FetchOpenOrdersResponse()
-        await self.rate_limit_control(open_client)
+        msg_header = f"Send request failed: {client_method_name}:{open_client.name}:"
+        if hasattr(request, 'symbol'):
+            msg_header += f"{request.symbol}:"
+        if hasattr(request, 'order_id'):
+            msg_header += f"{request.order_id}:"
+        if hasattr(request, 'client_order_id'):
+            msg_header += f"({request.client_order_id}):"
+        if rate_limit:
+            await self.rate_limit_control(open_client)
         try:
-            res = await client.fetch_open_orders(request.trade_id, request.symbol)
+            res = await getattr(client, client_method_name)(**kwargs)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
-            logger.warning(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
+            msg = f"{msg_header} RateLimitReached: {ex}"
+            logger.warning(msg)
+            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=msg)
         except errors.HTTPError as ex:
-            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            raise GRPCError(status=Status.FAILED_PRECONDITION, message=str(ex))
+            msg = f"{msg_header} HTTPError: {ex}"
+            logger.error(msg)
+            raise GRPCError(status=Status.FAILED_PRECONDITION, message=msg)
         except Exception as ex:
-            logger.error(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {ex}")
-            logger.debug(f"FetchOpenOrders for {open_client.name}:{request.symbol} exception: {traceback.format_exc()}")
-            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
+            msg = f"{msg_header} exception: {ex}"
+            logger.error(msg)
+            logger.debug(traceback.format_exc())
+            raise GRPCError(status=Status.UNKNOWN, message=msg)
         else:
-            open_client.ts_rlc = time.time()
-            active_orders = []
-            for order in res:
-                order_id = order['orderId']
-                active_orders.append(order_id)
-                response.orders.append(json.dumps(order))
-                if client.exchange in ('bitfinex', 'huobi'):
-                    client.active_order(order_id, order['origQty'], order['executedQty'])
+            if rate_limit:
+                open_client.ts_rlc = time.time()
+            return res, client, msg_header
 
+    async def fetch_server_time(self, request: mr.OpenClientConnectionId) -> mr.FetchServerTimeResponse:
+        res, _, _ = await self.send_request('fetch_server_time', request, rate_limit=True)
+        server_time = res.get('serverTime')
+        return mr.FetchServerTimeResponse(server_time=server_time)
+
+    async def one_click_arrival_deposit(self, request: mr.MarketRequest) -> mr.SimpleResponse():
+        res, _, _ = await self.send_request('one_click_arrival_deposit', request, tx_id=request.symbol)
+        return mr.SimpleResponse(success=True, result=json.dumps(str(res)))
+
+    async def fetch_open_orders(self, request: mr.MarketRequest) -> mr.FetchOpenOrdersResponse:
+        response = mr.FetchOpenOrdersResponse()
+        res, client, _ = await self.send_request(
+            'fetch_open_orders',
+            request,
+            rate_limit=True,
+            trade_id=request.trade_id,
+            symbol=request.symbol
+        )
+        active_orders = []
+        for order in res:
+            order_id = order['orderId']
+            active_orders.append(order_id)
+            response.orders.append(json.dumps(order))
             if client.exchange in ('bitfinex', 'huobi'):
-                client.active_orders_clear()
+                client.active_order(order_id, order['origQty'], order['executedQty'])
+
+        if client.exchange in ('bitfinex', 'huobi'):
+            client.active_orders_clear()
 
         response.rate_limiter = Martin.rate_limiter
         return response
 
     async def fetch_order(self, request: mr.FetchOrderRequest) -> mr.FetchOrderResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
-        _queue = client.on_order_update_queues.get(request.trade_id)
         response = mr.FetchOrderResponse()
-        await self.rate_limit_control(open_client)
-        try:
-            res = await client.fetch_order(
-                request.trade_id,
-                symbol=request.symbol,
-                order_id=request.order_id,
-                origin_client_order_id=request.client_order_id,
-                receive_window=None
-            )
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
-        except Exception as _ex:
-            logger.error(f"FetchOrder for {open_client.name}: {request.symbol}:"
-                         f" {request.order_id}({request.client_order_id}) exception: {_ex}")
-        else:
-            open_client.ts_rlc = time.time()
-            if _queue and request.filled_update_call and Decimal(res.get('executedQty', '0')):
-                request.order_id = res.get('orderId')
-                await self.create_trade_stream_event(_queue, client, open_client, request, res)
-            response.from_pydict(res)
+        res, client, _ = await self.send_request(
+            'fetch_order',
+            request,
+            rate_limit=True,
+            trade_id=request.trade_id,
+            symbol=request.symbol,
+            order_id=request.order_id,
+            origin_client_order_id=request.client_order_id,
+            receive_window=None
+        )
+
+        _queue = client.on_order_update_queues.get(request.trade_id)
+        if _queue and request.filled_update_call and Decimal(res.get('executedQty', '0')):
+            request.order_id = res.get('orderId', 0)
+            await self.create_trade_stream_event(_queue, request, res)
+        response.from_pydict(res)
         return response
 
-    async def create_trade_stream_event(self, _queue, client, open_client, request, order):
-        try:
-            trades = await client.fetch_order_trade_list(request.trade_id, request.symbol, request.order_id, order)
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
-        except Exception as _ex:
-            logger.error(f"Fetch order trades for {open_client.name}: {request.symbol} exception: {_ex}")
-        else:
-            logger.debug(f"FetchOrder.trades: {open_client.name}: {request.symbol}: {trades}")
-            for trade in trades:
-                trade |= {
-                    'clientOrderId': order['clientOrderId'],
-                    'orderPrice': order['price'],
-                    'origQty': order['origQty'],
-                    'executedQty': order['executedQty'],
-                    'cummulativeQuoteQty': order['cummulativeQuoteQty'],
-                    'status': order['status'],
-                }
-                event = OrderTradesEvent(trade)
-                await _queue.put(weakref.ref(event)())
+    async def create_trade_stream_event(self, _queue, request, order):
+        trades, _, msg_header = await self.send_request(
+            'fetch_order_trade_list',
+            request,
+            trade_id=request.trade_id,
+            symbol=request.symbol,
+            order_id=request.order_id,
+            order=order
+        )
+
+        logger.debug(f"{msg_header}: {trades}")
+        for trade in trades:
+            trade |= {
+                'clientOrderId': order['clientOrderId'],
+                'orderPrice': order['price'],
+                'origQty': order['origQty'],
+                'executedQty': order['executedQty'],
+                'cummulativeQuoteQty': order['cummulativeQuoteQty'],
+                'status': order['status'],
+            }
+            event = OrderTradesEvent(trade)
+            await _queue.put(weakref.ref(event)())
 
     async def cancel_all_orders(self, request: mr.MarketRequest) -> mr.SimpleResponse():
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = mr.SimpleResponse()
-        try:
-            res = await client.cancel_all_orders(request.trade_id, request.symbol)
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
-        except Exception as ex:
-            logger.error(f"CancelAllOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            logger.debug(f"CancelAllOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")
-            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
-        else:
-            response.success = True
-            response.result = json.dumps(str(res))
+
+        res, _, _ = await self.send_request(
+            'cancel_all_orders',
+            request,
+            trade_id=request.trade_id,
+            symbol=request.symbol
+        )
+
+        response.success = True
+        response.result = json.dumps(str(res))
         return response
 
     async def fetch_exchange_info_symbol(self, request: mr.MarketRequest) -> mr.FetchExchangeInfoSymbolResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = mr.FetchExchangeInfoSymbolResponse()
-        exchange_info = await client.fetch_exchange_info(request.symbol)
+        exchange_info, _, _ = await self.send_request(
+            'fetch_exchange_info',
+            request,
+            rate_limit=True,
+            symbol=request.symbol
+        )
+
         if exchange_info_symbol := exchange_info.get('symbols'):
             exchange_info_symbol = exchange_info_symbol[0]
         else:
             raise UserWarning(f"Symbol {request.symbol} not exist")
-        await self.rate_limit_control(open_client)
-        open_client.ts_rlc = time.time()
+
         filters_res = exchange_info_symbol.pop('filters', [])
         response.from_pydict(exchange_info_symbol)
         response.filters = self.process_filters(filters_res)
@@ -382,12 +376,13 @@ class Martin(mr.MartinBase):
         return filters
 
     async def fetch_account_information(self, request: mr.OpenClientConnectionId) -> mr.JsonResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = mr.JsonResponse()
-        await self.rate_limit_control(open_client)
-        account_information = await client.fetch_account_information(request.trade_id, receive_window=None)
-        open_client.ts_rlc = time.time()
+        account_information, _, _ = await self.send_request(
+            'fetch_account_information',
+            request,
+            rate_limit=True,
+            trade_id=request.trade_id,
+        )
         # Send only balances
         res = account_information.get('balances', [])
         # Create consolidated list of asset balances from SPOT and Funding wallets
@@ -402,17 +397,19 @@ class Martin(mr.MartinBase):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         response = mr.JsonResponse()
-        await self.rate_limit_control(open_client)
         res = []
-        if (client.exchange in ('bitfinex', 'okx', 'bybit') or
-                (open_client.real_market and client.exchange == 'binance')):
-            try:
-                res = await client.fetch_funding_wallet(asset=request.asset,
-                                                        need_btc_valuation=request.need_btc_valuation,
-                                                        receive_window=request.receive_window)
-            except AttributeError:
-                logger.error("Can't get Funding Wallet balances")
-        open_client.ts_rlc = time.time()
+        if client.exchange in ('bitfinex', 'okx', 'bybit') \
+                or (open_client.real_market and client.exchange == 'binance'):
+
+            res, _, _ = await self.send_request(
+                'fetch_funding_wallet',
+                request,
+                rate_limit=True,
+                asset=request.asset,
+                need_btc_valuation=request.need_btc_valuation,
+                receive_window=request.receive_window
+            )
+
         response.items = list(map(json.dumps, res))
         return response
 
@@ -450,20 +447,20 @@ class Martin(mr.MartinBase):
         return response.from_pydict(res)
 
     async def fetch_klines(self, request: mr.FetchKlinesRequest) -> mr.JsonResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = mr.JsonResponse()
-        await self.rate_limit_control(open_client)
-        try:
-            res = await client.fetch_klines(symbol=request.symbol, interval=request.interval,
-                                            start_time=None, end_time=None, limit=request.limit)
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
-        except Exception as _ex:
-            logger.error(f"FetchKlines for {request.symbol} interval: {request.interval}, exception: {_ex}")
-        else:
-            open_client.ts_rlc = time.time()
-            response.items = list(map(json.dumps, res))
+
+        res, _, _ = await self.send_request(
+            'fetch_klines',
+            request,
+            rate_limit=True,
+            symbol=request.symbol,
+            interval=request.interval,
+            start_time=None,
+            end_time=None,
+            limit=request.limit
+        )
+
+        response.items = list(map(json.dumps, res))
         return response
 
     async def on_klines_update(self, request: mr.FetchKlinesRequest) -> mr.OnKlinesUpdateResponse:
@@ -522,26 +519,22 @@ class Martin(mr.MartinBase):
                 _queue.task_done()
 
     async def fetch_account_trade_list(self, request: mr.AccountTradeListRequest) -> mr.JsonResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = mr.JsonResponse()
-        await self.rate_limit_control(open_client)
-        try:
-            res = await client.fetch_account_trade_list(
-                request.trade_id,
-                request.symbol,
-                start_time=request.start_time,
-                end_time=None,
-                from_id=None,
-                limit=request.limit,
-                receive_window=None)
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
-        except Exception as _ex:
-            logger.error(f"FetchAccountTradeList for {open_client.name}: {request.symbol} exception: {_ex}")
-        else:
-            open_client.ts_rlc = time.time()
-            response.items = list(map(json.dumps, res))
+
+        res, _, _ = await self.send_request(
+            'fetch_account_trade_list',
+            request,
+            rate_limit=True,
+            trade_id=request.trade_id,
+            symbol=request.symbol,
+            start_time=request.start_time,
+            end_time=None,
+            from_id=None,
+            limit=request.limit,
+            receive_window=None
+        )
+
+        response.items = list(map(json.dumps, res))
         return response
 
     async def on_ticker_update(self, request: mr.MarketRequest) -> mr.OnTickerUpdateResponse:
@@ -707,100 +700,67 @@ class Martin(mr.MartinBase):
 
     async def create_limit_order(self, request: mr.CreateLimitOrderRequest) -> mr.CreateLimitOrderResponse:
         response = mr.CreateLimitOrderResponse()
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
-        try:
-            res = await client.create_order(
-                request.trade_id,
-                request.symbol,
-                Side.BUY if request.buy_side else Side.SELL,
-                order_type=OrderType.LIMIT,
-                time_in_force=TimeInForce.GTC,
-                quantity=request.quantity,
-                quote_order_quantity=None,
-                price=request.price,
-                new_client_order_id=request.new_client_order_id,
-                stop_price=None,
-                iceberg_quantity=None,
-                response_type=ResponseType.RESULT.value,
-                receive_window=None,
-                test=False
-            )
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
-        except (errors.RateLimitReached, errors.QueryCanceled) as ex:
-            Martin.rate_limit_reached_time = time.time()
-            logger.warning(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
-        except errors.HTTPError as ex:
-            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol}:{request.new_client_order_id}"
-                         f" exception: {ex}")
-            raise GRPCError(status=Status.FAILED_PRECONDITION, message=str(ex))
-        except Exception as ex:
-            logger.error(f"CreateLimitOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            logger.debug(f"CreateLimitOrder for {open_client.name}:{request.symbol} error: {traceback.format_exc()}")
-            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
-        else:
-            if not res and client.exchange in ('binance', 'huobi', 'okx'):
-                res = await client.fetch_order(
-                    trade_id=request.trade_id,
-                    symbol=request.symbol,
-                    order_id=None,
-                    origin_client_order_id=request.new_client_order_id,
-                    receive_window=None,
-                    response_type=False
-                )
-            response.from_pydict(res)
-            logger.debug(f"CreateLimitOrder: for {open_client.name}:{request.symbol}: created: {res.get('orderId')}")
+
+        res, _, msg_header = await self.send_request(
+            'create_order',
+            request,
+            rate_limit=True,
+            trade_id=request.trade_id,
+            symbol=request.symbol,
+            side=Side.BUY if request.buy_side else Side.SELL,
+            order_type=OrderType.LIMIT,
+            time_in_force=TimeInForce.GTC,
+            quantity=request.quantity,
+            quote_order_quantity=None,
+            price=request.price,
+            new_client_order_id=request.new_client_order_id,
+            stop_price=None,
+            iceberg_quantity=None,
+            response_type=ResponseType.RESULT.value,
+            receive_window=None,
+            test=False
+        )
+
+        response.from_pydict(res)
+        logger.debug(f"{msg_header}: order created: {res.get('orderId')}")
         return response
 
     async def cancel_order(self, request: mr.CancelOrderRequest) -> mr.CancelOrderResponse:
         response = mr.CancelOrderResponse()
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
+
+        res, client, _ = await self.send_request(
+            'cancel_order',
+            request,
+            rate_limit=True,
+            trade_id=request.trade_id,
+            symbol=request.symbol,
+            order_id=request.order_id,
+            origin_client_order_id=None,
+            new_client_order_id=None,
+            receive_window=None
+        )
+
         _queue = client.on_order_update_queues.get(request.trade_id)
-        try:
-            res = await client.cancel_order(
-                request.trade_id,
-                request.symbol,
-                order_id=request.order_id,
-                origin_client_order_id=None,
-                new_client_order_id=None,
-                receive_window=None)
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
-        except errors.RateLimitReached as ex:
-            Martin.rate_limit_reached_time = time.time()
-            logger.warning(f"CancelOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
-        except Exception as ex:
-            logger.error(f"CancelOrder for {open_client.name}:{request.symbol} exception: {ex}")
-            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
-        else:
-            if Decimal(res.get('executedQty', '0')):
-                await self.create_trade_stream_event(_queue, client, open_client, request, res)
+        if Decimal(res.get('executedQty', '0')):
+            await self.create_trade_stream_event(_queue, request, res)
             response.from_pydict(res)
         return response
 
     async def transfer_to_master(self, request: mr.MarketRequest) -> mr.SimpleResponse:
         response = mr.SimpleResponse()
         response.success = False
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
-        await self.rate_limit_control(open_client)
-        try:
-            res = await client.transfer_to_master(symbol=request.symbol, quantity=request.amount)
-        except errors.HTTPError as ex:
-            logger.error(f"TransferToMaster for {open_client.name}: {request.symbol} exception: {ex}")
-            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
-        except Exception as ex:
-            logger.error(f"TransferToMaster for {open_client.name}: {request.symbol} exception: {ex}")
-            raise GRPCError(status=Status.UNKNOWN, message=str(ex))
-        else:
-            open_client.ts_rlc = time.time()
-            if res and res.get("txnId"):
-                response.success = True
-            response.result = json.dumps(res)
+
+        res, _, _ = await self.send_request(
+            'transfer_to_master',
+            request,
+            rate_limit=True,
+            symbol=request.symbol,
+            quantity=request.amount
+        )
+
+        if res and res.get("txnId"):
+            response.success = True
+        response.result = json.dumps(res)
         return response
 
     async def start_stream(self, request: mr.StartStreamRequest) -> mr.SimpleResponse:
@@ -836,7 +796,7 @@ class Martin(mr.MartinBase):
 
     async def check_stream(self, request: mr.MarketRequest) -> mr.SimpleResponse:
         response = mr.SimpleResponse()
-        if open_client := OpenClient.get_client(request.client_id):
+        if open_client := OpenClient.get_client(request.client_id, raise_ex=False):
             client = open_client.client
             response.success = bool(client.data_streams.get(request.trade_id))
         else:
@@ -870,26 +830,15 @@ def is_port_in_use(port: int) -> bool:
         return s.connect_ex(('localhost', port)) == 0
 
 
-async def stop_tasks():
-    for task in asyncio.all_tasks():
-        if all(item in task.get_name() for item in ['keepalive', 'heartbeat']) and not task.done():
-            task.cancel()
-    for oc in OpenClient.open_clients:
-        await oc.client.session.close()
-
-
 async def amain(host: str = '127.0.0.1', port: int = 50051):
-    try:
-        if is_port_in_use(port):
-            raise SystemExit(f"gRPC server port {port} already used")
-        server = Server([Martin()])
+    if is_port_in_use(port):
+        raise SystemExit(f"gRPC server port {port} already used")
+
+    server = Server([Martin()])
+    with graceful_exit([server]):
         await server.start(host, port)
         logger.info(f"Starting server v:{__version__} on {host}:{port}")
         await server.wait_closed()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        await stop_tasks()
 
 
 def main():
