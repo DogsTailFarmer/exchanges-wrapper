@@ -1029,7 +1029,6 @@ class Client:
             res, _ = await self.http.send_api_call("/v5/order/history", signed=True, **params)
             if res["list"]:
                 b_res = bbt.order(res["list"][0], response_type=response_type)
-        logger.debug(f"fetch_order.b_res: {b_res}")
         return b_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-order-trade
@@ -1151,7 +1150,6 @@ class Client:
                 except asyncio.TimeoutError:
                     logger.warning(f"WSS CancelOrder for ByBit:{symbol}:{order_id} timeout exception")
 
-        logger.debug(f"cancel_order.binance_res: {binance_res}")
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-all-open-orders-on-a-symbol-trade
@@ -1791,10 +1789,9 @@ class Client:
                 params["end"] = str(end_time)
             res = await self.http.send_api_call("/api/v5/trade/fills-history", signed=True, **params)
             binance_res = okx.order_trade_list(res)
-        logger.debug(f"fetch_account_trade_list.binance_res: {binance_res}")
         return binance_res
 
-    async def fetch_order_trade_list(self, trade_id, symbol, order_id, order=None):
+    async def fetch_order_trade_list(self, trade_id, symbol, order_id):
         if not order_id:
             raise ValueError("This query (fetch_order_trade_list) requires an order_id")
         self.assert_symbol(symbol)
@@ -1821,14 +1818,19 @@ class Client:
                       }
             res = await self.http.send_api_call("/api/v5/trade/fills", signed=True, **params)
             b_res = okx.order_trade_list(res)
-        elif self.exchange == 'bybit' and order:
+        elif self.exchange == 'bybit':
+            res_list = []
             params = {
-                'accountType': "UNIFIED",
                 'category': "spot",
-                'startTime':  order.get('time') - 1000,
+                'execType': 'Trade',
+                'orderId': str(order_id)
             }
-            res, _ = await self.http.send_api_call("/v5/account/transaction-log", signed=True, **params)
-            b_res = bbt.order_trade_list(res['list'], str(order_id))
+            next_page_cursor = 1
+            while next_page_cursor:
+                res, _ = await self.http.send_api_call("/v5/execution/list", signed=True, **params)
+                next_page_cursor = params['cursor'] = res['nextPageCursor']
+                res_list.extend(res['list'])
+            b_res = bbt.order_trade_list(res_list)
         return b_res
 
     # endregion

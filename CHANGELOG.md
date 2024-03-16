@@ -1,4 +1,9 @@
-## 2.1.0 2024-03-xx
+## 2.1.1 2024-03-16
+### Update
+* `Bybit`: `fetch_order`, `fetch_order_trade_list`: deep refine
+* Some minor improvements
+
+## 2.1.0 2024-03-15
 ### Update
 * `on_order_book_update`: skip partially empty event
 * `fetch_order_trade_list`: `ByBit`: remove `endTime` limit

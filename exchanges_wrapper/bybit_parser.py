@@ -498,32 +498,24 @@ def funding_wallet(res: []) -> []:
     return balances
 
 
-def order_trade_list(res: [], order_id: str) -> []:
-    trade_rows = {}
-    order_trades = []
-    [order_trades.append(trade) for trade in res if trade['orderId'] == order_id]
-
-    for trade in order_trades:
-        trade_id = trade['tradeId']
-        qty = Decimal(trade['cashFlow'])
-        fee = Decimal(trade['fee'])
-        if (trade['side'] == 'Buy' and qty > 0) or (trade['side'] == 'Sell' and qty < 0):
-            price = trade['tradePrice']
-            qty = abs(qty)
-            quote_qty = str(Decimal(price) * qty)
-            trade_rows[trade_id] = {
+def order_trade_list(res: []) -> []:
+    trades = []
+    for trade in reversed(res):
+        trades.append(
+            {
                 "symbol": trade['symbol'],
-                "id": int(trade['tradeId']),
-                "orderId": int(order_id),
+                "id": int(trade['execId']),
+                "orderId": int(trade['orderId']),
                 "orderListId": -1,
-                "price": price,
-                "qty": str(qty),
-                "quoteQty": quote_qty,
-                "commission": str(fee) if fee else '0',
-                "commissionAsset": trade['currency'] if fee else '',
-                "time": int(trade['transactionTime']),
+                "price": trade['execPrice'],
+                "qty": trade['execQty'],
+                "quoteQty": trade['execValue'],
+                "commission": trade['execFee'],
+                "commissionAsset": trade['feeCurrency'],
+                "time": int(trade['execTime']),
                 "isBuyer": trade['side'] == 'Buy',
-                "isMaker": True,
-                "isBestMatch": True,
+                "isMaker": trade['isMaker'],
+                "isBestMatch": True
             }
-    return list(trade_rows.values())
+        )
+    return trades

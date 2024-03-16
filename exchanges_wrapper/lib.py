@@ -43,7 +43,7 @@ class OrderTradesEvent:
         self.last_executed_price = event_data["price"]
         self.commission_amount = event_data["commission"]
         self.commission_asset = event_data["commissionAsset"]
-        self.transaction_time = event_data["time"]
+        self.transaction_time = event_data["updateTime"]
         self.trade_id = event_data["id"]
         self.ignore_a = int()
         self.in_order_book = True

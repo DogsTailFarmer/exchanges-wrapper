@@ -18,6 +18,7 @@ from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE, errors, Server, 
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
 from exchanges_wrapper.lib import OrderTradesEvent, REST_RATE_LIMIT_INTERVAL, FILTER_TYPE_MAP
+from exchanges_wrapper.errors import ExchangeError
 #
 HEARTBEAT = 1  # Sec
 MAX_QUEUE_SIZE = 100
@@ -217,7 +218,7 @@ class Martin(mr.MartinBase):
     async def send_request(self, client_method_name, request, rate_limit=False, **kwargs):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        msg_header = f"Send request failed: {client_method_name}:{open_client.name}:"
+        msg_header = f"Send request: {client_method_name}:{open_client.name}:"
         if hasattr(request, 'symbol'):
             msg_header += f"{request.symbol}:"
         if hasattr(request, 'order_id'):
@@ -239,6 +240,10 @@ class Martin(mr.MartinBase):
             msg = f"{msg_header} HTTPError: {ex}"
             logger.error(msg)
             raise GRPCError(status=Status.FAILED_PRECONDITION, message=msg)
+        except ExchangeError as ex:
+            msg = f"{msg_header}: {ex}"
+            logger.warning(msg)
+            raise GRPCError(status=Status.OUT_OF_RANGE, message=msg)
         except Exception as ex:
             msg = f"{msg_header} exception: {ex}"
             logger.error(msg)
@@ -283,7 +288,7 @@ class Martin(mr.MartinBase):
 
     async def fetch_order(self, request: mr.FetchOrderRequest) -> mr.FetchOrderResponse:
         response = mr.FetchOrderResponse()
-        res, client, _ = await self.send_request(
+        res, _, msg_header = await self.send_request(
             'fetch_order',
             request,
             rate_limit=True,
@@ -293,26 +298,27 @@ class Martin(mr.MartinBase):
             origin_client_order_id=request.client_order_id,
             receive_window=None
         )
+        logger.debug(f"{msg_header}: {res}")
 
-        _queue = client.on_order_update_queues.get(request.trade_id)
-        if _queue and request.filled_update_call and Decimal(res.get('executedQty', '0')):
-            request.order_id = res.get('orderId', 0)
-            await self.create_trade_stream_event(_queue, request, res)
+        if res and request.filled_update_call and Decimal(res['executedQty']):
+            request.order_id = res['orderId']
+            await self.create_trade_stream_event(request, res)
         response.from_pydict(res)
         return response
 
-    async def create_trade_stream_event(self, _queue, request, order):
-        trades, _, msg_header = await self.send_request(
+    async def create_trade_stream_event(self, request, order):
+        trades, client, msg_header = await self.send_request(
             'fetch_order_trade_list',
             request,
             trade_id=request.trade_id,
             symbol=request.symbol,
-            order_id=request.order_id,
-            order=order
+            order_id=request.order_id
         )
 
-        logger.debug(f"{msg_header}: {trades}")
+        _queue = client.on_order_update_queues.get(request.trade_id)
+
         for trade in trades:
+            trade['updateTime'] = trade.pop('time')
             trade |= {
                 'clientOrderId': order['clientOrderId'],
                 'orderPrice': order['price'],
@@ -320,9 +326,11 @@ class Martin(mr.MartinBase):
                 'executedQty': order['executedQty'],
                 'cummulativeQuoteQty': order['cummulativeQuoteQty'],
                 'status': order['status'],
+                "time": order['time']
             }
             event = OrderTradesEvent(trade)
             await _queue.put(weakref.ref(event)())
+        logger.debug(f"{msg_header}: {trades}")
 
     async def cancel_all_orders(self, request: mr.MarketRequest) -> mr.SimpleResponse():
         response = mr.SimpleResponse()
@@ -728,7 +736,7 @@ class Martin(mr.MartinBase):
     async def cancel_order(self, request: mr.CancelOrderRequest) -> mr.CancelOrderResponse:
         response = mr.CancelOrderResponse()
 
-        res, client, _ = await self.send_request(
+        res, _, msg_header = await self.send_request(
             'cancel_order',
             request,
             rate_limit=True,
@@ -740,10 +748,8 @@ class Martin(mr.MartinBase):
             receive_window=None
         )
 
-        _queue = client.on_order_update_queues.get(request.trade_id)
-        if Decimal(res.get('executedQty', '0')):
-            await self.create_trade_stream_event(_queue, request, res)
-            response.from_pydict(res)
+        logger.debug(f"{msg_header}: order canceled: {res}")
+        response.from_pydict(res)
         return response
 
     async def transfer_to_master(self, request: mr.MarketRequest) -> mr.SimpleResponse:
@@ -840,9 +846,17 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
         logger.info(f"Starting server v:{__version__} on {host}:{port}")
         await server.wait_closed()
 
+        [task.cancel() for task in asyncio.all_tasks() if not task.done()]
+
+        for oc in OpenClient.open_clients:
+            await oc.client.session.close()
+
 
 def main():
-    asyncio.run(amain())
+    try:
+        asyncio.run(amain())
+    except asyncio.CancelledError:
+        pass  # # Task cancellation should not be logged as an error
 
 
 if __name__ == '__main__':
