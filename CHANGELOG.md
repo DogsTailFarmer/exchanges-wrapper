@@ -1,3 +1,7 @@
+## 2.1.2 2024-03-19
+### Fix
+* Some SonarLint issues
+
 ## 2.1.1 2024-03-16
 ### Update
 * `Bybit`: `fetch_order`, `fetch_order_trade_list`: deep refine

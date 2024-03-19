@@ -14,6 +14,7 @@ class OrderBook:
         self.asks = {i[0]: i[1] for i in snapshot["a"]}
         self.bids = {i[0]: i[1] for i in snapshot["b"]}
 
+    # noinspection PyTypeChecker
     def get_book(self) -> dict:
         return {
             'stream': f"{self.symbol}@depth5",

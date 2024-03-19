@@ -5,7 +5,7 @@ from urllib.parse import urlencode, urlparse
 import aiohttp
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from crypto_ws_api.ws_session import generate_signature
 from exchanges_wrapper.errors import (
     RateLimitReached,
@@ -48,7 +48,8 @@ class HttpClient:
             payload = None
 
         if response.status >= 400:
-            logger.debug(f"handle_errors.response: {response.text}")
+            # TODO different handling for errors in the exchange and transport layers [400 Bad Request]
+            logger.debug(f"handle_errors: payload: {payload}, response: {response.text}")
             if response.status == 400 and payload and payload.get("error", str()) == "ERR_RATE_LIMIT":
                 raise RateLimitReached(RateLimitReached.message)
             elif response.status == 403 and self.exchange != 'okx':
@@ -224,7 +225,7 @@ class ClientHBP(HttpClient):
         _params = {}
         url = f"{_endpoint}/{path}?"
         if signed:
-            ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
             _params = {
                 "AccessKeyId": self.api_key,
                 "SignatureMethod": 'HmacSHA256',
@@ -267,7 +268,7 @@ class ClientOKX(HttpClient):
             path += f"?{urlencode(kwargs)}"
         url = f'{_endpoint}{path}'
         if signed:
-            ts = f"{datetime.utcnow().isoformat('T', 'milliseconds')}Z"
+            ts = f"{datetime.now(timezone.utc).replace(tzinfo=None).isoformat('T', 'milliseconds')}Z"
             if method == 'POST' and kwargs:
                 query_kwargs = json.dumps(kwargs.get('data') if 'data' in kwargs else kwargs)
                 signature_payload = f"{ts}{method}{path}{query_kwargs}"

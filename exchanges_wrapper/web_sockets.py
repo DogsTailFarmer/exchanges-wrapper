@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 from decimal import Decimal
 import gzip
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlencode, urlparse
 import websockets.client
 from websockets import ConnectionClosed
@@ -352,7 +352,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
         self.symbol = symbol
 
     async def start_wss(self):
-        ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         _params = {
                 "accessKey": self.client.api_key,
                 "signatureMethod": "HmacSHA256",
