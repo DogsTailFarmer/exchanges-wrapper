@@ -48,16 +48,16 @@ class HttpClient:
             payload = None
 
         if response.status >= 400:
-            # TODO different handling for errors in the exchange and transport layers [400 Bad Request]
-            logger.debug(f"handle_errors: payload: {payload}, response: {response.text}")
             if response.status == 400 and payload and payload.get("error", str()) == "ERR_RATE_LIMIT":
                 raise RateLimitReached(RateLimitReached.message)
+            elif response.status == 400 and response.reason != "Bad Request":
+                raise ExchangeError(f"ExchangeError: {payload}:{response.reason}:{response.text}")
             elif response.status == 403 and self.exchange != 'okx':
                 raise WAFLimitViolated(WAFLimitViolated.message)
             elif response.status == 418:
                 raise IPAddressBanned(IPAddressBanned.message)
             else:
-                raise HTTPError(f"Malformed request: status: {response.status}, reason: {response.reason}")
+                raise HTTPError(f"Malformed request: {payload}:{response.reason}:{response.text}")
 
         if self.exchange == 'bybit' and payload and payload.get('retCode') == 0:
             return payload.get('result'), payload.get('time')

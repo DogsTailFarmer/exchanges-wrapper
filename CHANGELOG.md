@@ -1,3 +1,10 @@
+## 2.1.3 2024-03-21
+### Fix
+* Change `datetime.now(timezone.utc).replace(tzinfo=None)` for format compatibility
+
+### Update
+* HTTP handle errors, for `response.status == 400` differ pure `Bad Request` and other reasons
+
 ## 2.1.2 2024-03-19
 ### Fix
 * Some SonarLint issues

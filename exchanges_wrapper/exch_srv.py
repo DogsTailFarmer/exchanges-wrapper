@@ -700,7 +700,7 @@ class Martin(mr.MartinBase):
             else:
                 event = vars(_event)
                 event.pop('handlers', None)
-                logger.debug(f"OnOrderUpdate: {open_client.name}: {event}")
+                # logger.debug(f"OnOrderUpdate: {open_client.name}: {event}")
                 response.success = True
                 response.result = json.dumps(event)
                 yield response
@@ -709,7 +709,7 @@ class Martin(mr.MartinBase):
     async def create_limit_order(self, request: mr.CreateLimitOrderRequest) -> mr.CreateLimitOrderResponse:
         response = mr.CreateLimitOrderResponse()
 
-        res, _, msg_header = await self.send_request(
+        res, _, _ = await self.send_request(
             'create_order',
             request,
             rate_limit=True,
@@ -730,13 +730,12 @@ class Martin(mr.MartinBase):
         )
 
         response.from_pydict(res)
-        logger.debug(f"{msg_header}: order created: {res.get('orderId')}")
         return response
 
     async def cancel_order(self, request: mr.CancelOrderRequest) -> mr.CancelOrderResponse:
         response = mr.CancelOrderResponse()
 
-        res, _, msg_header = await self.send_request(
+        res, _, _ = await self.send_request(
             'cancel_order',
             request,
             rate_limit=True,
@@ -748,7 +747,6 @@ class Martin(mr.MartinBase):
             receive_window=None
         )
 
-        logger.debug(f"{msg_header}: order canceled: {res}")
         response.from_pydict(res)
         return response
 
@@ -846,17 +844,20 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
         logger.info(f"Starting server v:{__version__} on {host}:{port}")
         await server.wait_closed()
 
-        [task.cancel() for task in asyncio.all_tasks() if not task.done()]
-
         for oc in OpenClient.open_clients:
             await oc.client.session.close()
+
+        [task.cancel() for task in asyncio.all_tasks() if not task.done()]
 
 
 def main():
     try:
         asyncio.run(amain())
-    except asyncio.CancelledError:
+    except asyncio.exceptions.CancelledError:
         pass  # # Task cancellation should not be logged as an error
+    except Exception as ex:
+        print(f"Exception: {ex}")
+        print(traceback.format_exc())
 
 
 if __name__ == '__main__':
