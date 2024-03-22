@@ -1,3 +1,7 @@
+## 2.1.4 2024-03-22
+### Update
+* Refine HTTP handle errors
+
 ## 2.1.3 2024-03-21
 ### Fix
 * Change `datetime.now(timezone.utc).replace(tzinfo=None)` for format compatibility

@@ -18,9 +18,15 @@ from exchanges_wrapper.errors import (
 logger = logging.getLogger(__name__)
 
 AJ = 'application/json'
+STATUS_BAD_REQUEST = 400
+STATUS_UNAUTHORIZED = 401
+STATUS_FORBIDDEN = 403
+STATUS_I_AM_A_TEAPOT = 418  # HTTP status code for IPAddressBanned
+ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW = "Timestamp for this request is outside of the recvWindow"
 
 
 class HttpClient:
+
     def __init__(self, **kwargs):
         self.api_key = kwargs.get('api_key')
         self.api_secret = kwargs.get('api_secret')
@@ -48,13 +54,30 @@ class HttpClient:
             payload = None
 
         if response.status >= 400:
-            if response.status == 400 and payload and payload.get("error", str()) == "ERR_RATE_LIMIT":
-                raise RateLimitReached(RateLimitReached.message)
-            elif response.status == 400 and response.reason != "Bad Request":
-                raise ExchangeError(f"ExchangeError: {payload}:{response.reason}:{response.text}")
-            elif response.status == 403 and self.exchange != 'okx':
+            if response.status == STATUS_BAD_REQUEST:
+                if payload:
+                    if payload.get("error", "") == "ERR_RATE_LIMIT":
+                        raise RateLimitReached(RateLimitReached.message)
+                    elif (
+                            (self.exchange == 'binance' and payload.get('code', 0) == -1021)
+                            or (self.exchange == 'bybit' and payload.get('retCode', 0) == 10002)
+                    ):
+                        raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
+                    else:
+                        raise ExchangeError(f"ExchangeError: {payload}:{response.reason}:{response.text}")
+                elif response.reason != "Bad Request":
+                    raise ExchangeError(f"ExchangeError: {payload}:{response.reason}:{response.text}")
+
+            elif (
+                    response.status == STATUS_UNAUTHORIZED
+                    and self.exchange == 'okx'
+                    and payload
+                    and payload.get('code', 0) == '50102'
+            ):
+                raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
+            elif response.status == STATUS_FORBIDDEN and self.exchange != 'okx':
                 raise WAFLimitViolated(WAFLimitViolated.message)
-            elif response.status == 418:
+            elif response.status == STATUS_I_AM_A_TEAPOT:
                 raise IPAddressBanned(IPAddressBanned.message)
             else:
                 raise HTTPError(f"Malformed request: {payload}:{response.reason}:{response.text}")
