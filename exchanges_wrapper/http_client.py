@@ -64,9 +64,9 @@ class HttpClient:
                     ):
                         raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
                     else:
-                        raise ExchangeError(f"ExchangeError: {payload}:{response.reason}:{response.text}")
+                        raise ExchangeError(f"ExchangeError: {payload}")
                 elif response.reason != "Bad Request":
-                    raise ExchangeError(f"ExchangeError: {payload}:{response.reason}:{response.text}")
+                    raise ExchangeError(f"ExchangeError: {response.reason}:{response.text}")
 
             elif (
                     response.status == STATUS_UNAUTHORIZED

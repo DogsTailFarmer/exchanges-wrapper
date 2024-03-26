@@ -1,3 +1,11 @@
+## 2.1.5 2024-03-25
+### Fix
+* Bybit: `on_balance_update`: duplication during transfer from web-interface
+* Some exception handling
+
+### Update
+* Dependency: Up requirements for crypto-ws-api==2.0.7
+
 ## 2.1.4 2024-03-22
 ### Update
 * Refine HTTP handle errors

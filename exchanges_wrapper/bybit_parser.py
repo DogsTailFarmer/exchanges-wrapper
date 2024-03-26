@@ -450,7 +450,9 @@ def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, uid=None) 
 
     elif mode == 'universal':
         for i in data_in:
-            if i['coin'] in symbol and 'UNIFIED' in (i['fromAccountType'], i['toAccountType']):
+            if i['coin'] in symbol and \
+                    ((i['fromAccountType'] == 'UNIFIED' and i['fromMemberId'] == uid)
+                     or (i['toAccountType'] == 'UNIFIED' and i['toMemberId'] == uid)):
                 data_out.append(
                     {
                         i['transferId']: {

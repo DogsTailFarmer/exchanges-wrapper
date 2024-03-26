@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import grpclib.exceptions
 
-from exchanges_wrapper import __version__
+from exchanges_wrapper import __version__ as ver_ew
+from crypto_ws_api import __version__ as ver_cw
 import time
 import weakref
 import gc
@@ -129,9 +131,9 @@ class OpenClient:
         )
 
     @classmethod
-    def get_client(cls, _id, raise_ex=True):
+    def get_client(cls, _id):
         res = next((client for client in cls.open_clients if id(client) == _id), None)
-        if res is None and raise_ex:
+        if res is None:
             logger.warning(f"No client exist: {_id}")
             raise GRPCError(status=Status.UNAVAILABLE, message="No client exist")
         return res
@@ -196,7 +198,7 @@ class Martin(mr.MartinBase):
         Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
         return mr.OpenClientConnectionId(
             client_id=client_id,
-            srv_version=__version__,
+            srv_version=f"{ver_cw}:{ver_ew}",
             exchange=open_client.client.exchange,
             real_market=open_client.real_market
         )
@@ -229,7 +231,7 @@ class Martin(mr.MartinBase):
             await self.rate_limit_control(open_client)
         try:
             res = await getattr(client, client_method_name)(**kwargs)
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, asyncio.exceptions.CancelledError):
             pass  # Task cancellation should not be logged as an error
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
@@ -700,7 +702,7 @@ class Martin(mr.MartinBase):
             else:
                 event = vars(_event)
                 event.pop('handlers', None)
-                # logger.debug(f"OnOrderUpdate: {open_client.name}: {event}")
+                # logger.info(f"OnOrderUpdate: {open_client.name}: {event}")
                 response.success = True
                 response.result = json.dumps(event)
                 yield response
@@ -800,11 +802,11 @@ class Martin(mr.MartinBase):
 
     async def check_stream(self, request: mr.MarketRequest) -> mr.SimpleResponse:
         response = mr.SimpleResponse()
-        if open_client := OpenClient.get_client(request.client_id, raise_ex=False):
+        response.success = False
+        if open_client := OpenClient.get_client(request.client_id):
             client = open_client.client
             response.success = bool(client.data_streams.get(request.trade_id))
         else:
-            response.success = False
             logger.warning(f"CheckStream request failed for {request.symbol}")
         return response
 
@@ -841,7 +843,7 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
     server = Server([Martin()])
     with graceful_exit([server]):
         await server.start(host, port)
-        logger.info(f"Starting server v:{__version__} on {host}:{port}")
+        logger.info(f"Starting server v:{ver_cw}:{ver_ew} on {host}:{port}")
         await server.wait_closed()
 
         for oc in OpenClient.open_clients:
@@ -853,7 +855,7 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
 def main():
     try:
         asyncio.run(amain())
-    except asyncio.exceptions.CancelledError:
+    except (asyncio.exceptions.CancelledError, grpclib.exceptions.StreamTerminatedError):
         pass  # # Task cancellation should not be logged as an error
     except Exception as ex:
         print(f"Exception: {ex}")

@@ -1095,7 +1095,6 @@ class Client:
                         binance_res = bfx.order(res[4], response_type=True, cancelled=True)
                         break
                     await asyncio.sleep(0.1)
-                logger.debug(f"cancel_order.bitfinex {order_id}: timeout: {timeout}")
             else:
                 logger.warning(f"cancel_order.bitfinex {order_id}: res: {res}")
         elif self.exchange == 'huobi':
