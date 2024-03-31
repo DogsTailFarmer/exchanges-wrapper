@@ -116,7 +116,7 @@ docker run -itP \
 
 ### Documentations
 * Served methods and examples of their use are described at ```example/exch_client.py```
-* For [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/overview) serializing structured data see ```proto/exchanges_wrapper/api.proto```
+* For [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/overview) serializing structured data see ```exchanges_wrapper/proto/martin.proto```
 
 ## Donate
 *USDT* (TRC20) TN8F3Dz8BU8VwECRh3LTKi7FrsU8eWfsZz
