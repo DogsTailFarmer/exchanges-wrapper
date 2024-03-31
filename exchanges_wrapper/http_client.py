@@ -58,10 +58,7 @@ class HttpClient:
                 if payload:
                     if payload.get("error", "") == "ERR_RATE_LIMIT":
                         raise RateLimitReached(RateLimitReached.message)
-                    elif (
-                            (self.exchange == 'binance' and payload.get('code', 0) == -1021)
-                            or (self.exchange == 'bybit' and payload.get('retCode', 0) == 10002)
-                    ):
+                    elif self.exchange == 'binance' and payload.get('code', 0) == -1021:
                         raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
                     else:
                         raise ExchangeError(f"ExchangeError: {payload}")
@@ -82,8 +79,11 @@ class HttpClient:
             else:
                 raise HTTPError(f"Malformed request: {payload}:{response.reason}:{response.text}")
 
-        if self.exchange == 'bybit' and payload and payload.get('retCode') == 0:
-            return payload.get('result'), payload.get('time')
+        if self.exchange == 'bybit' and payload:
+            if payload.get('retCode') == 0:
+                return payload.get('result'), payload.get('time')
+            elif payload.get('retCode') == 10002:
+                raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
             return payload.get('data', payload.get('tick'))
         elif self.exchange == 'okx' and payload and payload.get('code') == '0':

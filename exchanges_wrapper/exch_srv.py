@@ -174,8 +174,7 @@ class Martin(mr.MartinBase):
                     if main_client.account_uid and main_client.account_id:
                         open_client.client.main_account_uid = main_client.account_uid
                         open_client.client.main_account_id = main_client.account_id
-                        logger.info(f"The values for main Huobi account were received and set:"
-                                    f" UID: {main_client.account_uid} and account ID: {main_client.account_id}")
+                        logger.info(f"Huobi UID: {main_client.account_uid} and account ID: {main_client.account_id}")
                     else:
                         logger.warning("No account IDs were received for the Huobi master account")
                     await main_client.close()
@@ -232,7 +231,8 @@ class Martin(mr.MartinBase):
         try:
             res = await getattr(client, client_method_name)(**kwargs)
         except (asyncio.CancelledError, asyncio.exceptions.CancelledError):
-            pass  # Task cancellation should not be logged as an error
+            msg = f"{msg_header} Server Shutdown"
+            raise GRPCError(status=Status.UNAVAILABLE, message=msg)
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
             msg = f"{msg_header} RateLimitReached: {ex}"
@@ -655,7 +655,7 @@ class Martin(mr.MartinBase):
                     return
                 _events.append(_event)
                 _get_event_from_queue = True
-            except asyncio.TimeoutError:
+            except asyncio.exceptions.TimeoutError:
                 _get_event_from_queue = False
 
                 if client.exchange in ('bitfinex', 'huobi', 'bybit'):

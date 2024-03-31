@@ -53,7 +53,12 @@ class EventsDataStream:
         self.wss_started = False
 
     async def start(self):
-        async for self.websocket in websockets.client.connect(self.endpoint, logger=logger_ws):
+        ping_interval = None if self.exchange == 'huobi' else 20
+        async for self.websocket in websockets.connect(
+                self.endpoint,
+                logger=logger_ws,
+                ping_interval=ping_interval
+        ):
             try:
                 await self.start_wss()
             except ConnectionClosed as ex:
@@ -178,8 +183,9 @@ class EventsDataStream:
             else:
                 logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'huobi':
-            if msg_data.get('ping'):
-                await self.websocket.send(json.dumps({"pong": msg_data.get('ping')}))
+            if ping := msg_data.get('ping'):
+                await self.websocket.send(json.dumps({"pong": ping}))
+                await asyncio.sleep(0)
             elif msg_data.get('action') == 'ping':
                 pong = {
                     "action": "pong",
@@ -188,6 +194,7 @@ class EventsDataStream:
                     }
                 }
                 await self.websocket.send(json.dumps(pong))
+                await asyncio.sleep(0)
             elif msg_data.get('tick') or msg_data.get('data'):
                 if ch_type == 'ticker':
                     _price = msg_data.get('tick', {}).get('lastPrice', None)
@@ -210,6 +217,7 @@ class EventsDataStream:
     async def ws_listener(self, request=None, symbol=None, ch_type=str()):
         if request:
             await self.websocket.send(json.dumps(request))
+            await asyncio.sleep(0)
         async for msg_data in self.websocket:
             await self._handle_messages(msg_data, symbol, ch_type)
 
@@ -370,6 +378,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "params": _params
         }
         await self.websocket.send(json.dumps(request))
+        await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
         #
         request = {
@@ -377,6 +386,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "ch": "accounts.update#2"
         }
         await self.websocket.send(json.dumps(request))
+        await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
         #
         request = {
@@ -384,6 +394,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "ch": f"orders#{self.symbol.lower()}"
         }
         await self.websocket.send(json.dumps(request))
+        await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
         #
         request = {
@@ -489,6 +500,7 @@ class OkxPrivateEventsDataStream(EventsDataStream):
                             ]
                    }
         await self.websocket.send(json.dumps(request))
+        await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv())
         # Channel subscription
         request = {"op": 'subscribe',
@@ -539,6 +551,7 @@ class BBTPrivateEventsDataStream(EventsDataStream):
             "args": [self.client.api_key, ts, signature]
         }
         await self.websocket.send(json.dumps(request))
+        await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv())
         # Channel subscription
         request = {

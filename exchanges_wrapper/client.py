@@ -1078,15 +1078,15 @@ class Client:
                     "This query requires an order_id on Bitfinex. Deletion by user number is not implemented."
                 )
             params = {'id': order_id}
-            res = (
-                    await self.user_wss_session.handle_request(trade_id, "oc", _params=params)
-                    or await self.http.send_api_call(
+            res = await self.user_wss_session.handle_request(trade_id, "oc", _params=params)
+            if res is None or (res and isinstance(res, list) and res[6] == 'ERROR'):
+                logger.debug(f"cancel_order.bitfinex {order_id}: res1: {res}")
+                res = await self.http.send_api_call(
                         "v2/auth/w/order/cancel",
                         method="POST",
                         signed=True,
                         **params
-                    )
-            )
+                )
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
                 timeout = STATUS_TIMEOUT / 0.1
                 while timeout:
@@ -1096,7 +1096,7 @@ class Client:
                         break
                     await asyncio.sleep(0.1)
             else:
-                logger.warning(f"cancel_order.bitfinex {order_id}: res: {res}")
+                logger.debug(f"cancel_order.bitfinex {order_id}: res2: {res}")
         elif self.exchange == 'huobi':
             res = await self.http.send_api_call(
                 f"v1/order/orders/{order_id}/submitcancel",
@@ -1109,7 +1109,6 @@ class Client:
                     timeout -= 1
                     await asyncio.sleep(0.1)
                 binance_res = await self.fetch_order(trade_id, symbol, order_id=res, response_type=True)
-
         elif self.exchange == 'okx':
             _symbol = self.symbol_to_okx(symbol)
             _queue = asyncio.Queue()
@@ -1187,9 +1186,10 @@ class Client:
                         **params,
                     )
             )
-            logger.debug(f"cancel_all_orders.res: {res}")
             if res and res[6] == 'SUCCESS':
                 return bfx.orders(res[4], response_type=True, cancelled=True)
+            logger.debug(f"bitfinex: cancel_all_orders.res: {res}")
+
         elif self.exchange == 'huobi':
             orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
             orders_id = [str(order.get('orderId')) for order in orders]
@@ -1295,7 +1295,6 @@ class Client:
                 method="POST",
                 signed=True
             )
-            # logger.debug(f"fetch_open_orders.res: {res}")
             if res:
                 binance_res = bfx.orders(res)
         elif self.exchange == 'huobi':

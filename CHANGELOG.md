@@ -1,3 +1,10 @@
+## 2.1.6 2024-03-29
+### Fix
+* Bybit: `on_balance_update`: missed event during transfer from API
+
+### Update
+* Dependency: Up requirements for crypto-ws-api==2.0.8
+
 ## 2.1.5 2024-03-25
 ### Fix
 * Bybit: `on_balance_update`: duplication during transfer from web-interface
