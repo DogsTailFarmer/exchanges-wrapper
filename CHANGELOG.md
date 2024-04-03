@@ -1,3 +1,7 @@
+## 2.1.7 2024-03-29
+### Fix
+* `Bybit`: http error handling: handling events that are not explicitly described
+
 ## 2.1.6 2024-03-29
 ### Fix
 * Bybit: `on_balance_update`: missed event during transfer from API

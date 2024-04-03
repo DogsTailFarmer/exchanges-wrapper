@@ -84,12 +84,14 @@ class HttpClient:
                 return payload.get('result'), payload.get('time')
             elif payload.get('retCode') == 10002:
                 raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
+            else:
+                raise ExchangeError(f"API request failed: {response.status}:{response.reason}:{payload}")
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
             return payload.get('data', payload.get('tick'))
         elif self.exchange == 'okx' and payload and payload.get('code') == '0':
             return payload.get('data', [])
-        elif (self.exchange not in ('binance', 'bitfinex') or
-              (self.exchange == 'binance' and payload and "code" in payload)):
+        elif self.exchange not in ('binance', 'bitfinex') \
+                or (self.exchange == 'binance' and payload and "code" in payload):
             raise ExchangeError(f"API request failed: {response.status}:{response.reason}:{payload}")
         else:
             return payload
