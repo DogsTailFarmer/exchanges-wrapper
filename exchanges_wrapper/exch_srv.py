@@ -160,9 +160,11 @@ class Martin(mr.MartinBase):
         logger.info(f"OpenClientConnection start trade: {request.account_name}:{request.trade_id}")
         client_id = OpenClient.get_id(request.account_name)
         if client_id:
+            logger.debug(f"OpenClientConnection: {request.account_name}:{request.trade_id}:{client_id}")
             open_client = OpenClient.get_client(client_id)
             open_client.client.http.rate_limit_reached = False
         else:
+            logger.debug(f"OpenClientConnection: {request.account_name}:{request.trade_id}: set new client_id")
             try:
                 open_client = OpenClient(request.account_name)
                 client_id = id(open_client)

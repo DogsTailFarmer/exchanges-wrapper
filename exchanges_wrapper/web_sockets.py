@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode, urlparse
 import websockets
 
-import exchanges_wrapper.bitfinex_parser as bfx
-import exchanges_wrapper.huobi_parser as hbp
-import exchanges_wrapper.okx_parser as okx
-import exchanges_wrapper.bybit_parser as bbt
+import exchanges_wrapper.parsers.bitfinex_parser as bfx
+import exchanges_wrapper.parsers.huobi_parser as hbp
+import exchanges_wrapper.parsers.okx_parser as okx
+import exchanges_wrapper.parsers.bybit_parser as bbt
 from crypto_ws_api.ws_session import generate_signature
 from exchanges_wrapper import LOG_PATH
 

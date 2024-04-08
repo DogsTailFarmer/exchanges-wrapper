@@ -22,10 +22,10 @@ from exchanges_wrapper.web_sockets import UserEventsDataStream, \
     BBTPrivateEventsDataStream
 from exchanges_wrapper.definitions import OrderType
 from exchanges_wrapper.events import Events
-import exchanges_wrapper.bitfinex_parser as bfx
-import exchanges_wrapper.huobi_parser as hbp
-import exchanges_wrapper.okx_parser as okx
-import exchanges_wrapper.bybit_parser as bbt
+import exchanges_wrapper.parsers.bitfinex_parser as bfx
+import exchanges_wrapper.parsers.huobi_parser as hbp
+import exchanges_wrapper.parsers.okx_parser as okx
+import exchanges_wrapper.parsers.bybit_parser as bbt
 from crypto_ws_api.ws_session import UserWSSession
 
 logger = logging.getLogger(__name__)
@@ -117,6 +117,7 @@ class Client:
         return res
 
     async def load(self, symbol):
+        logger.info(f"Try load {self.exchange}:{symbol} info...")
         infos = await self.fetch_exchange_info(symbol)
         if not infos.get('serverTime'):
             raise UserWarning("Can't get exchange info, check availability and operational status of the exchange")
@@ -144,6 +145,7 @@ class Client:
         # load rate limits
         self.rate_limits = infos["rateLimits"]
         self.loaded = True
+        logger.info(f"Info for {self.exchange}:{symbol} loaded success")
 
     async def close(self):
         await self.session.close()
@@ -1177,18 +1179,19 @@ class Client:
             orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
             orders_id = [order.get('orderId') for order in orders]
             params = {'id': orders_id}
-            res = (
-                    await self.user_wss_session.handle_request(trade_id, "oc_multi", _params=params)
-                    or await self.http.send_api_call(
+            res = await self.user_wss_session.handle_request(trade_id, "oc_multi", _params=params)
+            if res is None or (res and isinstance(res, list) and res[6] == 'ERROR'):
+                logger.debug(f"cancel_all_orders.bitfinex {orders_id}: res1: {res}")
+                res = await self.http.send_api_call(
                         "v2/auth/w/order/cancel/multi",
                         method="POST",
                         signed=True,
-                        **params,
-                    )
-            )
-            if res and res[6] == 'SUCCESS':
-                return bfx.orders(res[4], response_type=True, cancelled=True)
-            logger.debug(f"bitfinex: cancel_all_orders.res: {res}")
+                        **params
+                )
+            if res and isinstance(res, list) and res[6] == 'SUCCESS':
+                binance_res = bfx.orders(res[4], response_type=True, cancelled=True)
+            else:
+                logger.debug(f"bitfinex: cancel_all_orders.res: {res}")
 
         elif self.exchange == 'huobi':
             orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)

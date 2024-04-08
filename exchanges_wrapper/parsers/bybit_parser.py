@@ -374,7 +374,12 @@ def on_trade_update(res: dict) -> dict:
     last_executed_price = res.get("execPrice", res.get("avgPrice"))
     last_quote_asset_transacted = res.get("execValue", cumulative_quote_asset)
 
-    status = 'NEW' if leaves_qty == order_quantity else 'PARTIALLY_FILLED' if leaves_qty > 0 else 'FILLED'
+    if leaves_qty == order_quantity:
+        status = 'NEW'
+    elif leaves_qty > 0:
+        status = 'PARTIALLY_FILLED'
+    else:
+        status = 'FILLED'
 
     return {
         "e": "executionReport",

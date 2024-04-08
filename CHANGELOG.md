@@ -1,3 +1,8 @@
+## 2.1.8 2024-04-08
+### Update
+* `Bitfinex`: add logging for `cancel_order()` and `cancel_all_orders()` methods
+* Add debug logging for `open_client_connection()` and `client.load()`
+
 ## 2.1.7 2024-03-29
 ### Fix
 * `Bybit`: http error handling: handling events that are not explicitly described
