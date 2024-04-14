@@ -1,3 +1,7 @@
+## 2.1.9 2024-04-14
+### Fix
+* Creating and manage asynchronous tasks
+
 ## 2.1.8 2024-04-08
 ### Update
 * `Bitfinex`: add logging for `cancel_order()` and `cancel_all_orders()` methods
@@ -125,7 +129,7 @@
 ## 1.4.9b2 2024-02-05
 ### Fix
 * Binance: `TransferToMaster`: sentence `Email address should be encoded. e.g. alice@test.com should be encoded into
-alice%40test.com` from API docs the are False, must be `content += urlencode(kwargs["params"], safe="@")`
+alice%40test.com` from API docs they are False, must be `content += urlencode(kwargs["params"], safe="@")`
 
 ### Update
 * HTX: changed deprecated endpoint "v1/common/symbols" to "v1/settings/common/market-symbols"
@@ -133,7 +137,7 @@ alice%40test.com` from API docs the are False, must be `content += urlencode(kwa
 
 ## 1.4.8 2024-02-02
 ### Added for new features
-* Binance: `TransferToMaster` now can be used for collect assets on the sub-account
+* Binance: `TransferToMaster` now can be used for collect assets on the subaccount
 
 ## 1.4.7.post6 2024-01-31
 ### Fix
@@ -165,7 +169,7 @@ alice%40test.com` from API docs the are False, must be `content += urlencode(kwa
 
 ## v1.4.4 2023-12-13
 ### Update
-* Before send cancel order result checking if it was be executed and generating trade event
+* Before send cancel order result checking if it was being executed and generating trade event
 * Rollback 1.4.3
     - Binance: in create Limit order parameters adding parameter "selfTradePreventionMode": "NONE"
 

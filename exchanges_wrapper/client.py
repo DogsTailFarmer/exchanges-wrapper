@@ -108,6 +108,12 @@ class Client:
         self.main_account_uid = None
         self.ledgers_id = []
         self.ts_start = {}
+        self.tasks = set()
+
+    def tasks_manage(self, coro):
+        _t = asyncio.create_task(coro)
+        self.tasks.add(_t)
+        _t.add_done_callback(self.tasks.discard)
 
     async def fetch_object(self, key):
         res = None
@@ -145,7 +151,7 @@ class Client:
         # load rate limits
         self.rate_limits = infos["rateLimits"]
         self.loaded = True
-        logger.info(f"Info for {self.exchange}:{symbol} loaded success")
+        logger.info(f"Info for {self.exchange}:{symbol} loaded successfully")
 
     async def close(self):
         await self.session.close()
@@ -176,7 +182,7 @@ class Client:
             user_data_stream = BBTPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         if user_data_stream:
             self.data_streams[_trade_id] |= {user_data_stream}
-            asyncio.ensure_future(user_data_stream.start())
+            self.tasks_manage(user_data_stream.start())
             timeout = STATUS_TIMEOUT / 0.1
             while not user_data_stream.wss_started:
                 timeout -= 1
@@ -190,8 +196,7 @@ class Client:
         if self.exchange == 'binance':
             market_data_stream = MarketEventsDataStream(self, self.endpoint_ws_public, self.exchange, _trade_id)
             self.data_streams[_trade_id] |= {market_data_stream}
-            asyncio.ensure_future(market_data_stream.start())
-            # start_list.append(market_data_stream.start())
+            self.tasks_manage(market_data_stream.start())
         else:
             for channel in _events:
                 # https://www.okx.com/help-center/changes-to-v5-api-websocket-subscription-parameter-and-url
@@ -202,7 +207,7 @@ class Client:
                 #
                 market_data_stream = MarketEventsDataStream(self, _endpoint, self.exchange, _trade_id, channel)
                 self.data_streams[_trade_id] |= {market_data_stream}
-                asyncio.ensure_future(market_data_stream.start())
+                self.tasks_manage(market_data_stream.start())
 
     async def stop_events_listener(self, _trade_id):
         logger.info(f"Stop events listener data streams for {_trade_id}")
@@ -1249,12 +1254,12 @@ class Client:
             params = {'category': 'spot', 'symbol': symbol}
             res, _ = await self.http.send_api_call("/v5/order/cancel-all", method="POST", signed=True, **params)
 
-            tasks = []
+            tasks = set()
             for order in res.get('list', []):
                 _id = order.get('orderId')
-                task = asyncio.ensure_future(self.fetch_object(f"oc-{_id}"))
+                task = asyncio.create_task(self.fetch_object(f"oc-{_id}"))
                 task.set_name(f"{_id}")
-                tasks.append(task)
+                tasks.add(task)
 
             if tasks:
                 done, pending = await asyncio.wait(tasks, timeout=STATUS_TIMEOUT)
@@ -1267,6 +1272,7 @@ class Client:
                             _res = await self.fetch_order(trade_id, symbol, order_id=_id, response_type=True)
                             binance_res.append(_res)
                     pending.clear()
+                tasks.clear()
 
         return binance_res
 

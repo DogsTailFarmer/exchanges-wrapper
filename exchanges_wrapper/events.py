@@ -1,5 +1,4 @@
-import asyncio
-import functools
+
 from collections import defaultdict
 import logging
 
@@ -11,7 +10,6 @@ logger = logging.getLogger(__name__)
 # based on: https://stackoverflow.com/a/2022629/10144963
 class Handlers(list):
     async def __call__(self, *args, **kwargs):
-        loop = asyncio.get_running_loop()
         trade_id = kwargs.pop('trade_id', None)
         _trade_id = None
         for func in self:
@@ -20,12 +18,7 @@ class Handlers(list):
             except Exception as ex:  # skipcq: PYL-W0703
                 logger.warning(f"Handlers error when try get trade_id: {ex}")
             if trade_id is None or trade_id == _trade_id:
-                if asyncio.iscoroutinefunction(func):
-                    await func(*args, **kwargs)
-                    continue
-                if kwargs:
-                    func = functools.partial(func, **kwargs)
-                loop.run_in_executor(None, func, *args)
+                await func(*args, **kwargs)
 
     def __repr__(self):
         return f"Handlers({list.__repr__(self)})"

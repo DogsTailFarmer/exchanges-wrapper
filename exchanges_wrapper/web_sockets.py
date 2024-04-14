@@ -48,7 +48,7 @@ class EventsDataStream:
         self.wss_event_buffer = {}
         self._order_book = None
         self._price = None
-        self.tasks_list = []
+        self.tasks = set()
         self.wss_started = False
 
     async def start(self):
@@ -84,8 +84,13 @@ class EventsDataStream:
             await self.websocket.close(code=4000)
 
     def tasks_cancel(self):
-        [task.cancel() for task in self.tasks_list if not task.done()]
-        self.tasks_list.clear()
+        [task.cancel() for task in self.tasks if not task.done()]
+        self.tasks.clear()
+
+    def tasks_manage(self, coro):
+        _t = asyncio.create_task(coro)
+        self.tasks.add(_t)
+        _t.add_done_callback(self.tasks.discard)
 
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
@@ -110,8 +115,7 @@ class EventsDataStream:
                 return
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and msg_data.get("success")):
-                _task = asyncio.ensure_future(self.bybit_heartbeat(ch_type or "private"))
-                self.tasks_list.append(_task)
+                self.tasks_manage(self.bybit_heartbeat(ch_type or "private"))
                 if msg_data["op"] == "subscribe" and msg_data["success"] and not msg_data["ret_msg"]:
                     self.wss_started = True
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
@@ -602,8 +606,7 @@ class UserEventsDataStream(EventsDataStream):
 
     async def start_wss(self):
         logger.info(f"Start User WSS for {self.exchange}")
-        _task = asyncio.ensure_future(self._heartbeat(self.listen_key))
-        self.tasks_list.append(_task)
+        self.tasks_manage(self._heartbeat(self.listen_key))
         try:
             await self.ws_listener()
         finally:

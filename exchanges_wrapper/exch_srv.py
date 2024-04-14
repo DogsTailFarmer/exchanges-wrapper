@@ -185,14 +185,16 @@ class Martin(mr.MartinBase):
                 raise GRPCError(status=Status.FAILED_PRECONDITION, message=str(ex))
 
         try:
-            await open_client.client.load(request.symbol)
+            await asyncio.wait_for(open_client.client.load(request.symbol), timeout=HEARTBEAT * 60)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
+        except asyncio.exceptions.TimeoutError:
+            await OpenClient.get_client(client_id).client.session.close()
+            OpenClient.remove_client(request.account_name)
+            raise GRPCError(status=Status.UNAVAILABLE, message=f"'{open_client.name}' timeout error")
         except Exception as ex:
             logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
             logger.debug(f"Exception traceback: {traceback.format_exc()}")
-            await OpenClient.get_client(client_id).client.session.close()
-            OpenClient.remove_client(request.account_name)
             raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=str(ex))
 
         # Set rate_limiter
@@ -851,7 +853,7 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
         for oc in OpenClient.open_clients:
             await oc.client.session.close()
 
-        [task.cancel() for task in asyncio.all_tasks() if not task.done()]
+        [task.cancel() for task in asyncio.all_tasks() if not task.done() and task is not asyncio.current_task()]
 
 
 def main():
