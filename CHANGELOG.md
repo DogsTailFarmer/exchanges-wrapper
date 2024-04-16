@@ -1,3 +1,7 @@
+## 2.1.10 2024-04-16
+### Update
+* `Bitfinex`: `client.fetch_order()`: searching on `origin_client_order_id` also
+
 ## 2.1.9 2024-04-14
 ### Fix
 * Creating and manage asynchronous tasks

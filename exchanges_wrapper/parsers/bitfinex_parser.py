@@ -50,13 +50,13 @@ class OrderBook:
         return self
 
 
-def get_symbols(symbols_details: []) -> str:
+def get_symbols(symbols_details: [], symbol) -> str:
     symbols = []
     res = ",t"
     for symbol_details in symbols_details:
-        symbol = symbol_details['pair']
-        if 'f0' not in symbol:
-            symbols.append(symbol.upper())
+        _symbol = symbol_details['pair']
+        if 'f0' not in _symbol and _symbol.replace(":", "").upper() == symbol:
+            symbols.append(_symbol.upper())
     return f"t{res.join(symbols)}"
 
 
@@ -623,3 +623,16 @@ def funding_wallet(res: []) -> []:
                 balances.append(_binance_res)
 
     return balances
+
+
+def find_order(_res, order_id, origin_client_order_id):
+    res = []
+    if _res:
+        if order_id:
+            res = _res[0]
+        else:
+            for i in _res:
+                if i[2] == int(origin_client_order_id):
+                    res = i
+                    break
+    return res

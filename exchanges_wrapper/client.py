@@ -344,7 +344,7 @@ class Client:
                 "v2/tickers",
                 send_api_key=False,
                 endpoint=self.endpoint_api_public,
-                symbols=bfx.get_symbols(symbols_details)
+                symbols=bfx.get_symbols(symbols_details, symbol)
             )
             if symbols_details and tickers:
                 binance_res = bfx.exchange_info(symbols_details, tickers, symbol)
@@ -879,18 +879,22 @@ class Client:
             if new_client_order_id:
                 params["cid"] = new_client_order_id
                 self.active_order(new_client_order_id, quantity)
-            res = (
-                    await self.user_wss_session.handle_request(trade_id, "on", _params=params)
-                    or await self.http.send_api_call(
-                        "v2/auth/w/order/submit",
-                        method="POST",
-                        signed=True,
-                        **params,
-                    )
-            )
+
+            res = await self.user_wss_session.handle_request(trade_id, "on", _params=params)
+
+            if not res or (res and isinstance(res, list) and res[6] != 'SUCCESS'):
+                logger.debug(f"create_order.bitfinex {new_client_order_id}: {res}")
+                res = await self.http.send_api_call(
+                    "v2/auth/w/order/submit",
+                    method="POST",
+                    signed=True,
+                    **params
+                )
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
                 self.active_order(res[4][0][0], quantity)
                 binance_res = bfx.order(res[4][0], response_type=False)
+            else:
+                logger.debug(f"create_order.bitfinex {new_client_order_id}: {res}")
         elif self.exchange == 'huobi':
             params = {
                 'account-id': str(self.account_id),
@@ -966,9 +970,7 @@ class Client:
             response_type=None,
     ):
         self.assert_symbol(symbol)
-        if self.exchange == 'bitfinex' and not order_id:
-            raise ValueError("This query requires an order_id")
-        elif self.exchange in ('binance', 'huobi', 'okx', 'bybit') and not order_id and not origin_client_order_id:
+        if not order_id and not origin_client_order_id:
             raise ValueError("This query requires an order_id or an origin_client_order_id")
 
         b_res = {}
@@ -995,20 +997,28 @@ class Client:
                     )
             )
         elif self.exchange == 'bitfinex':
-            params = {'id': [order_id]}
-            res = await self.http.send_api_call(
+            params = {}
+            if order_id:
+                params['id'] = [order_id]
+            _res = await self.http.send_api_call(
                 f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}",
                 method="POST",
                 signed=True,
                 **params
-            ) or await self.http.send_api_call(
-                f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}/hist",
-                method="POST",
-                signed=True,
-                **params
             )
+            res = bfx.find_order(_res, order_id, origin_client_order_id)
+            if not res:
+                if not order_id:
+                    params['start'] = int(time.time() * 1000) - 600000  # 10 mins
+                _res = await self.http.send_api_call(
+                    f"v2/auth/r/orders/{self.symbol_to_bfx(symbol)}/hist",
+                    method="POST",
+                    signed=True,
+                    **params
+                )
+                res = bfx.find_order(_res, order_id, origin_client_order_id)
             if res:
-                b_res = bfx.order(res[0], response_type=response_type)
+                b_res = bfx.order(res, response_type=response_type)
                 self.active_order(b_res['orderId'], b_res['origQty'], b_res['executedQty'])
         elif self.exchange == 'huobi':
             if origin_client_order_id:
@@ -1185,7 +1195,7 @@ class Client:
             orders_id = [order.get('orderId') for order in orders]
             params = {'id': orders_id}
             res = await self.user_wss_session.handle_request(trade_id, "oc_multi", _params=params)
-            if res is None or (res and isinstance(res, list) and res[6] == 'ERROR'):
+            if not res or (res and isinstance(res, list) and res[6] != 'SUCCESS'):
                 logger.debug(f"cancel_all_orders.bitfinex {orders_id}: res1: {res}")
                 res = await self.http.send_api_call(
                         "v2/auth/w/order/cancel/multi",
