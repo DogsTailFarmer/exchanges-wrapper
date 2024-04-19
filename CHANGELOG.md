@@ -1,3 +1,7 @@
+## 2.1.11 2024-04-19
+### Update
+* Some minor improvements
+
 ## 2.1.10 2024-04-16
 ### Update
 * `Bitfinex`: `client.fetch_order()`: searching on `origin_client_order_id` also

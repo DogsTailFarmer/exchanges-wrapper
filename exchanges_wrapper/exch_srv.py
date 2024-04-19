@@ -233,10 +233,14 @@ class Martin(mr.MartinBase):
         if rate_limit:
             await self.rate_limit_control(open_client)
         try:
-            res = await getattr(client, client_method_name)(**kwargs)
-        except (asyncio.CancelledError, asyncio.exceptions.CancelledError):
+            res = await asyncio.wait_for(getattr(client, client_method_name)(**kwargs), timeout=HEARTBEAT * 60)
+        except asyncio.exceptions.CancelledError:
             msg = f"{msg_header} Server Shutdown"
             raise GRPCError(status=Status.UNAVAILABLE, message=msg)
+        except asyncio.exceptions.TimeoutError:
+            msg = f"{msg_header} timeout error"
+            logger.warning(msg)
+            raise GRPCError(status=Status.OUT_OF_RANGE, message=msg)
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
             msg = f"{msg_header} RateLimitReached: {ex}"
