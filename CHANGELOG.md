@@ -1,6 +1,7 @@
 ## 2.1.11 2024-04-19
 ### Update
 * Some minor improvements
+* Dependency: Up requirements for crypto-ws-api==2.0.10
 
 ## 2.1.10 2024-04-16
 ### Update
