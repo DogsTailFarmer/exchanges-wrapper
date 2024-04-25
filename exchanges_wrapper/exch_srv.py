@@ -240,7 +240,7 @@ class Martin(mr.MartinBase):
         except asyncio.exceptions.TimeoutError:
             msg = f"{msg_header} timeout error"
             logger.warning(msg)
-            raise GRPCError(status=Status.OUT_OF_RANGE, message=msg)
+            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=msg)
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
             msg = f"{msg_header} RateLimitReached: {ex}"

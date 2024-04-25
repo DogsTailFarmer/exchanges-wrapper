@@ -1,3 +1,7 @@
+## 2.1.11.post1 2024-04-xx
+### Update
+* `send_request`: controlling rate_limit by changing exception handling
+
 ## 2.1.11 2024-04-19
 ### Update
 * Some minor improvements
