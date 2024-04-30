@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 import grpclib.exceptions
 
-from exchanges_wrapper import __version__ as ver_ew
-from crypto_ws_api import __version__ as ver_cw
+from exchanges_wrapper import __version__ as VER_EW
+from crypto_ws_api import __version__ as VER_CW
 import time
 import weakref
 import gc
@@ -148,10 +149,10 @@ class Martin(mr.MartinBase):
     rate_limit_reached_time = None
     rate_limiter = None
 
-    async def rate_limit_control(self, client, _call_from='default'):
-        if client.client.exchange == 'bitfinex':
-            rate_limit_interval = REST_RATE_LIMIT_INTERVAL.get(client.client.exchange, {}).get(_call_from, 0)
-            ts_diff = time.time() - client.ts_rlc
+    async def rate_limit_control(self, exchange, ts_rlc, _call_from='default'):
+        if exchange == 'bitfinex':
+            rate_limit_interval = REST_RATE_LIMIT_INTERVAL.get(exchange, {}).get(_call_from, 0)
+            ts_diff = time.time() - ts_rlc
             if ts_diff < rate_limit_interval:
                 sleep_duration = rate_limit_interval - ts_diff
                 await asyncio.sleep(sleep_duration)
@@ -201,7 +202,7 @@ class Martin(mr.MartinBase):
         Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
         return mr.OpenClientConnectionId(
             client_id=client_id,
-            srv_version=f"{ver_cw}:{ver_ew}",
+            srv_version=f"{VER_CW}:{VER_EW}",
             exchange=open_client.client.exchange,
             real_market=open_client.real_market
         )
@@ -231,7 +232,10 @@ class Martin(mr.MartinBase):
         if hasattr(request, 'client_order_id'):
             msg_header += f"({request.client_order_id}):"
         if rate_limit:
-            await self.rate_limit_control(open_client)
+            await self.rate_limit_control(client.exchange, open_client.ts_rlc)
+        if client.exchange == 'bitfinex':
+            await client.request_event.wait()
+            client.request_event.clear()
         try:
             res = await asyncio.wait_for(getattr(client, client_method_name)(**kwargs), timeout=HEARTBEAT * 60)
         except asyncio.exceptions.CancelledError:
@@ -263,6 +267,8 @@ class Martin(mr.MartinBase):
             if rate_limit:
                 open_client.ts_rlc = time.time()
             return res, client, msg_header
+        finally:
+            client.request_event.set()
 
     async def fetch_server_time(self, request: mr.OpenClientConnectionId) -> mr.FetchServerTimeResponse:
         res, _, _ = await self.send_request('fetch_server_time', request, rate_limit=True)
@@ -432,36 +438,39 @@ class Martin(mr.MartinBase):
         return response
 
     async def fetch_order_book(self, request: mr.MarketRequest) -> mr.FetchOrderBookResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = mr.FetchOrderBookResponse()
-        await self.rate_limit_control(open_client)
-        limit = 1 if client.exchange in ('bitfinex', 'okx') else 5
-        res = await client.fetch_order_book(symbol=request.symbol, limit=limit)
-        open_client.ts_rlc = time.time()
+        res, _, _ = await self.send_request(
+            'fetch_order_book',
+            request,
+            rate_limit=True,
+            symbol=request.symbol
+        )
+
         res['bids'] = [json.dumps(v) for v in res.get('bids', [])]
         res['asks'] = [json.dumps(v) for v in res.get('asks', [])]
         return response.from_pydict(res)
 
     async def fetch_symbol_price_ticker(self, request: mr.MarketRequest) -> mr.FetchSymbolPriceTickerResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = mr.FetchSymbolPriceTickerResponse()
-        await self.rate_limit_control(open_client)
-        res = await client.fetch_symbol_price_ticker(symbol=request.symbol)
-        open_client.ts_rlc = time.time()
+        res, _, _ = await self.send_request(
+            'fetch_symbol_price_ticker',
+            request,
+            rate_limit=True,
+            symbol=request.symbol
+        )
         return response.from_pydict(res)
 
     async def fetch_ticker_price_change_statistics(
             self,
             request: mr.MarketRequest
     ) -> mr.FetchTickerPriceChangeStatisticsResponse:
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
         response = mr.FetchTickerPriceChangeStatisticsResponse()
-        await self.rate_limit_control(open_client)
-        res = await client.fetch_ticker_price_change_statistics(symbol=request.symbol)
-        open_client.ts_rlc = time.time()
+        res, _, _ = await self.send_request(
+            'fetch_ticker_price_change_statistics',
+            request,
+            rate_limit=True,
+            symbol=request.symbol
+        )
         return response.from_pydict(res)
 
     async def fetch_klines(self, request: mr.FetchKlinesRequest) -> mr.JsonResponse:
@@ -667,15 +676,13 @@ class Martin(mr.MartinBase):
                 _get_event_from_queue = False
 
                 if client.exchange in ('bitfinex', 'huobi', 'bybit'):
-                    await self.rate_limit_control(open_client)
-                    try:
-                        balances = await client.fetch_ledgers(request.symbol)
-                    except Exception as _ex:
-                        logger.warning(f"OnBalanceUpdate: for {open_client.name}:{request.symbol}: {_ex}")
-                        logger.debug(f"OnBalanceUpdate: {traceback.format_exc()}")
-                    else:
-                        open_client.ts_rlc = time.time()
-                        [_events.append(client.events.wrap_event(balance)) for balance in balances]
+                    balances, _, _ = await self.send_request(
+                        'fetch_ledgers',
+                        request,
+                        rate_limit=True,
+                        symbol=request.symbol
+                    )
+                    [_events.append(client.events.wrap_event(balance)) for balance in balances]
 
             for _event in _events:
                 if _event.asset in request.symbol:
@@ -851,7 +858,7 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
     server = Server([Martin()])
     with graceful_exit([server]):
         await server.start(host, port)
-        logger.info(f"Starting server v:{ver_cw}:{ver_ew} on {host}:{port}")
+        logger.info(f"Starting server v:{VER_CW}:{VER_EW} on {host}:{port}")
         await server.wait_closed()
 
         for oc in OpenClient.open_clients:

@@ -12,7 +12,7 @@ COPY requirements.txt requirements.txt
 
 RUN pip3 install -r requirements.txt
 
-COPY ./exchanges_wrapper/* /home/appuser/.local/lib/python3.10/site-packages/exchanges_wrapper/
+COPY ./exchanges_wrapper /home/appuser/.local/lib/python3.10/site-packages/exchanges_wrapper/
 
 WORKDIR "/home/appuser/.local/lib/python3.10/site-packages"
 

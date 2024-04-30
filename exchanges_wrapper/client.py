@@ -109,6 +109,8 @@ class Client:
         self.ledgers_id = []
         self.ts_start = {}
         self.tasks = set()
+        self.request_event = asyncio.Event()
+        self.request_event.set()
 
     def tasks_manage(self, coro):
         _t = asyncio.create_task(coro)
@@ -377,24 +379,10 @@ class Client:
     # MARKET DATA ENDPOINTS
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#order-book
-    async def fetch_order_book(self, symbol, precision='P0', limit=100):
+    async def fetch_order_book(self, symbol, precision='P0'):
         self.assert_symbol(symbol)
-        valid_limits = []
-        if self.exchange == 'binance':
-            valid_limits = [5, 10, 20, 50, 100, 500, 1000, 5000]
-        elif self.exchange == 'bitfinex':
-            valid_limits = [1, 25, 100]
-        elif self.exchange == 'huobi':
-            valid_limits = [5, 10, 20]
-        elif self.exchange == 'okx':
-            valid_limits = [1, 5, 10, 20, 50, 100, 400]
-        elif self.exchange == 'bybit':
-            valid_limits = range(1, 51)
+        limit = 1 if self.exchange in ('bitfinex', 'okx', 'bybit') else 5
         binance_res = {}
-        if limit not in valid_limits:
-            raise ValueError(
-                f"{limit} is not a valid limit. Valid limits: {valid_limits}"
-            )
         if self.exchange == 'binance':
             binance_res = await self.http.send_api_call(
                 "/api/v3/depth",

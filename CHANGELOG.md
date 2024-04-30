@@ -1,6 +1,11 @@
-## 2.1.11.post1 2024-04-xx
+## 2.1.12 2024-04-30
+### Fix
+* `Docker`: [#49 ImportError: cannot import name 'version' from 'exchanges_wrapper'](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/49#issue-2272432093)
+
 ### Update
 * `send_request`: controlling rate_limit by changing exception handling
+* `Bitfinex`: sync `nonce` for connections group
+* Dependency: Up requirements for crypto-ws-api==2.0.11
 
 ## 2.1.11 2024-04-19
 ### Update

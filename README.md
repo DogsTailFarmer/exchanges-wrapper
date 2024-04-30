@@ -83,6 +83,11 @@ pip install -U exchanges-wrapper
 #### Start server
 * Run in terminal window
   ```
+  exchanges-wrapper-init
+  ``` 
+and
+  
+  ```
   exchanges-wrapper-srv
   ``` 
   
