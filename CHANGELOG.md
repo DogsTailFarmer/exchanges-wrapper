@@ -1,3 +1,10 @@
+## 2.1.13 2024-06-26
+### Fix
+* `HTX`: WSS missed account change event
+
+### Update
+* Dependency
+
 ## 2.1.12 2024-04-30
 ### Fix
 * `Docker`: [#49 ImportError: cannot import name 'version' from 'exchanges_wrapper'](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/49#issue-2272432093)
@@ -31,14 +38,14 @@
 
 ## 2.1.6 2024-03-29
 ### Fix
-* Bybit: `on_balance_update`: missed event during transfer from API
+* `Bybit`: `on_balance_update`: missed event during transfer from API
 
 ### Update
 * Dependency: Up requirements for crypto-ws-api==2.0.8
 
 ## 2.1.5 2024-03-25
 ### Fix
-* Bybit: `on_balance_update`: duplication during transfer from web-interface
+* `Bybit`: `on_balance_update`: duplication during transfer from web-interface
 * Some exception handling
 
 ### Update

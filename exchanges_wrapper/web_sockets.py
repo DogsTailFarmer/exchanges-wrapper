@@ -408,23 +408,22 @@ class HbpPrivateEventsDataStream(EventsDataStream):
 
     async def _handle_event(self, msg_data, *args):
         content = None
+        _ch = msg_data['ch']
         _data = msg_data.get('data')
-        if _data.get('symbol') == self.symbol.lower():
-            if msg_data['ch'] == 'accounts.update#2':
-                content = hbp.on_funds_update(_data)
-            elif (msg_data['ch'] == f"orders#{self.symbol.lower()}"
-                  and _data['eventType'] in ('creation', 'cancellation')):
-                order_id = _data['orderId']
-                self.client.active_order(order_id, quantity=_data['orderSize'])
-                if _data.get('eventType') == 'cancellation':
-                    self.client.active_orders[order_id]['cancelled'] = True
-            elif msg_data['ch'] == f"trade.clearing#{self.symbol.lower()}#0":
-                order_id = _data['orderId']
-                self.client.active_order(order_id, last_event=_data)
-                if _data['tradeId'] not in self.client.active_orders[order_id]["eventIds"]:
-                    self.client.active_orders[order_id]["eventIds"].append(_data['tradeId'])
-                    self.client.active_orders[order_id]['executedQty'] += Decimal(_data['tradeVolume'])
-                    content = hbp.on_order_update(self.client.active_orders[order_id])
+        if _ch == 'accounts.update#2' and _data.get('currency') in self.symbol.lower():
+            content = hbp.on_funds_update(_data)
+        elif _ch == f"orders#{self.symbol.lower()}" and _data['eventType'] in ('creation', 'cancellation'):
+            order_id = _data['orderId']
+            self.client.active_order(order_id, quantity=_data['orderSize'])
+            if _data.get('eventType') == 'cancellation':
+                self.client.active_orders[order_id]['cancelled'] = True
+        elif _ch == f"trade.clearing#{self.symbol.lower()}#0":
+            order_id = _data['orderId']
+            self.client.active_order(order_id, last_event=_data)
+            if _data['tradeId'] not in self.client.active_orders[order_id]["eventIds"]:
+                self.client.active_orders[order_id]["eventIds"].append(_data['tradeId'])
+                self.client.active_orders[order_id]['executedQty'] += Decimal(_data['tradeVolume'])
+                content = hbp.on_order_update(self.client.active_orders[order_id])
 
         if content:
             logger.debug(f"HTXPrivateEvents.content: {content}")
