@@ -22,7 +22,7 @@ dependencies = [
     "pyotp~=2.9.0",
     "simplejson==3.19.2",
     "aiohttp==3.9.5",
-    "Pympler~=1.0.1",
+    "Pympler~=1.1",
     "websockets~=12.0",
     "expiringdict~=1.2.2",
     "ujson~=5.10.0",
