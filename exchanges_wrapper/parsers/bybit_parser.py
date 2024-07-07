@@ -452,7 +452,6 @@ def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, uid=None) 
                         }
                     }
                 )
-
     elif mode == 'universal':
         for i in data_in:
             if i['coin'] in symbol and \
@@ -469,7 +468,6 @@ def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, uid=None) 
                         }
                     }
                 )
-
     elif mode == 'log':
         for i in data_in:
             if i['currency'] in symbol:
@@ -484,7 +482,6 @@ def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, uid=None) 
                         }
                     }
                 )
-
     return data_out
 
 

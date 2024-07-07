@@ -493,24 +493,24 @@ class Client:
                 uid=self.account_uid
             )
 
-            params.pop('status')
-            params['accountType'] = 'UNIFIED'
-            params['category'] = 'spot'
-            params['type'] = 'TRANSFER_IN'
+            if not _res:
+                # Get Transaction Log
+                params.pop('status')
+                params['accountType'] = 'UNIFIED'
+                params['category'] = 'spot'
+                params['type'] = 'TRANSFER_IN'
 
-            # Get Transaction Log
-            res, ts = await self.http.send_api_call(
-                "/v5/account/transaction-log",
-                signed=True,
-                **params
-            )
-
-            _res += bbt.on_balance_update(
-                res['list'],
-                ts,
-                symbol,
-                'log'
-            )
+                res, ts = await self.http.send_api_call(
+                    "/v5/account/transaction-log",
+                    signed=True,
+                    **params
+                )
+                _res += bbt.on_balance_update(
+                    res['list'],
+                    ts,
+                    symbol,
+                    'log'
+                )
 
             for i in _res:
                 _id = next(iter(i))

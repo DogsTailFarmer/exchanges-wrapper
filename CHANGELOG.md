@@ -1,3 +1,7 @@
+## 2.1.14 2024-07-07
+### Fix
+* `Bybit`: `fetch_ledgers()` doubling of incoming transfers to a subaccount
+
 ## 2.1.13 2024-06-26
 ### Fix
 * `HTX`: WSS missed account change event
