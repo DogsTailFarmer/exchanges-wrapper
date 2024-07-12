@@ -15,7 +15,7 @@ RATE_LIMITER = 5
 FILE_CONFIG = 'ms_cfg.toml'
 config = toml.load(FILE_CONFIG)
 EXCHANGE = config.get('exchange')
-SYMBOL = 'BTCUSDT'
+SYMBOL = 'BNBUSDT'
 
 
 async def main(_exchange, _symbol):
@@ -63,8 +63,10 @@ async def main(_exchange, _symbol):
     # Subscribe to WSS
     # First you want to create all WSS task
     # Market stream
+    # noinspection PyAsyncCall
     asyncio.create_task(on_ticker_update(stub, client_id, _symbol, trade_id))
     # User Stream
+    # noinspection PyAsyncCall
     asyncio.create_task(on_order_update(stub, client_id, _symbol, trade_id))
     # Other market and user methods are used similarly: OnKlinesUpdate, OnFundsUpdate, OnOrderBookUpdate
     # Start WSS
@@ -334,6 +336,37 @@ async def transfer2master(_stub, symbol: str, amount: str):
             print(f"Sent {amount} {symbol} to main account")
         else:
             print(f"Not sent {amount} {symbol} to main account\n,{res.result}")
+
+
+async def transfer2sub(_stub, email: str, symbol: str, amount: str):
+    """
+    Send request to transfer asset from subaccount to subaccount
+    Binance sub to sub only
+    :param _stub:
+    :param email:
+    :param symbol:
+    :param amount:
+    :return:
+    """
+    try:
+        res = await _stub.transfer_to_sub(
+            mr.MarketRequest,
+            symbol=symbol,
+            amount=amount,
+            data=email
+        )
+    except asyncio.CancelledError:
+        pass  # Task cancellation should not be logged as an error
+    except GRPCError as ex:
+        status_code = ex.status
+        print(f"Exception transfer {symbol} to sub account: {status_code.name}, {ex.message}")
+    except Exception as _ex:
+        print(f"Exception transfer {symbol} to sub account: {_ex}")
+    else:
+        if res.success:
+            print(f"Sent {amount} {symbol} to sub account {email}")
+        else:
+            print(f"Not sent {amount} {symbol} to sub account {email}\n,{res.result}")
 
 
 # Server exception handling example for methods where it's realized

@@ -38,6 +38,7 @@ service Martin {
   rpc StartStream (StartStreamRequest) returns (SimpleResponse) {}
   rpc StopStream (MarketRequest) returns (SimpleResponse) {}
   rpc TransferToMaster(MarketRequest) returns (SimpleResponse) {}
+  rpc TransferToSub(MarketRequest) returns (SimpleResponse) {}
 }
 
 message JSONResponse {
@@ -368,6 +369,7 @@ message MarketRequest {
   string trade_id = 2;
   string symbol = 3;
   string amount = 4;
+  string data = 5;
 }
 
 message StartStreamRequest {

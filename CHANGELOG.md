@@ -1,3 +1,7 @@
+## 2.1.15 2024-07-12
+### Added for new features
+* `Binance`: add method `transfer_to_sub()`. See use example in `example/exch_client.py`
+
 ## 2.1.14 2024-07-07
 ### Fix
 * `Bybit`: `fetch_ledgers()` doubling of incoming transfers to a subaccount

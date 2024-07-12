@@ -767,6 +767,24 @@ class Martin(mr.MartinBase):
         response.from_pydict(res)
         return response
 
+    async def transfer_to_sub(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+        response = mr.SimpleResponse()
+        response.success = False
+
+        res, _, _ = await self.send_request(
+            'transfer_to_sub',
+            request,
+            rate_limit=True,
+            email=request.data,
+            symbol=request.symbol,
+            quantity=request.amount
+        )
+
+        if res and res.get("txnId"):
+            response.success = True
+        response.result = json.dumps(res)
+        return response
+
     async def transfer_to_master(self, request: mr.MarketRequest) -> mr.SimpleResponse:
         response = mr.SimpleResponse()
         response.success = False

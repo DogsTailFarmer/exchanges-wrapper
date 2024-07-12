@@ -407,6 +407,7 @@ class MarketRequest(betterproto.Message):
     trade_id: str = betterproto.string_field(2)
     symbol: str = betterproto.string_field(3)
     amount: str = betterproto.string_field(4)
+    data: str = betterproto.string_field(5)
 
 
 @dataclass(eq=False, repr=False)
@@ -916,6 +917,23 @@ class MartinStub(betterproto.ServiceStub):
             metadata=metadata,
         )
 
+    async def transfer_to_sub(
+        self,
+        market_request: "MarketRequest",
+        *,
+        timeout: Optional[float] = None,
+        deadline: Optional["Deadline"] = None,
+        metadata: Optional["MetadataLike"] = None
+    ) -> "SimpleResponse":
+        return await self._unary_unary(
+            "/martin.Martin/TransferToSub",
+            market_request,
+            SimpleResponse,
+            timeout=timeout,
+            deadline=deadline,
+            metadata=metadata,
+        )
+
 
 class MartinBase(ServiceBase):
 
@@ -1052,6 +1070,11 @@ class MartinBase(ServiceBase):
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def transfer_to_master(
+        self, market_request: "MarketRequest"
+    ) -> "SimpleResponse":
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
+    async def transfer_to_sub(
         self, market_request: "MarketRequest"
     ) -> "SimpleResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
@@ -1270,6 +1293,13 @@ class MartinBase(ServiceBase):
         response = await self.transfer_to_master(request)
         await stream.send_message(response)
 
+    async def __rpc_transfer_to_sub(
+        self, stream: "grpclib.server.Stream[MarketRequest, SimpleResponse]"
+    ) -> None:
+        request = await stream.recv_message()
+        response = await self.transfer_to_sub(request)
+        await stream.send_message(response)
+
     def __mapping__(self) -> Dict[str, grpclib.const.Handler]:
         return {
             "/martin.Martin/CancelAllOrders": grpclib.const.Handler(
@@ -1430,6 +1460,12 @@ class MartinBase(ServiceBase):
             ),
             "/martin.Martin/TransferToMaster": grpclib.const.Handler(
                 self.__rpc_transfer_to_master,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                MarketRequest,
+                SimpleResponse,
+            ),
+            "/martin.Martin/TransferToSub": grpclib.const.Handler(
+                self.__rpc_transfer_to_sub,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 MarketRequest,
                 SimpleResponse,

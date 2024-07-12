@@ -1,5 +1,5 @@
 # Example parameters for exchanges_wrapper/exch_client.py
-# Accounts name wold be identically accounts.name from exch_srv_cfg.toml
+# Accounts name would be identically accounts.name from exch_srv_cfg.toml
 exchange = "Demo - Binance"
 # exchange = "Demo - Bitfinex"
 # exchange = "Demo - OKX"

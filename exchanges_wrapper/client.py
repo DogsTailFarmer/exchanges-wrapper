@@ -703,7 +703,8 @@ class Client:
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#symbol-price-ticker
     async def fetch_symbol_price_ticker(self, symbol=None):
         if symbol:
-            self.assert_symbol_exists(symbol)
+            if not (self.exchange == 'binance' and symbol == 'BNBUSDT'):
+                self.assert_symbol_exists(symbol)
             binance_res = {}
         elif self.exchange in ('bitfinex', 'huobi'):
             raise ValueError('For fetch_symbol_price_ticker() symbol parameter required')
@@ -1603,25 +1604,34 @@ class Client:
             binance_res = bbt.funding_wallet(res["balance"])
         return binance_res
 
-    # https://binance-docs.github.io/apidocs/spot/en/#transfer-to-master-for-sub-account
-    async def transfer_to_master(self, symbol, quantity, receive_window=None):
-        quantity = any2str(Decimal(quantity).quantize(Decimal('0.01234567'), rounding=ROUND_HALF_DOWN))
-
-        binance_res = {}
+    # https://developers.binance.com/docs/sub_account/asset-management/Transfer-to-Sub-account-of-Same-Master
+    async def transfer_to_sub(self, email, symbol, quantity, receive_window=None):
         if self.exchange == 'binance':
-            params = {"asset": symbol, "amount": quantity}
+            quantity = any2str(Decimal(quantity).quantize(Decimal('0.01234567'), rounding=ROUND_HALF_DOWN))
+            params = {"toEmail": email, "asset": symbol, "amount": quantity}
             if receive_window:
                 params["recvWindow"] = receive_window
+            return await self.http.send_api_call(
+                "/sapi/v1/sub-account/transfer/subToSub",
+                "POST",
+                signed=True,
+                params=params
+            )
+        else:
+            raise ValueError(f"Can't implemented for {self.exchange}")
+
+    # https://binance-docs.github.io/apidocs/spot/en/#transfer-to-master-for-sub-account
+    async def transfer_to_master(self, symbol, quantity, receive_window=None):
+        _quantity = any2str(Decimal(quantity).quantize(Decimal('0.01234567'), rounding=ROUND_HALF_DOWN))
+        binance_res = {}
+        if self.exchange == 'binance':
             if self.master_email:
-                logger.info(f"Collect {quantity}{symbol} to {self.master_email} sub-account")
-                params["toEmail"] = self.master_email
-                binance_res = await self.http.send_api_call(
-                    "/sapi/v1/sub-account/transfer/subToSub",
-                    "POST",
-                    signed=True,
-                    params=params
-                )
+                logger.info(f"Collect {_quantity}{symbol} to {self.master_email} sub-account")
+                binance_res = await self.transfer_to_sub(self.master_email, symbol, quantity, receive_window)
             else:
+                params = {"asset": symbol, "amount": _quantity}
+                if receive_window:
+                    params["recvWindow"] = receive_window
                 binance_res = await self.http.send_api_call(
                     "/sapi/v1/sub-account/transfer/subToMaster",
                     "POST",
@@ -1636,7 +1646,7 @@ class Client:
                 "from": "exchange",
                 "to": "exchange",
                 "currency": symbol,
-                "amount": quantity,
+                "amount": _quantity,
                 "email_dst": self.master_email,
                 "tfaToken": {"method": "otp", "token": totp.now()}
             }
@@ -1658,7 +1668,7 @@ class Client:
                 'to-account-type': "spot",
                 'to-account': self.main_account_id,
                 'currency': symbol.lower(),
-                'amount': quantity
+                'amount': _quantity
             }
             res = await self.http.send_api_call(
                 "v1/account/transfer",
@@ -1670,7 +1680,7 @@ class Client:
         elif self.exchange == 'okx':
             params = {
                 "ccy": symbol,
-                "amt": quantity,
+                "amt": _quantity,
                 "from": '18',
                 "to": '18',
                 "type": '3'
@@ -1692,7 +1702,7 @@ class Client:
             params = {
                 'transferId': str(uuid.uuid4()),
                 'coin': symbol,
-                'amount':  str(math.floor(float(quantity) * 10 ** n) / 10 ** n),
+                'amount':  str(math.floor(float(_quantity) * 10 ** n) / 10 ** n),
                 'fromMemberId': self.account_uid,
                 'toMemberId': self.main_account_uid,
                 'fromAccountType': 'UNIFIED',
