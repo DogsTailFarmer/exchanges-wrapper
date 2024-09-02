@@ -354,13 +354,7 @@ class Client:
             server_time = await self.fetch_server_time()
             params = {'symbols': symbol.lower()}
             trading_symbol = await self.http.send_api_call("v1/settings/common/market-symbols", **params)
-            if self.account_id is None:
-                accounts = await self.http.send_api_call("v1/account/accounts", signed=True)
-                for account in accounts:
-                    if account.get('type') == 'spot':
-                        self.account_id = account.get('id')
-                        break
-                self.account_uid = await self.http.send_api_call("v2/user/uid", signed=True)
+            await self.set_htx_ids()
             binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbol[0])
         elif self.exchange == 'okx':
             params = {'instType': 'SPOT'}
@@ -375,6 +369,15 @@ class Client:
             binance_res = bbt.exchange_info(server_time.get('serverTime'), instruments.get('list'))
         # logger.info(f"fetch_exchange_info: binance_res: {binance_res}")
         return binance_res
+
+    async def set_htx_ids(self):
+        if self.account_id is None:
+            accounts = await self.http.send_api_call("v1/account/accounts", signed=True)
+            for account in accounts:
+                if account.get('type') == 'spot':
+                    self.account_id = account.get('id')
+                    break
+            self.account_uid = await self.http.send_api_call("v2/user/uid", signed=True)
 
     # MARKET DATA ENDPOINTS
 

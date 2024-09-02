@@ -16,7 +16,7 @@ def fetch_server_time(res: []) -> {}:
 def exchange_info(server_time: int, trading_symbol: [], tickers: [], symbol_t) -> {}:
     symbols = []
     symbols_price = {
-        pair.get('instId').replace('-', ''): Decimal(pair.get('last'))
+        pair.get('instId').replace('-', ''): Decimal(pair.get('last', '0'))
         for pair in tickers
     }
     for market in trading_symbol:

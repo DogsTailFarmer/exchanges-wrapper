@@ -173,7 +173,7 @@ class Martin(mr.MartinBase):
                     # For HuobiPro get master account uid and account_id
                     main_account = get_account(open_client.client.master_name)
                     main_client = Client(*main_account)
-                    await main_client.fetch_exchange_info(request.symbol)
+                    await asyncio.wait_for(main_client.set_htx_ids(), timeout=HEARTBEAT * 60)
                     if main_client.account_uid and main_client.account_id:
                         open_client.client.main_account_uid = main_client.account_uid
                         open_client.client.main_account_id = main_client.account_id

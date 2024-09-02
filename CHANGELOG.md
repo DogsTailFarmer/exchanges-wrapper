@@ -1,3 +1,7 @@
+## 2.1.16 2024-09-xx
+### Fix
+* OKX: get_exchange_info: <class 'decimal.ConversionSyntax'> [#82](https://github.com/DogsTailFarmer/martin-binance/issues/82#issue-2467548368)
+
 ## 2.1.15 2024-07-12
 ### Added for new features
 * `Binance`: add method `transfer_to_sub()`. See use example in `example/exch_client.py`
