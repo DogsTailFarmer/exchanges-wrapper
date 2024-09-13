@@ -17,10 +17,7 @@ import exchanges_wrapper.parsers.bybit_parser as bbt
 from crypto_ws_api.ws_session import generate_signature
 from exchanges_wrapper import LOG_PATH
 
-logger = logging.getLogger('exch_srv_logger')
-
-logger_ws = logging.getLogger(__name__)
-logger_ws.level = logging.INFO
+logger = logging.getLogger(__name__)
 formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
 #
 fh = logging.handlers.RotatingFileHandler(Path(LOG_PATH, 'websockets.log'), maxBytes=1000000, backupCount=10)
@@ -31,8 +28,9 @@ sh = logging.StreamHandler()
 sh.setFormatter(formatter)
 sh.setLevel(logging.INFO)
 
-logger_ws.addHandler(fh)
-logger_ws.addHandler(sh)
+logger.addHandler(fh)
+logger.addHandler(sh)
+logger.propagate = False
 
 sys.tracebacklimit = 0
 
@@ -50,12 +48,13 @@ class EventsDataStream:
         self._price = None
         self.tasks = set()
         self.wss_started = False
+        self.ping = 0
 
     async def start(self):
         ping_interval = None if self.exchange == 'huobi' else 20
         async for self.websocket in websockets.connect(
                 self.endpoint,
-                logger=logger_ws,
+                logger=logger,
                 ping_interval=ping_interval
         ):
             try:
@@ -66,7 +65,7 @@ class EventsDataStream:
                     logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")
                     break
                 else:
-                    logger.warning(f"Restart WSS for {self.exchange}")
+                    logger.warning(f"Restart WSS for {self.exchange}: {ex}")
                     continue
             except Exception as ex:
                 self.tasks_cancel()
@@ -187,9 +186,11 @@ class EventsDataStream:
                 logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'huobi':
             if ping := msg_data.get('ping'):
+                self.ping = 0
                 await self.websocket.send(json.dumps({"pong": ping}))
                 await asyncio.sleep(0)
             elif msg_data.get('action') == 'ping':
+                self.ping = 0
                 pong = {
                     "action": "pong",
                     "data": {
@@ -228,6 +229,17 @@ class EventsDataStream:
         while True:
             await asyncio.sleep(interval)
             await self.websocket.send(json.dumps({"req_id": req_id, "op": "ping"}))
+
+    async def htx_keepalive(self, interval=60):
+        await asyncio.sleep(interval * 10)
+        while True:
+            await asyncio.sleep(interval)
+            if self.ping:
+                break
+            else:
+                self.ping = 1
+        logger.warning("From HTX server PING timeout exceeded")
+        await self.websocket.close()
 
 
 class MarketEventsDataStream(EventsDataStream):
@@ -299,6 +311,8 @@ class MarketEventsDataStream(EventsDataStream):
                     request = {'sub': f"market.{symbol}.kline.{hbp.interval(tf)}"}
                 elif ch_type == 'depth5':
                     request = {'sub': f"market.{symbol}.depth.step0"}
+
+                self.tasks_manage(self.htx_keepalive(interval=30))
 
         await self.ws_listener(request, symbol, ch_type)
 
@@ -404,6 +418,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "action": "sub",
             "ch": f"trade.clearing#{self.symbol.lower()}#0"
         }
+        self.tasks_manage(self.htx_keepalive())
         await self.ws_listener(request, symbol=self.symbol)
 
     async def _handle_event(self, msg_data, *args):

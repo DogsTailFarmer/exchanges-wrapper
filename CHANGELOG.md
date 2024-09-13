@@ -1,6 +1,10 @@
-## 2.1.16 2024-09-xx
+## 2.1.16 2024-09-13
 ### Fix
-* OKX: get_exchange_info: <class 'decimal.ConversionSyntax'> [#82](https://github.com/DogsTailFarmer/martin-binance/issues/82#issue-2467548368)
+* `OKX`: get_exchange_info: <class 'decimal.ConversionSyntax'> [#82](https://github.com/DogsTailFarmer/martin-binance/issues/82#issue-2467548368)
+
+### Update
+* `HTX`: monitoring PING interval from server for each WSS channel and restart if timing out
+* Dependency
 
 ## 2.1.15 2024-07-12
 ### Added for new features
