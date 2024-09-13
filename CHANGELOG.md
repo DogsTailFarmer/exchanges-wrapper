@@ -1,3 +1,7 @@
+## 2.1.18 2024-09-13
+### Fix
+* Dependency conflict
+
 ## 2.1.17 2024-09-13
 ### Update
 * Dependency: Up requirements for crypto-ws-api==2.0.13
