@@ -20,7 +20,7 @@ dependencies = [
     "crypto-ws-api==2.0.12",
     "grpcio==1.62.0",
     "pyotp~=2.9.0",
-    "simplejson==3.19.2",
+    "simplejson==3.19.3",
     "aiohttp==3.9.5",
     "websockets~=12.0",
     "expiringdict~=1.2.2",
