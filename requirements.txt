@@ -1,10 +1,10 @@
-crypto-ws-api==2.0.13
+crypto-ws-api==2.0.14
 pyotp==2.9.0
 simplejson==3.19.3
-toml
+toml~=0.10.2
 aiohttp~=3.10.5
-websockets
+websockets==13.0.1
 expiringdict~=1.2.2
-ujson
+ujson~=5.10.0
 betterproto==2.0.0b7
 grpclib~=0.4.7

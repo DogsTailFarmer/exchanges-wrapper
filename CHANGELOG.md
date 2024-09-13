@@ -1,3 +1,7 @@
+## 2.1.19 2024-09-13
+### Fix
+* `pyproject.toml`
+
 ## 2.1.18 2024-09-13
 ### Fix
 * Dependency conflict

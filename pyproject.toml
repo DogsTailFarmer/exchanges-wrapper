@@ -17,15 +17,15 @@ dynamic = ["version", "description"]
 requires-python = ">=3.9"
 
 dependencies = [
-    "crypto-ws-api==2.0.12",
-    "grpcio==1.62.0",
-    "pyotp~=2.9.0",
-    "simplejson==3.19.2",
-    "aiohttp==3.9.5",
-    "websockets~=12.0",
+    "crypto-ws-api==2.0.14",
+    "pyotp==2.9.0",
+    "simplejson==3.19.3",
+    "toml~=0.10.2",
+    "aiohttp~=3.10.5",
+    "websockets==13.0.1",
     "expiringdict~=1.2.2",
     "ujson~=5.10.0",
-    "betterproto==2.0.0b6",
+    "betterproto==2.0.0b7",
     "grpclib~=0.4.7"
 ]
 
