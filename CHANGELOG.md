@@ -1,3 +1,7 @@
+## 2.1.17 2024-09-13
+### Update
+* Dependency: Up requirements for crypto-ws-api==2.0.13
+
 ## 2.1.16 2024-09-13
 ### Fix
 * `OKX`: get_exchange_info: <class 'decimal.ConversionSyntax'> [#82](https://github.com/DogsTailFarmer/martin-binance/issues/82#issue-2467548368)
