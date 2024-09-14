@@ -1,3 +1,7 @@
+## 2.1.20 2024-09-14
+### Fix
+* Downgraded `betterproto` to `2.0.0b6`
+
 ## 2.1.19 2024-09-13
 ### Fix
 * `pyproject.toml`

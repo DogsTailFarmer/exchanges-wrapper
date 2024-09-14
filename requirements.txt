@@ -6,5 +6,5 @@ aiohttp~=3.10.5
 websockets==13.0.1
 expiringdict~=1.2.2
 ujson~=5.10.0
-betterproto==2.0.0b7
+betterproto==2.0.0b6
 grpclib~=0.4.7
