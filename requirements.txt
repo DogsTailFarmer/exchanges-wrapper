@@ -2,7 +2,7 @@ crypto-ws-api==2.0.14
 pyotp==2.9.0
 simplejson==3.19.3
 toml~=0.10.2
-aiohttp~=3.10.5
+aiohttp~=3.10.10
 websockets==13.0.1
 expiringdict~=1.2.2
 ujson~=5.10.0
