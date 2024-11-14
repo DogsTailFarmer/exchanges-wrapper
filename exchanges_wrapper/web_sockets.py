@@ -8,7 +8,8 @@ from decimal import Decimal
 import gzip
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlparse
-import websockets
+from websockets.asyncio.client import connect
+from websockets import ConnectionClosed
 
 import exchanges_wrapper.parsers.bitfinex_parser as bfx
 import exchanges_wrapper.parsers.huobi_parser as hbp
@@ -52,16 +53,16 @@ class EventsDataStream:
 
     async def start(self):
         ping_interval = None if self.exchange == 'huobi' else 20
-        async for self.websocket in websockets.connect(
+        async for self.websocket in connect(
                 self.endpoint,
                 logger=logger,
                 ping_interval=ping_interval
         ):
             try:
                 await self.start_wss()
-            except websockets.ConnectionClosed as ex:
+            except ConnectionClosed as ex:
                 self.tasks_cancel()
-                if ex.code == 4000:
+                if ex.rcvd and ex.rcvd.code == 4000:
                     logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")
                     break
                 else:
@@ -120,7 +121,7 @@ class EventsDataStream:
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and not msg_data.get("success")):
                 logger.warning(f"Reconnecting ByBit WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
-                raise websockets.ConnectionClosed(None, None)
+                raise ConnectionClosed(None, None)
             else:
                 logger.info(f"ByBit undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'okx':
@@ -136,7 +137,7 @@ class EventsDataStream:
                 self.wss_started = True
             elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
                 logger.warning(f"Reconnecting OKX WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
-                raise websockets.ConnectionClosed(None, None)
+                raise ConnectionClosed(None, None)
             else:
                 logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'bitfinex':
@@ -147,12 +148,12 @@ class EventsDataStream:
                 if msg_data.get('platform') and msg_data.get('platform').get('status') != 1:
                     logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
                     await asyncio.sleep(60)
-                    raise websockets.ConnectionClosed(None, None)
+                    raise ConnectionClosed(None, None)
                 elif 'code' in msg_data:
                     code = msg_data.get('code')
                     if code == 10300:
                         logger.warning('WSS Subscription failed (generic)')
-                        raise websockets.ConnectionClosed(None, None)
+                        raise ConnectionClosed(None, None)
                     elif code == 10301:
                         logger.error('WSS Already subscribed')
                     elif code == 10302:
@@ -161,11 +162,11 @@ class EventsDataStream:
                         raise UserWarning('WSS Reached limit of open channels')
                     elif code == 20051:
                         logger.warning('WSS reconnection request received from exchange')
-                        raise websockets.ConnectionClosed(None, None)
+                        raise ConnectionClosed(None, None)
                     elif code == 20060:
                         logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
                         await asyncio.sleep(120)
-                        raise websockets.ConnectionClosed(None, None)
+                        raise ConnectionClosed(None, None)
                 elif msg_data.get('event') == 'subscribed':
                     chan_id = msg_data.get('chanId')
                     logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
@@ -210,11 +211,13 @@ class EventsDataStream:
             elif msg_data.get('action') in ('req', 'sub') and msg_data.get('code') == 200:
                 if msg_data.get('ch') == f"trade.clearing#{symbol.lower()}#0":
                     self.wss_started = True
+            elif 'subbed' in msg_data and msg_data.get('status') == 'ok':
+                logger.info(f"Huobi WSS started: {msg_data['subbed']}")
             elif (msg_data.get('action') == 'sub' and
                   msg_data.get('code') == 500 and
                   msg_data.get('message') == '系统异常:'):
                 logger.warning(f"Reconnecting Huobi user {ch_type} channel")
-                raise websockets.ConnectionClosed(None, None)
+                raise ConnectionClosed(None, None)
             else:
                 logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 

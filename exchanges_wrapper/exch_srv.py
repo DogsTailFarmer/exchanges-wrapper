@@ -625,6 +625,7 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnOrderBookUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
+                # logger.info(f"on_order_book_update.event: {client.exchange}:{_event}")
                 if _event.bids and _event.asks:
                     response.last_update_id = _event.last_update_id
                     response.bids = list(map(json.dumps, _event.bids))
