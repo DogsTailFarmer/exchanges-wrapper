@@ -13,14 +13,18 @@ import asyncio
 import functools
 import ujson as json
 import logging.handlers
-import toml
 from decimal import Decimal
 
 import exchanges_wrapper.martin as mr
-from exchanges_wrapper import WORK_PATH, CONFIG_FILE, LOG_FILE, errors, Server, Status, GRPCError, graceful_exit
+from exchanges_wrapper import WORK_PATH, LOG_FILE, errors, Server, Status, GRPCError, graceful_exit
 from exchanges_wrapper.client import Client
 from exchanges_wrapper.definitions import Side, OrderType, TimeInForce, ResponseType
-from exchanges_wrapper.lib import OrderTradesEvent, REST_RATE_LIMIT_INTERVAL, FILTER_TYPE_MAP
+from exchanges_wrapper.lib import (
+    OrderTradesEvent,
+    get_account,
+    REST_RATE_LIMIT_INTERVAL,
+    FILTER_TYPE_MAP,
+)
 from exchanges_wrapper.errors import ExchangeError
 #
 HEARTBEAT = 1  # Sec
@@ -46,75 +50,14 @@ logging.basicConfig()
 logging.getLogger('hpack').setLevel(logging.INFO)
 
 
-def get_account(_account_name: str) -> ():
-    config = toml.load(str(CONFIG_FILE))
-    accounts = config.get('accounts')
-
-    for account in accounts:
-        if account.get('name') == _account_name:
-            exchange = account['exchange']
-            sub_account = account.get('sub_account_name')
-            test_net = account['test_net']
-            master_email = account.get('master_email')
-            master_name = account.get('master_name')
-
-            endpoint = config['endpoint'][exchange]
-            ws_add_on = None
-
-            if exchange == 'huobi':
-                ws_add_on = endpoint.get('ws_public_mbr')
-            elif exchange == 'okx':
-                ws_add_on = endpoint.get('ws_business')
-
-            if exchange == 'bitfinex':
-                api_auth = endpoint['api_auth']
-            else:
-                api_auth = endpoint['api_test'] if test_net else endpoint['api_auth']
-            api_public = endpoint['api_public']
-
-            ws_public = endpoint['ws_test_public'] if exchange == 'bybit' and test_net else endpoint['ws_public']
-
-            if exchange == 'bitfinex':
-                ws_api = ws_auth = endpoint['ws_auth']
-            else:
-                ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
-                if exchange == 'okx':
-                    ws_api = ws_auth
-                else:
-                    ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
-
-            if exchange == 'binance_us':
-                exchange = 'binance'
-
-            res = (
-                exchange,
-                sub_account,
-                test_net,
-                account['api_key'],
-                account['api_secret'],
-                api_public,
-                ws_public,
-                api_auth,
-                ws_auth,
-                ws_add_on,
-                account.get('passphrase'),
-                master_email,
-                master_name,
-                account.get('two_fa'),
-                ws_api
-            )
-            return res
-    return ()
-
-
 class OpenClient:
     open_clients = []
 
     def __init__(self, _account_name: str):
         if account := get_account(_account_name):
             self.name = _account_name
-            self.real_market = not account[2]
-            self.client = Client(*account)
+            self.real_market = not account['test_net']
+            self.client = Client(account)
             self.ts_rlc = time.time()
             OpenClient.open_clients.append(self)
         else:
@@ -172,7 +115,7 @@ class Martin(mr.MartinBase):
                 if open_client.client.master_name == 'Huobi':
                     # For HuobiPro get master account uid and account_id
                     main_account = get_account(open_client.client.master_name)
-                    main_client = Client(*main_account)
+                    main_client = Client(main_account)
                     await asyncio.wait_for(main_client.set_htx_ids(), timeout=HEARTBEAT * 60)
                     if main_client.account_uid and main_client.account_id:
                         open_client.client.main_account_uid = main_client.account_uid
@@ -222,53 +165,55 @@ class Martin(mr.MartinBase):
         return mr.SimpleResponse(success=_success)
 
     async def send_request(self, client_method_name, request, rate_limit=False, **kwargs):
-        open_client = OpenClient.get_client(request.client_id)
-        client = open_client.client
-        msg_header = f"Send request: {client_method_name}:{open_client.name}:"
+        open_client_instance = OpenClient.get_client(request.client_id)
+        client = open_client_instance.client
+
+        msg_header = self.build_msg_header(client_method_name, open_client_instance, request)
+
+        if rate_limit:
+            await self.rate_limit_control(client.exchange, open_client_instance.ts_rlc)
+
+        if client.exchange == 'bitfinex':
+            await client.request_event.wait()
+            client.request_event.clear()
+
+        try:
+            res = await asyncio.wait_for(getattr(client, client_method_name)(**kwargs), timeout=HEARTBEAT * 60)
+        except asyncio.exceptions.CancelledError:
+            raise GRPCError(status=Status.UNAVAILABLE, message=f"{msg_header} Server Shutdown")
+        except asyncio.exceptions.TimeoutError:
+            self.log_and_raise_grpc_error(msg_header, Status.RESOURCE_EXHAUSTED, "timeout error")
+        except (errors.RateLimitReached, errors.QueryCanceled) as ex:
+            Martin.rate_limit_reached_time = time.time()
+            self.log_and_raise_grpc_error(msg_header, Status.RESOURCE_EXHAUSTED, f"RateLimitReached: {ex}")
+        except errors.HTTPError as ex:
+            self.log_and_raise_grpc_error(msg_header, Status.FAILED_PRECONDITION, f"HTTPError: {ex}")
+        except ExchangeError as ex:
+            self.log_and_raise_grpc_error(msg_header, Status.OUT_OF_RANGE, str(ex))
+        except Exception as ex:
+            logger.error(f"{msg_header} exception: {ex}")
+            logger.debug(traceback.format_exc())
+            raise GRPCError(status=Status.UNKNOWN, message=f"{msg_header} exception: {ex}")
+        else:
+            if rate_limit:
+                open_client_instance.ts_rlc = time.time()
+            return res, client, msg_header
+        finally:
+            client.request_event.set()
+
+    def build_msg_header(self, client_method_name, open_client_instance, request):
+        msg_header = f"Send request: {client_method_name}:{open_client_instance.name}:"
         if hasattr(request, 'symbol'):
             msg_header += f"{request.symbol}:"
         if hasattr(request, 'order_id'):
             msg_header += f"{request.order_id}:"
         if hasattr(request, 'client_order_id'):
             msg_header += f"({request.client_order_id}):"
-        if rate_limit:
-            await self.rate_limit_control(client.exchange, open_client.ts_rlc)
-        if client.exchange == 'bitfinex':
-            await client.request_event.wait()
-            client.request_event.clear()
-        try:
-            res = await asyncio.wait_for(getattr(client, client_method_name)(**kwargs), timeout=HEARTBEAT * 60)
-        except asyncio.exceptions.CancelledError:
-            msg = f"{msg_header} Server Shutdown"
-            raise GRPCError(status=Status.UNAVAILABLE, message=msg)
-        except asyncio.exceptions.TimeoutError:
-            msg = f"{msg_header} timeout error"
-            logger.warning(msg)
-            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=msg)
-        except (errors.RateLimitReached, errors.QueryCanceled) as ex:
-            Martin.rate_limit_reached_time = time.time()
-            msg = f"{msg_header} RateLimitReached: {ex}"
-            logger.warning(msg)
-            raise GRPCError(status=Status.RESOURCE_EXHAUSTED, message=msg)
-        except errors.HTTPError as ex:
-            msg = f"{msg_header} HTTPError: {ex}"
-            logger.error(msg)
-            raise GRPCError(status=Status.FAILED_PRECONDITION, message=msg)
-        except ExchangeError as ex:
-            msg = f"{msg_header}: {ex}"
-            logger.warning(msg)
-            raise GRPCError(status=Status.OUT_OF_RANGE, message=msg)
-        except Exception as ex:
-            msg = f"{msg_header} exception: {ex}"
-            logger.error(msg)
-            logger.debug(traceback.format_exc())
-            raise GRPCError(status=Status.UNKNOWN, message=msg)
-        else:
-            if rate_limit:
-                open_client.ts_rlc = time.time()
-            return res, client, msg_header
-        finally:
-            client.request_event.set()
+        return msg_header
+
+    def log_and_raise_grpc_error(self, msg_header, status, msg):
+        logger.warning(f"{msg_header} {msg}")
+        raise GRPCError(status=status, message=f"{msg_header} {msg}")
 
     async def fetch_server_time(self, request: mr.OpenClientConnectionId) -> mr.FetchServerTimeResponse:
         res, _, _ = await self.send_request('fetch_server_time', request, rate_limit=True)
@@ -288,10 +233,8 @@ class Martin(mr.MartinBase):
             trade_id=request.trade_id,
             symbol=request.symbol
         )
-        active_orders = []
         for order in res:
             order_id = order['orderId']
-            active_orders.append(order_id)
             response.orders.append(json.dumps(order))
             if client.exchange in ('bitfinex', 'huobi'):
                 client.active_order(order_id, order['origQty'], order['executedQty'])
@@ -625,7 +568,6 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnOrderBookUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
-                # logger.info(f"on_order_book_update.event: {client.exchange}:{_event}")
                 if _event.bids and _event.asks:
                     response.last_update_id = _event.last_update_id
                     response.bids = list(map(json.dumps, _event.bids))
@@ -737,11 +679,8 @@ class Martin(mr.MartinBase):
             order_type=OrderType.LIMIT,
             time_in_force=TimeInForce.GTC,
             quantity=request.quantity,
-            quote_order_quantity=None,
             price=request.price,
             new_client_order_id=request.new_client_order_id,
-            stop_price=None,
-            iceberg_quantity=None,
             response_type=ResponseType.RESULT.value,
             receive_window=None,
             test=False

@@ -8,13 +8,14 @@ from decimal import Decimal
 import gzip
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlparse
+
 from websockets.asyncio.client import connect
 from websockets import ConnectionClosed
 
-import exchanges_wrapper.parsers.bitfinex_parser as bfx
-import exchanges_wrapper.parsers.huobi_parser as hbp
-import exchanges_wrapper.parsers.okx_parser as okx
-import exchanges_wrapper.parsers.bybit_parser as bbt
+import exchanges_wrapper.parsers.bitfinex as bfx
+import exchanges_wrapper.parsers.huobi as hbp
+import exchanges_wrapper.parsers.okx as okx
+import exchanges_wrapper.parsers.bybit as bbt
 from crypto_ws_api.ws_session import generate_signature
 from exchanges_wrapper import LOG_PATH
 
@@ -52,15 +53,17 @@ class EventsDataStream:
         self.ping = 0
 
     async def start(self):
-        ping_interval = None if self.exchange == 'huobi' else 20
         async for self.websocket in connect(
                 self.endpoint,
                 logger=logger,
-                ping_interval=ping_interval
+                ping_interval=None if self.exchange == 'huobi' else 20
         ):
+            start_time = datetime.now(timezone.utc).replace(tzinfo=None)
             try:
                 await self.start_wss()
             except ConnectionClosed as ex:
+                ct = str(datetime.now(timezone.utc).replace(tzinfo=None) - start_time).rsplit('.')[0]
+                logger.info(f"WSS life time for {self.exchange} is {ct}")
                 self.tasks_cancel()
                 if ex.rcvd and ex.rcvd.code == 4000:
                     logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")

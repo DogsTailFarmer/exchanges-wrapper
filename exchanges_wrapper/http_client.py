@@ -26,16 +26,15 @@ ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW = "Timestamp for this request is outside of th
 
 
 class HttpClient:
-
-    def __init__(self, **kwargs):
-        self.api_key = kwargs.get('api_key')
-        self.api_secret = kwargs.get('api_secret')
-        self.passphrase = kwargs.get('passphrase')
-        self.endpoint = kwargs.get('endpoint')
-        self.session = kwargs.get('session')
-        self.exchange = kwargs.get('exchange')
-        self.sub_account = kwargs.get('sub_account')
-        self.test_net = kwargs.get('test_net')
+    def __init__(self, params: dict):
+        self.api_key = params['api_key']
+        self.api_secret = params['api_secret']
+        self.passphrase = params['passphrase']
+        self.endpoint = params['endpoint']
+        self.session = params['session']
+        self.exchange = params['exchange']
+        self.sub_account = params['sub_account']
+        self.test_net = params['test_net']
         self.rate_limit_reached = False
         self.rest_cycle_busy = None
 

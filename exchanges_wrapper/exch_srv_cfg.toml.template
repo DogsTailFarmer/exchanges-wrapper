@@ -117,7 +117,7 @@
     test_net = false
 # endregion
 
-# region Huobi acconts
+# region Huobi accounts
 [[accounts]]
     exchange = 'huobi'
     name = 'Huobi'
