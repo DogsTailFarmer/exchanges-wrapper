@@ -1,7 +1,7 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "1.4.8"
-
+# __version__ = "2.1.21"
+# TODO update from vertex
 # region endpoint
 [endpoint]
     [endpoint.binance]
@@ -42,6 +42,7 @@
         ws_public = 'wss://api.huobi.pro/ws'
         ws_public_mbr = 'wss://api.huobi.pro/feed'
         ws_auth = 'wss://api.huobi.pro/ws/v2'
+        ws_api = 'wss://api.huobi.pro/ws/trade'
 
     [endpoint.okx]
         api_public = 'https://aws.okx.com'

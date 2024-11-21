@@ -7,7 +7,6 @@ import time
 from decimal import Decimal
 import gzip
 from datetime import datetime, timezone
-from urllib.parse import urlencode, urlparse
 
 from websockets.asyncio.client import connect
 from websockets import ConnectionClosed
@@ -16,7 +15,7 @@ import exchanges_wrapper.parsers.bitfinex as bfx
 import exchanges_wrapper.parsers.huobi as hbp
 import exchanges_wrapper.parsers.okx as okx
 import exchanges_wrapper.parsers.bybit as bbt
-from crypto_ws_api.ws_session import generate_signature
+from crypto_ws_api.ws_session import generate_signature, compose_htx_ws_auth
 from exchanges_wrapper import LOG_PATH
 
 logger = logging.getLogger(__name__)
@@ -383,24 +382,11 @@ class HbpPrivateEventsDataStream(EventsDataStream):
         self.symbol = symbol
 
     async def start_wss(self):
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-        _params = {
-                "accessKey": self.client.api_key,
-                "signatureMethod": "HmacSHA256",
-                "signatureVersion": "2.1",
-                "timestamp": str(ts)
-        }
-        signature_payload = (f"GET\n{urlparse(self.endpoint).hostname}\n{urlparse(self.endpoint).path}\n"
-                             f"{urlencode(_params)}")
-        signature = generate_signature(self.exchange, self.client.api_secret, signature_payload)
-        _params["authType"] = "api"
-        _params["signature"] = signature
-        request = {
-            "action": "req",
-            "ch": "auth",
-            "params": _params
-        }
-        await self.websocket.send(json.dumps(request))
+        await self.websocket.send(
+            json.dumps(
+                compose_htx_ws_auth(self.endpoint, self.exchange, self.client.api_key, self.client.api_secret)
+            )
+        )
         await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
         #

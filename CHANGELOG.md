@@ -1,7 +1,7 @@
 ## 2.1.21 2024-11-xx
 ### Update
 * structure optimization
-* `websockets`: bump to v14.1
+* Dependency: bump requirements
 
 ## 2.1.20 2024-09-14
 ### Fix

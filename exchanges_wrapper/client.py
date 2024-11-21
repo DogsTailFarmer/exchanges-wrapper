@@ -83,7 +83,7 @@ class Client:
         else:
             raise UserWarning(f"Exchange {self.exchange} not yet connected")
 
-        if self.exchange in ('binance', 'okx', 'bitfinex'):
+        if self.exchange in ('binance', 'okx', 'bitfinex', 'huobi'):
             self.user_session = UserWSSession(
                 self.exchange,
                 self.endpoint_ws_api,
@@ -821,7 +821,7 @@ class Client:
                 trade_id,
                 "order.place",
                 _params=params,
-                _api_key=True,
+                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -867,13 +867,18 @@ class Client:
             }
             if new_client_order_id:
                 params["client-order-id"] = str(new_client_order_id)
-            res = await self.http.send_api_call(
-                "v1/order/orders/place",
-                method="POST",
-                signed=True,
-                timeout=STATUS_TIMEOUT,
-                **params,
-            )
+
+            res = await self.user_session.handle_request(trade_id, "create-order", _params=params)
+
+            if res is None:
+                logger.warning(FALLBACK_WARNING)
+                res = await self.http.send_api_call(
+                    "v1/order/orders/place",
+                    method="POST",
+                    signed=True,
+                    timeout=STATUS_TIMEOUT,
+                    **params,
+                )
             if res:
                 timeout = STATUS_TIMEOUT / 0.1
                 while not self.active_orders.get(int(res)) and timeout:
@@ -947,7 +952,7 @@ class Client:
                         trade_id,
                         "order.status",
                         _params=params,
-                        _api_key=True,
+                        send_api_key=True,
                         _signed=True,
                     )
             if b_res is None:
@@ -1039,7 +1044,7 @@ class Client:
                 trade_id,
                 "order.cancel",
                 _params=params,
-                _api_key=True,
+                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1141,7 +1146,7 @@ class Client:
                 trade_id,
                 "openOrders.cancelAll",
                 _params=params,
-                _api_key=True,
+                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1170,17 +1175,21 @@ class Client:
                 binance_res = bfx.orders(res[4], response_type=True, cancelled=True)
             else:
                 logger.debug(f"bitfinex: cancel_all_orders.res: {res}")
-
         elif self.exchange == 'huobi':
             orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
             orders_id = [str(order.get('orderId')) for order in orders]
             params = {'order-ids': orders_id}
-            res = await self.http.send_api_call(
-                "v1/order/orders/batchcancel",
-                method="POST",
-                signed=True,
-                **params,
-            )
+
+            res = await self.user_session.handle_request(trade_id, "cancel", _params=params)
+
+            if res is None:
+                logger.warning(FALLBACK_WARNING)
+                res = await self.http.send_api_call(
+                    "v1/order/orders/batchcancel",
+                    method="POST",
+                    signed=True,
+                    **params,
+                )
             orders_id = res.get('success', [])
             for order in orders:
                 if str(order.get('orderId')) in orders_id:
@@ -1260,7 +1269,7 @@ class Client:
                 trade_id,
                 "openOrders.status",
                 _params=params,
-                _api_key=True,
+                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1505,7 +1514,7 @@ class Client:
             binance_res = await self.user_session.handle_request(
                 trade_id,
                 "account.status",
-                _api_key=True,
+                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1727,7 +1736,7 @@ class Client:
                 trade_id,
                 "myTrades",
                 _params=params,
-                _api_key=True,
+                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
