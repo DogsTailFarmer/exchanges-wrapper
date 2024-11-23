@@ -12,7 +12,7 @@
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_exchanges-wrapper" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_exchanges-wrapper&metric=alert_status"/></a>
 <a href="https://pepy.tech/project/exchanges-wrapper" target="_blank"><img alt="Downloads" title="Downloads" src="https://static.pepy.tech/badge/exchanges-wrapper/month"/></a>
 ***
-From `v1.4.0` must be updated `exch_srv_cfg.toml`
+From `2.1.21` must be updated `exch_srv_cfg.toml`. See [Use templates for reference.](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/exchanges_wrapper/exch_srv_cfg.toml.template)
 ***
 
 ## exchanges-wrapper vs binance.py
