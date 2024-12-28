@@ -1,4 +1,4 @@
-crypto-ws-api==2.0.15rc1
+crypto-ws-api==2.0.15
 pyotp==2.9.0
 simplejson==3.19.3
 toml~=0.10.2

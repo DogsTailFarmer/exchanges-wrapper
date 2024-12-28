@@ -31,7 +31,10 @@ logger = logging.getLogger(__name__)
 
 STATUS_TIMEOUT = 5  # sec, also use for lifetime limit for inactive order (Bitfinex) as 60 * STATUS_TIMEOUT
 USER_DATA_STREAM = "/api/v3/userDataStream"
-FALLBACK_WARNING = 'Fallback to HTTP API call due to None response from user WSS session'
+ORDER_ENDPOINT = "/api/v3/order"
+
+def fallback_warning(exchange, symbol=None):
+    logger.warning(f"{exchange}:{symbol}: Fallback to HTTP API call")
 
 def truncate(f, n):
     return math.floor(f * 10 ** n) / 10 ** n
@@ -825,8 +828,8 @@ class Client:
                 _signed=True
             )
             if binance_res is None:
-                logger.warning(FALLBACK_WARNING)
-                route = "/api/v3/order/test" if test else "/api/v3/order"
+                fallback_warning(self.exchange, symbol)
+                route = "/api/v3/order/test" if test else ORDER_ENDPOINT
                 binance_res = await self.http.send_api_call(route, "POST", data=params, signed=True)
         elif self.exchange == 'bitfinex':
             params = {
@@ -843,7 +846,7 @@ class Client:
             res = await self.user_session.handle_request(trade_id, "on", _params=params)
 
             if not res or (res and isinstance(res, list) and res[6] != 'SUCCESS'):
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 logger.debug(f"create_order.bitfinex {new_client_order_id}: {res}")
                 res = await self.http.send_api_call(
                     "v2/auth/w/order/submit",
@@ -871,7 +874,7 @@ class Client:
             res = await self.user_session.handle_request(trade_id, "create-order", _params=params)
 
             if res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 res = await self.http.send_api_call(
                     "v1/order/orders/place",
                     method="POST",
@@ -898,7 +901,7 @@ class Client:
             }
             res = await self.user_session.handle_request(trade_id, "order", _params=params)
             if res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 res = await self.http.send_api_call(
                     "/api/v5/trade/order",
                     method="POST",
@@ -956,9 +959,9 @@ class Client:
                         _signed=True,
                     )
             if b_res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 b_res =  await self.http.send_api_call(
-                    "/api/v3/order",
+                    ORDER_ENDPOINT,
                     params=params,
                     signed=True,
                 )
@@ -1048,9 +1051,9 @@ class Client:
                 _signed=True
             )
             if binance_res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 binance_res = await self.http.send_api_call(
-                    "/api/v3/order",
+                    ORDER_ENDPOINT,
                     "DELETE",
                     params=params,
                     signed=True,
@@ -1063,7 +1066,7 @@ class Client:
             params = {'id': order_id}
             res = await self.user_session.handle_request(trade_id, "oc", _params=params)
             if res is None or (res and isinstance(res, list) and res[6] == 'ERROR'):
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 logger.debug(f"cancel_order.bitfinex {order_id}: res1: {res}")
                 res = await self.http.send_api_call(
                         "v2/auth/w/order/cancel",
@@ -1150,7 +1153,7 @@ class Client:
                 _signed=True
             )
             if binance_res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 binance_res = await self.http.send_api_call(
                     "/api/v3/openOrders",
                     "DELETE",
@@ -1163,7 +1166,7 @@ class Client:
             params = {'id': orders_id}
             res = await self.user_session.handle_request(trade_id, "oc_multi", _params=params)
             if not res or (res and isinstance(res, list) and res[6] != 'SUCCESS'):
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 logger.debug(f"cancel_all_orders.bitfinex {orders_id}: res1: {res}")
                 res = await self.http.send_api_call(
                         "v2/auth/w/order/cancel/multi",
@@ -1183,7 +1186,7 @@ class Client:
             res = await self.user_session.handle_request(trade_id, "cancel", _params=params)
 
             if res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 res = await self.http.send_api_call(
                     "v1/order/orders/batchcancel",
                     method="POST",
@@ -1273,7 +1276,7 @@ class Client:
                 _signed=True
             )
             if binance_res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 binance_res = await self.http.send_api_call(
                     "/api/v3/openOrders",
                     params=params,
@@ -1518,7 +1521,7 @@ class Client:
                 _signed=True
             )
             if binance_res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange)
                 binance_res = await self.http.send_api_call(
                     "/api/v3/account",
                     params=params,
@@ -1740,7 +1743,7 @@ class Client:
                 _signed=True
             )
             if binance_res is None:
-                logger.warning(FALLBACK_WARNING)
+                fallback_warning(self.exchange, symbol)
                 binance_res = await self.http.send_api_call(
                     "/api/v3/myTrades",
                     params=params,
