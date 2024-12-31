@@ -829,7 +829,7 @@ def main():
     try:
         asyncio.run(amain())
     except (asyncio.exceptions.CancelledError, grpclib.exceptions.StreamTerminatedError):
-        pass  # # Task cancellation should not be logged as an error
+        pass  # Task cancellation should not be logged as an error
     except Exception as ex:
         print(f"Exception: {ex}")
         print(traceback.format_exc())

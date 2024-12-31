@@ -12,7 +12,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "2.1.21"
+__version__ = "2.1.21rc5"
 
 from pathlib import Path
 import shutil
@@ -31,6 +31,7 @@ CONFIG_FILE = Path(CONFIG_PATH, "exch_srv_cfg.toml")
 LAST_STATE_PATH = Path(WORK_PATH, "last_state")
 LOG_PATH = Path(WORK_PATH, "exch_srv_log")
 LOG_FILE = Path(LOG_PATH, "exch_srv.log")
+LOG_FILE_TLG = Path(LOG_PATH, "tlg_proxy.log")
 
 
 def init():
