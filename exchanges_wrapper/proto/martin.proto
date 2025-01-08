@@ -3,7 +3,8 @@ Protocol buffer definition for exchanges-wrapper exch_srv.py
 https://grpc.io/docs/languages/python/quickstart/
 For compile use next commands
 pip install --pre "betterproto[compiler]"
-/exchanges_wrapper$ protoc -I . --python_betterproto_out=. proto/martin.proto
+pip install grpcio-tools
+/exchanges_wrapper$  python -m grpc_tools.protoc -I . --python_betterproto_out=. proto/martin.proto
 */
 
 syntax = "proto3";

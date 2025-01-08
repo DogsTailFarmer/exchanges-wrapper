@@ -247,37 +247,37 @@ class FetchExchangeInfoSymbolResponse(betterproto.Message):
 @dataclass(eq=False, repr=False)
 class FetchExchangeInfoSymbolResponseFilters(betterproto.Message):
     price_filter: Optional["FetchExchangeInfoSymbolResponseFiltersPriceFilter"] = (
-        betterproto.message_field(1, optional=True, group="_price_filter")
+        betterproto.message_field(1, optional=True)
     )
     percent_price: Optional["FetchExchangeInfoSymbolResponseFiltersPercentPrice"] = (
-        betterproto.message_field(2, optional=True, group="_percent_price")
+        betterproto.message_field(2, optional=True)
     )
     lot_size: Optional["FetchExchangeInfoSymbolResponseFiltersLotSize"] = (
-        betterproto.message_field(3, optional=True, group="_lot_size")
+        betterproto.message_field(3, optional=True)
     )
     min_notional: Optional["FetchExchangeInfoSymbolResponseFiltersMinNotional"] = (
-        betterproto.message_field(4, optional=True, group="_min_notional")
+        betterproto.message_field(4, optional=True)
     )
     iceberg_parts: Optional["FetchExchangeInfoSymbolResponseFiltersIcebergParts"] = (
-        betterproto.message_field(5, optional=True, group="_iceberg_parts")
+        betterproto.message_field(5, optional=True)
     )
     market_lot_size: Optional["FetchExchangeInfoSymbolResponseFiltersMarketLotSize"] = (
-        betterproto.message_field(6, optional=True, group="_market_lot_size")
+        betterproto.message_field(6, optional=True)
     )
     max_num_orders: Optional["FetchExchangeInfoSymbolResponseFiltersMaxNumOrders"] = (
-        betterproto.message_field(7, optional=True, group="_max_num_orders")
+        betterproto.message_field(7, optional=True)
     )
     max_num_algo_orders: Optional[
         "FetchExchangeInfoSymbolResponseFiltersMaxNumAlgoOrders"
-    ] = betterproto.message_field(8, optional=True, group="_max_num_algo_orders")
+    ] = betterproto.message_field(8, optional=True)
     max_num_iceberg_orders: Optional[
         "FetchExchangeInfoSymbolResponseFiltersMaxNumIcebergOrders"
-    ] = betterproto.message_field(9, optional=True, group="_max_num_iceberg_orders")
+    ] = betterproto.message_field(9, optional=True)
     max_position: Optional["FetchExchangeInfoSymbolResponseFiltersMaxPosition"] = (
-        betterproto.message_field(10, optional=True, group="_max_position")
+        betterproto.message_field(10, optional=True)
     )
     notional: Optional["FetchExchangeInfoSymbolResponseFiltersNotional"] = (
-        betterproto.message_field(11, optional=True, group="_notional")
+        betterproto.message_field(11, optional=True)
     )
 
 
@@ -714,7 +714,7 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> AsyncIterator["StreamResponse"]:
+    ) -> AsyncIterator[StreamResponse]:
         async for response in self._unary_stream(
             "/martin.Martin/OnBalanceUpdate",
             market_request,
@@ -732,7 +732,7 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> AsyncIterator["StreamResponse"]:
+    ) -> AsyncIterator[StreamResponse]:
         async for response in self._unary_stream(
             "/martin.Martin/OnFundsUpdate",
             on_funds_update_request,
@@ -750,7 +750,7 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> AsyncIterator["OnKlinesUpdateResponse"]:
+    ) -> AsyncIterator[OnKlinesUpdateResponse]:
         async for response in self._unary_stream(
             "/martin.Martin/OnKlinesUpdate",
             fetch_klines_request,
@@ -768,7 +768,7 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> AsyncIterator["FetchOrderBookResponse"]:
+    ) -> AsyncIterator[FetchOrderBookResponse]:
         async for response in self._unary_stream(
             "/martin.Martin/OnOrderBookUpdate",
             market_request,
@@ -786,7 +786,7 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> AsyncIterator["SimpleResponse"]:
+    ) -> AsyncIterator[SimpleResponse]:
         async for response in self._unary_stream(
             "/martin.Martin/OnOrderUpdate",
             market_request,
@@ -804,7 +804,7 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> AsyncIterator["OnTickerUpdateResponse"]:
+    ) -> AsyncIterator[OnTickerUpdateResponse]:
         async for response in self._unary_stream(
             "/martin.Martin/OnTickerUpdate",
             market_request,
@@ -1012,37 +1012,37 @@ class MartinBase(ServiceBase):
 
     async def on_balance_update(
         self, market_request: "MarketRequest"
-    ) -> AsyncIterator["StreamResponse"]:
+    ) -> AsyncIterator[StreamResponse]:
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
         yield StreamResponse()
 
     async def on_funds_update(
         self, on_funds_update_request: "OnFundsUpdateRequest"
-    ) -> AsyncIterator["StreamResponse"]:
+    ) -> AsyncIterator[StreamResponse]:
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
         yield StreamResponse()
 
     async def on_klines_update(
         self, fetch_klines_request: "FetchKlinesRequest"
-    ) -> AsyncIterator["OnKlinesUpdateResponse"]:
+    ) -> AsyncIterator[OnKlinesUpdateResponse]:
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
         yield OnKlinesUpdateResponse()
 
     async def on_order_book_update(
         self, market_request: "MarketRequest"
-    ) -> AsyncIterator["FetchOrderBookResponse"]:
+    ) -> AsyncIterator[FetchOrderBookResponse]:
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
         yield FetchOrderBookResponse()
 
     async def on_order_update(
         self, market_request: "MarketRequest"
-    ) -> AsyncIterator["SimpleResponse"]:
+    ) -> AsyncIterator[SimpleResponse]:
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
         yield SimpleResponse()
 
     async def on_ticker_update(
         self, market_request: "MarketRequest"
-    ) -> AsyncIterator["OnTickerUpdateResponse"]:
+    ) -> AsyncIterator[OnTickerUpdateResponse]:
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
         yield OnTickerUpdateResponse()
 

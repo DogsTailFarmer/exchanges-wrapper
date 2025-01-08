@@ -20,9 +20,10 @@ import shutil
 from grpclib.server import Server, GRPCError, Status
 from grpclib.client import Channel
 from grpclib.utils import graceful_exit
+from grpclib import exceptions
 
 __all__ = [
-    Server, GRPCError, Status, Channel, graceful_exit
+    Server, GRPCError, Status, Channel, graceful_exit, exceptions
 ]
 
 WORK_PATH = Path(Path.home(), ".MartinBinance")
