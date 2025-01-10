@@ -934,6 +934,23 @@ class MartinStub(betterproto.ServiceStub):
             metadata=metadata,
         )
 
+    async def client_restart(
+        self,
+        market_request: "MarketRequest",
+        *,
+        timeout: Optional[float] = None,
+        deadline: Optional["Deadline"] = None,
+        metadata: Optional["MetadataLike"] = None
+    ) -> "SimpleResponse":
+        return await self._unary_unary(
+            "/martin.Martin/ClientRestart",
+            market_request,
+            SimpleResponse,
+            timeout=timeout,
+            deadline=deadline,
+            metadata=metadata,
+        )
+
 
 class MartinBase(ServiceBase):
 
@@ -1077,6 +1094,9 @@ class MartinBase(ServiceBase):
     async def transfer_to_sub(
         self, market_request: "MarketRequest"
     ) -> "SimpleResponse":
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
+    async def client_restart(self, market_request: "MarketRequest") -> "SimpleResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def __rpc_cancel_all_orders(
@@ -1300,6 +1320,13 @@ class MartinBase(ServiceBase):
         response = await self.transfer_to_sub(request)
         await stream.send_message(response)
 
+    async def __rpc_client_restart(
+        self, stream: "grpclib.server.Stream[MarketRequest, SimpleResponse]"
+    ) -> None:
+        request = await stream.recv_message()
+        response = await self.client_restart(request)
+        await stream.send_message(response)
+
     def __mapping__(self) -> Dict[str, grpclib.const.Handler]:
         return {
             "/martin.Martin/CancelAllOrders": grpclib.const.Handler(
@@ -1466,6 +1493,12 @@ class MartinBase(ServiceBase):
             ),
             "/martin.Martin/TransferToSub": grpclib.const.Handler(
                 self.__rpc_transfer_to_sub,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                MarketRequest,
+                SimpleResponse,
+            ),
+            "/martin.Martin/ClientRestart": grpclib.const.Handler(
+                self.__rpc_client_restart,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 MarketRequest,
                 SimpleResponse,

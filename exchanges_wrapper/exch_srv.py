@@ -27,8 +27,9 @@ from exchanges_wrapper.lib import (
 )
 from exchanges_wrapper.errors import ExchangeError
 #
-HEARTBEAT = 1  # Sec
+HEARTBEAT = 1  # sec
 MAX_QUEUE_SIZE = 100
+WSS_TICKER_TIMEOUT = 300  # sec
 #
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
@@ -91,6 +92,7 @@ class OpenClient:
 class Martin(mr.MartinBase):
     rate_limit_reached_time = None
     rate_limiter = None
+    ticker_update_time = {}
 
     async def rate_limit_control(self, exchange, ts_rlc, _call_from='default'):
         if exchange == 'bitfinex':
@@ -531,6 +533,7 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnTickerUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
+                Martin.ticker_update_time[request.trade_id] = time.time()
                 response.from_pydict(
                     {
                         'openPrice': _event.open_price,
@@ -775,14 +778,19 @@ class Martin(mr.MartinBase):
 
     async def check_stream(self, request: mr.MarketRequest) -> mr.SimpleResponse:
         response = mr.SimpleResponse()
-        response.success = False
-        if open_client := OpenClient.get_client(request.client_id):
-            client = open_client.client
-            response.success = bool(client.data_streams.get(request.trade_id))
+        check_time = time.time() - Martin.ticker_update_time.get(request.trade_id, time.time() - WSS_TICKER_TIMEOUT - 1)
+        if check_time < WSS_TICKER_TIMEOUT:
+            response.success = True
+            # logger.info(f"CheckStream request passed for {request.trade_id}")
         else:
-            logger.warning(f"CheckStream request failed for {request.symbol}")
+            response.success = False
+            logger.warning(f"CheckStream request failed for {request.trade_id}")
         return response
 
+    async def client_restart(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+        await OpenClient.get_client(request.client_id).client.session.close()
+        OpenClient.remove_client(request.account_name)
+        return mr.SimpleResponse(success=True)
 
 async def stop_stream(client, trade_id):
     await client.stop_events_listener(trade_id)
