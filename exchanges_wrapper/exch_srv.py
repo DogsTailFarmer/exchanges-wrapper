@@ -36,7 +36,7 @@ formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
 #
 fh = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1000000, backupCount=10)
 fh.setFormatter(formatter)
-fh.setLevel(logging.INFO)
+fh.setLevel(logging.DEBUG)
 #
 sh = logging.StreamHandler()
 sh.setFormatter(formatter)
