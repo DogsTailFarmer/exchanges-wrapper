@@ -25,7 +25,6 @@ from exchanges_wrapper.lib import (
     REST_RATE_LIMIT_INTERVAL,
     FILTER_TYPE_MAP,
 )
-from exchanges_wrapper.errors import ExchangeError
 #
 HEARTBEAT = 1  # sec
 MAX_QUEUE_SIZE = 100
@@ -135,7 +134,7 @@ class Martin(mr.MartinBase):
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except asyncio.exceptions.TimeoutError:
-            await OpenClient.get_client(client_id).client.session.close()
+            await OpenClient.get_client(client_id).client.http.session.close()
             OpenClient.remove_client(request.account_name)
             raise GRPCError(status=Status.UNAVAILABLE, message=f"'{open_client.name}' timeout error")
         except Exception as ex:
@@ -190,7 +189,7 @@ class Martin(mr.MartinBase):
             self.log_and_raise_grpc_error(msg_header, Status.RESOURCE_EXHAUSTED, f"RateLimitReached: {ex}")
         except errors.HTTPError as ex:
             self.log_and_raise_grpc_error(msg_header, Status.FAILED_PRECONDITION, f"HTTPError: {ex}")
-        except ExchangeError as ex:
+        except errors.ExchangeError as ex:
             self.log_and_raise_grpc_error(msg_header, Status.OUT_OF_RANGE, str(ex))
         except Exception as ex:
             logger.error(f"{msg_header} exception: {ex}")
@@ -781,14 +780,14 @@ class Martin(mr.MartinBase):
         check_time = time.time() - Martin.ticker_update_time.get(request.trade_id, time.time() - WSS_TICKER_TIMEOUT - 1)
         if check_time < WSS_TICKER_TIMEOUT:
             response.success = True
-            # logger.info(f"CheckStream request passed for {request.trade_id}")
         else:
             response.success = False
             logger.warning(f"CheckStream request failed for {request.trade_id}")
         return response
 
     async def client_restart(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        await OpenClient.get_client(request.client_id).client.session.close()
+        if session:=OpenClient.get_client(request.client_id).client.http.session:
+            await session.close()
         OpenClient.remove_client(request.account_name)
         return mr.SimpleResponse(success=True)
 
@@ -828,7 +827,8 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
         await server.wait_closed()
 
         for oc in OpenClient.open_clients:
-            await oc.client.session.close()
+            if oc.client.http.session:
+                await oc.client.http.session.close()
 
         [task.cancel() for task in asyncio.all_tasks() if not task.done() and task is not asyncio.current_task()]
 

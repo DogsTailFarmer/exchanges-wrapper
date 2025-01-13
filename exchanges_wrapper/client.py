@@ -12,7 +12,7 @@ from expiringdict import ExpiringDict
 import uuid
 from decimal import Decimal, ROUND_HALF_DOWN
 
-from exchanges_wrapper.http_client import ClientBinance, ClientBFX, ClientHBP, ClientOKX, ClientBybit
+from exchanges_wrapper.http_client import HttpClient
 from exchanges_wrapper.errors import ExchangePyError
 from exchanges_wrapper.web_sockets import UserEventsDataStream, \
     MarketEventsDataStream, \
@@ -62,29 +62,16 @@ class Client:
         self.master_name = acc['master_name']
         self.two_fa = acc['two_fa']
         #
-        self.session = aiohttp.ClientSession()
-        client_init_params = {
-            'api_key': self.api_key,
-            'api_secret': self.api_secret,
-            'passphrase': self.passphrase,
-            'endpoint': self.endpoint_api_auth,
-            'session': self.session,
-            'exchange': self.exchange,
-            'sub_account': self.sub_account,
-            'test_net': self.test_net
-        }
-        if self.exchange == 'binance':
-            self.http = ClientBinance(client_init_params)
-        elif self.exchange == 'bitfinex':
-            self.http = ClientBFX(client_init_params)
-        elif self.exchange == 'huobi':
-            self.http = ClientHBP(client_init_params)
-        elif self.exchange == 'okx':
-            self.http = ClientOKX(client_init_params)
-        elif self.exchange == 'bybit':
-            self.http = ClientBybit(client_init_params)
-        else:
-            raise UserWarning(f"Exchange {self.exchange} not yet connected")
+        self.http = HttpClient(
+            {
+                'api_key': self.api_key,
+                'api_secret': self.api_secret,
+                'passphrase': self.passphrase,
+                'endpoint': self.endpoint_api_auth,
+                'exchange': self.exchange,
+                'test_net': self.test_net
+            }
+        )
 
         if self.exchange in ('binance', 'okx', 'bitfinex', 'huobi'):
             self.user_session = UserWSSession(
@@ -160,7 +147,8 @@ class Client:
         logger.info(f"Info for {self.exchange}:{symbol} loaded successfully")
 
     async def close(self):
-        await self.session.close()
+        if self.http.session:
+            await self.http.session.close()
 
     @property
     def events(self):

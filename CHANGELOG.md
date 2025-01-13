@@ -2,6 +2,7 @@
 ### Update
 * structure optimization
 * Bump requirements
+* `ByBit`: `on_funds_update`: `availableToWithdraw`: this field is deprecated for accountType=UNIFIED
 
 ## 2.1.20 2024-09-14
 ### Fix

@@ -422,10 +422,12 @@ def on_funds_update(res: dict) -> dict:
     data = res["coin"]
     funds = []
     for currency in data:
+        locked = currency["locked"]
+        free = str(Decimal(currency["walletBalance"]) - Decimal(locked))
         balance = {
             'a': currency["coin"],
-            'f': currency["availableToWithdraw"],
-            'l': currency["locked"],
+            'f': free,
+            'l': locked,
         }
         funds.append(balance)
     return {

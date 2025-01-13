@@ -31,12 +31,30 @@ class HttpClient:
         self.api_secret = params['api_secret']
         self.passphrase = params['passphrase']
         self.endpoint = params['endpoint']
-        self.session = params['session']
         self.exchange = params['exchange']
-        self.sub_account = params['sub_account']
         self.test_net = params['test_net']
         self.rate_limit_reached = False
         self.rest_cycle_busy = None
+        self.session = None
+        self._session_mutex = asyncio.Lock()
+        self.ex_imps = {}  #  exchanges implementation
+        self.declare_exchanges_implementation()
+
+    def declare_exchanges_implementation(self):
+        # noinspection PyTypeChecker
+        self.ex_imps = {
+        'binance': self._binance_request,
+        'bitfinex': self._bitfinex_request,
+        'bybit': self._bybit_request,
+        'huobi': self._huobi_request,
+        'okx': self._okx_request
+        }
+
+    async def _create_session_if_required(self):
+        if self.session is None:
+            async with self._session_mutex:
+                if self.session is None:
+                    self.session = aiohttp.ClientSession()
 
     async def handle_errors(self, response):
         if response.status >= 500:
@@ -103,67 +121,23 @@ class HttpClient:
                             endpoint=None,
                             timeout=None,
                             **kwargs):
-        pass  # meant to be overridden in a subclass
-
-
-class ClientBybit(HttpClient):
-
-    async def send_api_call(self,
-                            path,
-                            method="GET",
-                            signed=False,
-                            send_api_key=False,
-                            endpoint=None,
-                            timeout=None,
-                            **kwargs):
         if self.rate_limit_reached:
             raise QueryCanceled(QueryCanceled.message)
+        return await self.ex_imps[self.exchange](path, method, signed, send_api_key, endpoint, timeout, **kwargs)
 
-        url = endpoint or self.endpoint
-        params = None
-        query_kwargs = None
-        query_string = urlencode(kwargs)
+    async def send_request(self, method, url, timeout, query_kwargs):
+        await self._create_session_if_required()
 
-        if method == 'GET':
-            url += f'{path}?{query_string}'
+        try:
+            async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
+                self.rest_cycle_busy = False
+                return await self.handle_errors(response)
+        except (aiohttp.ClientOSError, aiohttp.ServerDisconnectedError):
+            await self.session.close()
+            self.session = None
+            raise ExchangeError("ClientOSError or ServerDisconnectedError, the connection will be restored")
 
-        if signed:
-            ts = int(time.time() * 1000)
-
-            if method == 'GET':
-                signature_payload = f"{ts}{self.api_key}{query_string}"
-            else:
-                url += path
-                query_kwargs = json.dumps(kwargs)
-                signature_payload = f"{ts}{self.api_key}{query_kwargs}"
-
-            signature = generate_signature(self.exchange, self.api_secret, signature_payload)
-            params = {
-                "Content-Type": AJ,
-                "X-Referer": "9KEW1K",
-                "X-BAPI-API-KEY": self.api_key,
-                "X-BAPI-SIGN": signature,
-                "X-BAPI-TIMESTAMP": str(ts)
-            }
-
-        # print(f"send_api_call.request: url: {url}, headers: {params}, data: {query_kwargs}")
-        async with self.session.request(method, url, timeout=timeout, headers=params, data=query_kwargs) as response:
-            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
-            return await self.handle_errors(response)
-
-
-class ClientBinance(HttpClient):
-
-    async def send_api_call(self,
-                            path,
-                            method="GET",
-                            signed=False,
-                            send_api_key=True,
-                            endpoint=None,
-                            timeout=None,
-                            **kwargs):
-        if self.rate_limit_reached:
-            raise QueryCanceled(QueryCanceled.message)
+    async def _binance_request(self, path, method, signed, send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint
         url = f'{_endpoint}{path}'
         query_kwargs = dict({"headers": {"Content-Type": AJ}}, **kwargs)
@@ -178,25 +152,11 @@ class ClientBinance(HttpClient):
             if "data" in kwargs:
                 content += urlencode(kwargs["data"])
             query_kwargs[location]["signature"] = generate_signature(self.exchange, self.api_secret, content)
+        return await self.send_request(method, url, timeout, query_kwargs)
 
-        async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
-            return await self.handle_errors(response)
-
-
-class ClientBFX(HttpClient):
-
-    async def send_api_call(self,
-                            path,
-                            method="GET",
-                            signed=False,
-                            send_api_key=True,
-                            endpoint=None,
-                            timeout=None,
-                            **kwargs):
-        if self.rate_limit_reached:
-            raise QueryCanceled(QueryCanceled.message)
+    async def _bitfinex_request(self, path, method, signed, send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint
-        bfx_post = self.exchange == 'bitfinex' and ((method == 'POST' and kwargs) or "params" in kwargs)
+        bfx_post = (method == 'POST' and kwargs) or "params" in kwargs
         _params = json.dumps(kwargs) if bfx_post else None
         url = f'{_endpoint}/{path}'
         query_kwargs = {"headers": {"Accept": AJ}}
@@ -207,7 +167,7 @@ class ClientBFX(HttpClient):
 
         # To avoid breaking the correct sequence Nonce value
         while self.rest_cycle_busy:
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.1)
         self.rest_cycle_busy = True
 
         if signed:
@@ -224,26 +184,42 @@ class ClientBFX(HttpClient):
                                                                           self.api_secret,
                                                                           signature_payload)
             query_kwargs["headers"]["bfx-nonce"] = str(ts)
+        return await self.send_request(method, url, timeout, query_kwargs)
 
-        # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
-        async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
-            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
-            self.rest_cycle_busy = False
-            return await self.handle_errors(response)
+    async def _bybit_request(self, path, method, signed, _send_api_key, endpoint, timeout, **kwargs):
+        url = endpoint or self.endpoint
+        query_kwargs = {}
+        data = None
+        headers = None
+        query_string = urlencode(kwargs)
 
+        if method == 'GET':
+            url += f'{path}?{query_string}'
 
-class ClientHBP(HttpClient):
+        if signed:
+            ts = int(time.time() * 1000)
 
-    async def send_api_call(self,
-                            path,
-                            method="GET",
-                            signed=False,
-                            send_api_key=None,
-                            endpoint=None,
-                            timeout=None,
-                            **kwargs):
-        if self.rate_limit_reached:
-            raise QueryCanceled(QueryCanceled.message)
+            if method == 'GET':
+                signature_payload = f"{ts}{self.api_key}{query_string}"
+            else:
+                url += path
+                data = json.dumps(kwargs)
+                signature_payload = f"{ts}{self.api_key}{data}"
+
+            signature = generate_signature(self.exchange, self.api_secret, signature_payload)
+            headers = {
+                "Content-Type": AJ,
+                "X-Referer": "9KEW1K",
+                "X-BAPI-API-KEY": self.api_key,
+                "X-BAPI-SIGN": signature,
+                "X-BAPI-TIMESTAMP": str(ts)
+            }
+
+        query_kwargs['data'] = data
+        query_kwargs['headers'] = headers
+        return await self.send_request(method, url, timeout, query_kwargs)
+
+    async def _huobi_request(self, path, method, signed, _send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint
         query_kwargs = {}
         _params = {}
@@ -266,40 +242,25 @@ class ClientHBP(HttpClient):
         elif method == 'GET':
             _params = kwargs
         url += urlencode(_params)
+        return await self.send_request(method, url, timeout, query_kwargs)
 
-        # print(f"send_api_call.request: url: {url}, query_kwargs: {query_kwargs}")
-        async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
-            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
-            return await self.handle_errors(response)
-
-
-class ClientOKX(HttpClient):
-
-    async def send_api_call(self,
-                            path,
-                            method="GET",
-                            signed=False,
-                            send_api_key=None,
-                            endpoint=None,
-                            timeout=None,
-                            **kwargs):
-        if self.rate_limit_reached:
-            raise QueryCanceled(QueryCanceled.message)
+    async def _okx_request(self, path, method, signed, _send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint
-        params = None
-        query_kwargs = None
+        query_kwargs = {}
+        data = None
+        headers = None
         if method == 'GET' and kwargs:
             path += f"?{urlencode(kwargs)}"
         url = f'{_endpoint}{path}'
         if signed:
             ts = f"{datetime.now(timezone.utc).replace(tzinfo=None).isoformat('T', 'milliseconds')}Z"
             if method == 'POST' and kwargs:
-                query_kwargs = json.dumps(kwargs.get('data') if 'data' in kwargs else kwargs)
-                signature_payload = f"{ts}{method}{path}{query_kwargs}"
+                data = json.dumps(kwargs.get('data') if 'data' in kwargs else kwargs)
+                signature_payload = f"{ts}{method}{path}{data}"
             else:
                 signature_payload = f"{ts}{method}{path}"
             signature = generate_signature(self.exchange, self.api_secret, signature_payload)
-            params = {
+            headers = {
                 "Content-Type": AJ,
                 "OK-ACCESS-KEY": self.api_key,
                 "OK-ACCESS-SIGN": signature,
@@ -307,7 +268,8 @@ class ClientOKX(HttpClient):
                 "OK-ACCESS-TIMESTAMP": ts
             }
             if self.test_net:
-                params["x-simulated-trading"] = '1'
-        async with self.session.request(method, url, timeout=timeout, headers=params, data=query_kwargs) as response:
-            # print(f"send_api_call.response: url: {response.url}, status: {response.status}")
-            return await self.handle_errors(response)
+                headers["x-simulated-trading"] = '1'
+
+        query_kwargs['data'] = data
+        query_kwargs['headers'] = headers
+        return await self.send_request(method, url, timeout, query_kwargs)
