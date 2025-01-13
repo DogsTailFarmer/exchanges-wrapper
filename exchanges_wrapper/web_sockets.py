@@ -19,20 +19,7 @@ from crypto_ws_api.ws_session import generate_signature, compose_htx_ws_auth
 from exchanges_wrapper import LOG_PATH
 
 logger = logging.getLogger(__name__)
-formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
-#
-fh = logging.handlers.RotatingFileHandler(Path(LOG_PATH, 'websockets.log'), maxBytes=1000000, backupCount=10)
-fh.setFormatter(formatter)
-fh.setLevel(logging.INFO)
-#
-sh = logging.StreamHandler()
-sh.setFormatter(formatter)
-sh.setLevel(logging.INFO)
-
-logger.addHandler(fh)
-logger.addHandler(sh)
 logger.propagate = False
-
 sys.tracebacklimit = 0
 
 

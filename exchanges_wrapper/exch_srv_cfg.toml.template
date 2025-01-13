@@ -1,7 +1,6 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
-# Copyright © 2021 Jerry Fedorenko aka VM
+# Copyright © 2021-2025 Jerry Fedorenko aka VM
 # __version__ = "2.1.21"
-# TODO update from vertex
 # region endpoint
 [endpoint]
     [endpoint.binance]
@@ -23,12 +22,6 @@
         ws_test = 'wss://testnet.binance.vision/ws'
         ws_api = 'wss://ws-api.binance.us:443/ws-api/v3'
         ws_api_test = 'wss://testnet.binance.vision/ws-api/v3'
-
-    [endpoint.ftx]
-        api_public = 'https://ftx.com/api'
-        ws_public = 'wss://ftx.com/ws/'
-        api_auth = 'https://ftx.com/api'
-        ws_auth = 'wss://ftx.com/ws/'
 
     [endpoint.bitfinex]
         api_public = 'https://api-pub.bitfinex.com'
@@ -99,6 +92,7 @@
 # region Bitfinex accounts
 # Set up a subaccount two-fa (2FA) key and master_email (Main account EMail)
 # for transfer funds from subaccount to master account
+
 [[accounts]]
     exchange = 'bitfinex'
     name = 'Demo - Bitfinex'

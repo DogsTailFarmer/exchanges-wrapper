@@ -1,4 +1,3 @@
-import aiohttp
 from enum import Enum
 from typing import Union
 import decimal
