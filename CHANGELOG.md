@@ -1,3 +1,7 @@
+## 2.1.23 2025-01-14
+### Fix
+* `web_sockets` module logging
+
 ## 2.1.21 2025-01-13
 ### Update
 * Structure optimization
