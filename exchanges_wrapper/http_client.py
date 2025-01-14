@@ -35,7 +35,7 @@ class HttpClient:
         self.test_net = params['test_net']
         self.rate_limit_reached = False
         self.rest_cycle_busy = None
-        self.session = None
+        self.session = aiohttp.ClientSession()
         self._session_mutex = asyncio.Lock()
         self.ex_imps = {}  #  exchanges implementation
         self.declare_exchanges_implementation()
@@ -51,10 +51,9 @@ class HttpClient:
         }
 
     async def _create_session_if_required(self):
-        if self.session is None:
+        if self.session.closed:
             async with self._session_mutex:
-                if self.session is None:
-                    self.session = aiohttp.ClientSession()
+                self.session = aiohttp.ClientSession()
 
     async def handle_errors(self, response):
         if response.status >= 500:
@@ -127,15 +126,13 @@ class HttpClient:
 
     async def send_request(self, method, url, timeout, query_kwargs):
         await self._create_session_if_required()
-
         try:
             async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
                 self.rest_cycle_busy = False
                 return await self.handle_errors(response)
         except (aiohttp.ClientOSError, aiohttp.ServerDisconnectedError):
             await self.session.close()
-            self.session = None
-            raise ExchangeError("ClientOSError or ServerDisconnectedError, the connection will be restored")
+            raise ExchangeError("HTTP ClientOSError or ServerDisconnectedError, the connection will be restored")
 
     async def _binance_request(self, path, method, signed, send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint

@@ -15,7 +15,7 @@
 From `2.1.21` must be updated `exch_srv_cfg.toml` from `exchanges_wrapper/exch_srv_cfg.toml.template`
 ***
 
-## exchanges-wrapper vs binance.py
+## exchanges-wrapper vs [binance.py](https://github.com/Th0rgal/binance.py)
 The main difference is the development of the project for trading with many exchanges.
 
 Next is adding a new module ```exchanges_wrapper/exch_srv.py``` as a multiplexer layer, providing simultaneous async interaction for many accounts
@@ -40,11 +40,8 @@ Served methods describes into ```example/exch_client.py```
 - Adaptive algorithm to ensure maximum performance and avoid exceeding the rates limits
 - Passthrough logging
 - WSS keepalive
-- Reuse session for new client sessions
-- Utilizing Websocket API (bidirectional) for the most commonly used methods:
-    + Binance ws-api/v3
-    + Bitfinex Websocket Authenticated Inputs v2
-    + OKX WS v5
+- Reuse session for new client connections
+- [Utilizing Websocket API (bidirectional) for the most commonly used methods:](https://github.com/DogsTailFarmer/crypto-ws-api)
 
 ## Extra exchanges implementation features
 - Binance REST API and WSS are accepted as basic, connection of other exchanges wrapped their API to Binance compatible

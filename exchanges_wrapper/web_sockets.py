@@ -1,8 +1,7 @@
 import sys
 import asyncio
 import ujson as json
-import logging.handlers
-from pathlib import Path
+import logging
 import time
 from decimal import Decimal
 import gzip
@@ -16,7 +15,6 @@ import exchanges_wrapper.parsers.huobi as hbp
 import exchanges_wrapper.parsers.okx as okx
 import exchanges_wrapper.parsers.bybit as bbt
 from crypto_ws_api.ws_session import generate_signature, compose_htx_ws_auth
-from exchanges_wrapper import LOG_PATH
 
 logger = logging.getLogger(__name__)
 logger.propagate = False
