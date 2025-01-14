@@ -52,7 +52,7 @@ at real bidding. First, run applications on the [Binance Spot Test Network](http
 
 ## Get started
 ### Prepare exchange account
-* Create account on [Binance](https://accounts.binance.com/en/register?ref=QCS4OGWR) and get 10% discount on all trading fee
+* Create account on [Binance](https://accounts.binance.com/en/register?ref=FXQ6HY5O) and get 10% discount on all trading fee
 * Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
 * Create account on [HUOBI](https://www.huobi.com/en-us/topic/double-reward/?invite_code=9uaw3223) and get 10% cashback on all trading fee
 * Create account on [OKX](https://www.okx.com/join/2607649) and get Mystery Boxes worth up to $10,000
