@@ -179,7 +179,7 @@ class Martin(mr.MartinBase):
             client.request_event.clear()
 
         try:
-            res = await asyncio.wait_for(getattr(client, client_method_name)(**kwargs), timeout=HEARTBEAT * 60)
+            res = await asyncio.wait_for(getattr(client, client_method_name)(**kwargs), timeout=90)
         except asyncio.exceptions.CancelledError:
             raise GRPCError(status=Status.UNAVAILABLE, message=f"{msg_header} Server Shutdown")
         except asyncio.exceptions.TimeoutError:
@@ -745,10 +745,6 @@ class Martin(mr.MartinBase):
         return response
 
     async def start_stream(self, request: mr.StartStreamRequest) -> mr.SimpleResponse:
-        if request.update_max_queue_size:
-            global MAX_QUEUE_SIZE
-            MAX_QUEUE_SIZE += int(MAX_QUEUE_SIZE / 10)
-            logger.info(f"MAX_QUEUE_SIZE was updated: new value is {MAX_QUEUE_SIZE}")
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         response = mr.SimpleResponse()
@@ -808,7 +804,9 @@ async def event_handler(_queue, client, trade_id, _event_type, event):
         logger.warning(f"For {_event_type} asyncio queue full and wold be closed")
         client.stream_queue.get(trade_id, set()).discard(_queue)
         await stop_stream(client, trade_id)
-
+        global MAX_QUEUE_SIZE
+        MAX_QUEUE_SIZE += int(MAX_QUEUE_SIZE / 10)
+        logger.info(f"MAX_QUEUE_SIZE was updated: new value is {MAX_QUEUE_SIZE}")
 
 def is_port_in_use(port: int) -> bool:
     import socket

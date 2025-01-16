@@ -233,7 +233,10 @@ class EventsDataStream:
     async def bybit_heartbeat(self, req_id, interval=20):
         while True:
             await asyncio.sleep(interval)
-            await self.websocket.send(json.dumps({"req_id": req_id, "op": "ping"}))
+            try:
+                await self.websocket.send(json.dumps({"req_id": req_id, "op": "ping"}))
+            except (ConnectionClosed, asyncio.exceptions.TimeoutError):
+                pass  # handled elsewhere
 
     async def htx_keepalive(self, interval=60):
         await asyncio.sleep(interval * 10)

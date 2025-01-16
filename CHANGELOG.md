@@ -1,3 +1,10 @@
+## 2.1.24 2025-01-16
+### Fix
+* `HTX`: `fetch_order`:
+    https://huobiapi.github.io/docs/spot/v1/en/#get-the-order-detail-of-an-order-based-on-client-order-id
+    If an order is created via API, then it's no longer queryable after being cancelled for 2 hours
+* `Bitfinex`: improving the generation and control of `nonce` values for authorized HTTP requests
+
 ## 2.1.23 2025-01-14
 ### Fix
 * `web_sockets` module logging

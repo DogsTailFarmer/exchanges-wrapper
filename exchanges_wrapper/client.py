@@ -10,9 +10,10 @@ import pyotp
 from expiringdict import ExpiringDict
 import uuid
 from decimal import Decimal, ROUND_HALF_DOWN
+import inspect
 
 from exchanges_wrapper.http_client import HttpClient
-from exchanges_wrapper.errors import ExchangePyError
+from exchanges_wrapper.errors import ExchangePyError, ExchangeError
 from exchanges_wrapper.web_sockets import UserEventsDataStream, \
     MarketEventsDataStream, \
     BfxPrivateEventsDataStream, \
@@ -33,7 +34,7 @@ USER_DATA_STREAM = "/api/v3/userDataStream"
 ORDER_ENDPOINT = "/api/v3/order"
 
 def fallback_warning(exchange, symbol=None):
-    logger.warning(f"{exchange}:{symbol}: Fallback to HTTP API call")
+    logger.warning(f"Called by: {inspect.stack()[1][3]}: {exchange}:{symbol}: Fallback to HTTP API call")
 
 def truncate(f, n):
     return math.floor(f * 10 ** n) / 10 ** n
@@ -977,14 +978,21 @@ class Client:
                 b_res = bfx.order(res, response_type=response_type)
                 self.active_order(b_res['orderId'], b_res['origQty'], b_res['executedQty'])
         elif self.exchange == 'huobi':
-            if origin_client_order_id:
-                params = {'clientOrderId': str(origin_client_order_id)}
-                res = await self.http.send_api_call("/v1/order/orders/getClientOrder", signed=True, **params)
+            try:
+                if origin_client_order_id:
+                    params = {'clientOrderId': str(origin_client_order_id)}
+                    res = await self.http.send_api_call("/v1/order/orders/getClientOrder", signed=True, **params)
+                else:
+                    res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
+            except ExchangeError as ex:
+                # https://huobiapi.github.io/docs/spot/v1/en/#get-the-order-detail-of-an-order-based-on-client-order-id
+                # If an order is created via API, then it's no longer queryable after being cancelled for 2 hours
+                if "base-record-invalid" in ex:
+                    return hbp.order_cancelled(symbol, order_id, origin_client_order_id)
             else:
-                res = await self.http.send_api_call(f"v1/order/orders/{order_id}", signed=True)
-            if res:
-                b_res = hbp.order(res, response_type=response_type)
-                self.active_order(b_res['orderId'], b_res['origQty'], b_res['executedQty'])
+                if res:
+                    b_res = hbp.order(res, response_type=response_type)
+                    self.active_order(b_res['orderId'], b_res['origQty'], b_res['executedQty'])
         elif self.exchange == 'okx':
             params = {'instId': self.symbol_to_okx(symbol),
                       'ordId': str(order_id),

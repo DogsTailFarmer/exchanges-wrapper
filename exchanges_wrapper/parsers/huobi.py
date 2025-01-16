@@ -170,6 +170,23 @@ def order(res: {}, response_type=None) -> {}:
             "side": side,
         }
 
+def order_cancelled(symbol, order_id=None, origin_client_order_id=None,) -> {}:
+    return {
+        "symbol": symbol,
+        "origClientOrderId": origin_client_order_id,
+        "orderId": order_id,
+        "orderListId": -1,
+        "clientOrderId": origin_client_order_id,
+        "transactTime": int(time.time() * 1000),
+        "price": "0",
+        "origQty": "0",
+        "executedQty": "0",
+        "cummulativeQuoteQty": "0",
+        "status": 'CANCELED',
+        "timeInForce": "GTC",
+        "type": "LIMIT",
+        "side": '',
+    }
 
 def account_information(res: {}) -> {}:
     balances = []

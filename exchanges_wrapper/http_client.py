@@ -23,7 +23,7 @@ STATUS_UNAUTHORIZED = 401
 STATUS_FORBIDDEN = 403
 STATUS_I_AM_A_TEAPOT = 418  # HTTP status code for IPAddressBanned
 ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW = "Timestamp for this request is outside of the recvWindow"
-
+TIMEOUT = aiohttp.ClientTimeout(total=60)
 
 class HttpClient:
     def __init__(self, params: dict):
@@ -34,8 +34,8 @@ class HttpClient:
         self.exchange = params['exchange']
         self.test_net = params['test_net']
         self.rate_limit_reached = False
-        self.rest_cycle_busy = None
-        self.session = aiohttp.ClientSession()
+        self.rest_cycle_lock = asyncio.Lock()
+        self.session = None
         self._session_mutex = asyncio.Lock()
         self.ex_imps = {}  #  exchanges implementation
         self.declare_exchanges_implementation()
@@ -51,9 +51,9 @@ class HttpClient:
         }
 
     async def _create_session_if_required(self):
-        if self.session.closed:
+        if self.session is None or self.session.closed:
             async with self._session_mutex:
-                self.session = aiohttp.ClientSession()
+                self.session = aiohttp.ClientSession(timeout=TIMEOUT)
 
     async def handle_errors(self, response):
         if response.status >= 500:
@@ -128,11 +128,10 @@ class HttpClient:
         await self._create_session_if_required()
         try:
             async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
-                self.rest_cycle_busy = False
                 return await self.handle_errors(response)
-        except (aiohttp.ClientOSError, aiohttp.ServerDisconnectedError):
+        except (aiohttp.ClientConnectionError, asyncio.exceptions.TimeoutError):
             await self.session.close()
-            raise ExchangeError("HTTP ClientOSError or ServerDisconnectedError, the connection will be restored")
+            raise ExchangeError("HTTP ClientConnectionError, the connection will be restored")
 
     async def _binance_request(self, path, method, signed, send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint
@@ -162,25 +161,24 @@ class HttpClient:
         if bfx_post and "params" in kwargs:
             query_kwargs['data'] = _params
 
-        # To avoid breaking the correct sequence Nonce value
-        while self.rest_cycle_busy:
-            await asyncio.sleep(0.1)
-        self.rest_cycle_busy = True
-
         if signed:
-            ts = int(time.time() * 1000)
-            query_kwargs["headers"]["Content-Type"] = AJ
-            if bfx_post:
-                query_kwargs['data'] = _params
-            if send_api_key:
-                query_kwargs["headers"]["bfx-apikey"] = self.api_key
-            signature_payload = f'/api/{path}{ts}'
-            if _params:
-                signature_payload += f"{_params}"
-            query_kwargs["headers"]["bfx-signature"] = generate_signature(self.exchange,
-                                                                          self.api_secret,
-                                                                          signature_payload)
-            query_kwargs["headers"]["bfx-nonce"] = str(ts)
+            async with self.rest_cycle_lock:
+                ts = int(time.time() * 1000000)
+                query_kwargs["headers"]["Content-Type"] = AJ
+                if bfx_post:
+                    query_kwargs['data'] = _params
+                if send_api_key:
+                    query_kwargs["headers"]["bfx-apikey"] = self.api_key
+                signature_payload = f'/api/{path}{ts}'
+                if _params:
+                    signature_payload += f"{_params}"
+                query_kwargs["headers"]["bfx-signature"] = generate_signature(self.exchange,
+                                                                              self.api_secret,
+                                                                              signature_payload)
+                query_kwargs["headers"]["bfx-nonce"] = str(ts)
+
+                return await self.send_request(method, url, timeout, query_kwargs)
+
         return await self.send_request(method, url, timeout, query_kwargs)
 
     async def _bybit_request(self, path, method, signed, _send_api_key, endpoint, timeout, **kwargs):
