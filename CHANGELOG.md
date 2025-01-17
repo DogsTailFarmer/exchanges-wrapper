@@ -1,3 +1,7 @@
+## 2.1.25 2025-01-17
+### Update
+* Some minor improvements
+
 ## 2.1.24 2025-01-16
 ### Fix
 * `HTX`: `fetch_order`:

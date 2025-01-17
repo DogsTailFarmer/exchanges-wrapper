@@ -989,6 +989,8 @@ class Client:
                 # If an order is created via API, then it's no longer queryable after being cancelled for 2 hours
                 if "base-record-invalid" in ex:
                     return hbp.order_cancelled(symbol, order_id, origin_client_order_id)
+                else:
+                    raise
             else:
                 if res:
                     b_res = hbp.order(res, response_type=response_type)
