@@ -987,7 +987,7 @@ class Client:
             except ExchangeError as ex:
                 # https://huobiapi.github.io/docs/spot/v1/en/#get-the-order-detail-of-an-order-based-on-client-order-id
                 # If an order is created via API, then it's no longer queryable after being cancelled for 2 hours
-                if "base-record-invalid" in ex:
+                if "base-record-invalid" in str(ex):
                     return hbp.order_cancelled(symbol, order_id, origin_client_order_id)
                 else:
                     raise
