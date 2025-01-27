@@ -1,3 +1,8 @@
+## 2.1.27 2025-01-27
+### Update
+* Bump requirements
+* Some minor improvements
+
 ## 2.1.26 2025-01-18
 ### Fix
 * `HTX`: fetch_order:...: exception: argument of type 'ExchangeError' is not iterable", None)

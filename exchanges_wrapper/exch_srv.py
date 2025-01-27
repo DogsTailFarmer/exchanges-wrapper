@@ -183,7 +183,7 @@ class Martin(mr.MartinBase):
         except asyncio.exceptions.CancelledError:
             raise GRPCError(status=Status.UNAVAILABLE, message=f"{msg_header} Server Shutdown")
         except asyncio.exceptions.TimeoutError:
-            self.log_and_raise_grpc_error(msg_header, Status.RESOURCE_EXHAUSTED, "timeout error")
+            self.log_and_raise_grpc_error(msg_header, Status.DEADLINE_EXCEEDED, "timeout error")
         except (errors.RateLimitReached, errors.QueryCanceled) as ex:
             Martin.rate_limit_reached_time = time.time()
             self.log_and_raise_grpc_error(msg_header, Status.RESOURCE_EXHAUSTED, f"RateLimitReached: {ex}")

@@ -57,8 +57,10 @@ class HttpClient:
 
     async def handle_errors(self, response):
         if response.status >= 500:
-            raise ExchangeError(f"An issue occurred on exchange's side: {response.status}: {response.url}:"
-                                f" {response.reason}")
+            raise ExchangeError(
+                f"{'API request rejected' if self.exchange == 'bitfinex' else 'An issue occurred on exchange side'}:"
+                f" {response.status}: {response.url}: {response.reason}"
+            )
         if response.status == 429:
             logger.error(f"API RateLimitReached: {response.url}")
             self.rate_limit_reached = self.exchange in ('binance', 'okx')
