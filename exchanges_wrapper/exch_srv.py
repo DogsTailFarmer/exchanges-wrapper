@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from typing import Any, AsyncGenerator
 
 import grpclib.exceptions
 
@@ -25,6 +26,9 @@ from exchanges_wrapper.lib import (
     REST_RATE_LIMIT_INTERVAL,
     FILTER_TYPE_MAP,
 )
+from exchanges_wrapper.martin import StreamResponse, SimpleResponse, OnKlinesUpdateResponse, OnTickerUpdateResponse, \
+    FetchOrderBookResponse
+
 #
 HEARTBEAT = 1  # sec
 MAX_QUEUE_SIZE = 100
@@ -154,12 +158,13 @@ class Martin(mr.MartinBase):
     async def reset_rate_limit(self, request: mr.OpenClientConnectionId) -> mr.SimpleResponse:
         Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
         _success = False
-        client = OpenClient.get_client(request.client_id).client
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
         if Martin.rate_limit_reached_time:
             if time.time() - Martin.rate_limit_reached_time > 30:
                 client.http.rate_limit_reached = False
                 Martin.rate_limit_reached_time = None
-                logger.info("RateLimit error clear, trying one else time")
+                logger.info(f"RateLimit error clear for {open_client.name}, trying one else time")
                 _success = True
         elif client.http.rate_limit_reached:
             Martin.rate_limit_reached_time = time.time()
@@ -434,7 +439,7 @@ class Martin(mr.MartinBase):
         response.items = list(map(json.dumps, res))
         return response
 
-    async def on_klines_update(self, request: mr.FetchKlinesRequest) -> mr.OnKlinesUpdateResponse:
+    async def on_klines_update(self, request: mr.FetchKlinesRequest) -> AsyncGenerator[OnKlinesUpdateResponse, Any]:
         response = mr.OnKlinesUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -508,7 +513,7 @@ class Martin(mr.MartinBase):
         response.items = list(map(json.dumps, res))
         return response
 
-    async def on_ticker_update(self, request: mr.MarketRequest) -> mr.OnTickerUpdateResponse:
+    async def on_ticker_update(self, request: mr.MarketRequest) -> AsyncGenerator[OnTickerUpdateResponse, Any]:
         response = mr.OnTickerUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -543,7 +548,7 @@ class Martin(mr.MartinBase):
                 yield response
                 _queue.task_done()
 
-    async def on_order_book_update(self, request: mr.MarketRequest) -> mr.FetchOrderBookResponse:
+    async def on_order_book_update(self, request: mr.MarketRequest) -> AsyncGenerator[FetchOrderBookResponse, Any]:
         response = mr.FetchOrderBookResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -577,7 +582,7 @@ class Martin(mr.MartinBase):
                     yield response
                 _queue.task_done()
 
-    async def on_funds_update(self, request: mr.OnFundsUpdateRequest) -> mr.StreamResponse:
+    async def on_funds_update(self, request: mr.OnFundsUpdateRequest) -> AsyncGenerator[StreamResponse, Any]:
         response = mr.StreamResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -597,7 +602,7 @@ class Martin(mr.MartinBase):
                 yield response
                 _queue.task_done()
 
-    async def on_balance_update(self, request: mr.MarketRequest) -> mr.StreamResponse:
+    async def on_balance_update(self, request: mr.MarketRequest) -> AsyncGenerator[StreamResponse, Any]:
         response = mr.StreamResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -643,7 +648,7 @@ class Martin(mr.MartinBase):
                 if _get_event_from_queue:
                     _queue.task_done()
 
-    async def on_order_update(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+    async def on_order_update(self, request: mr.MarketRequest) -> AsyncGenerator[SimpleResponse, Any]:
         response = mr.SimpleResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
@@ -787,6 +792,7 @@ class Martin(mr.MartinBase):
         OpenClient.remove_client(request.account_name)
         return mr.SimpleResponse(success=True)
 
+
 async def stop_stream(client, trade_id):
     await client.stop_events_listener(trade_id)
     client.events.unregister(client.exchange, trade_id)
@@ -807,6 +813,7 @@ async def event_handler(_queue, client, trade_id, _event_type, event):
         global MAX_QUEUE_SIZE
         MAX_QUEUE_SIZE += int(MAX_QUEUE_SIZE / 10)
         logger.info(f"MAX_QUEUE_SIZE was updated: new value is {MAX_QUEUE_SIZE}")
+
 
 def is_port_in_use(port: int) -> bool:
     import socket

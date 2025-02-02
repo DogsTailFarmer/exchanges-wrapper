@@ -1,3 +1,7 @@
+## 2.1.28 2025-02-xx
+### Update
+* `ByBit`: API Rate Limit handler
+
 ## 2.1.27 2025-01-27
 ### Update
 * Bump requirements

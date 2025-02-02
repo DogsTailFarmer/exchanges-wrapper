@@ -1,6 +1,9 @@
 """
 Parser for convert Bybit REST API/WSS V5 response to Binance like result
 """
+import asyncio
+import random
+import time
 from decimal import Decimal
 import logging
 
@@ -47,6 +50,57 @@ class OrderBook:
 
     # def __call__(self):
         # return self
+
+
+class RateLimitHandler:
+    def __init__(self):
+        self.stats = {}  # {'path': [limit_status, start_time, reset_time, range_window, limit]}
+
+    def update(self, path, headers):
+        if limit := int(headers.get('X-Bapi-Limit', '0')):
+            limit_status = int(headers['X-Bapi-Limit-Status'])
+            now = int(time.time() * 1000)
+            reset_time = max(int(headers['X-Bapi-Limit-Reset-Timestamp']), now)
+            if stats := self.stats.get(path):
+                _limit_status, start_time, _reset_time, _range_window, _limit = stats
+            else:
+                _limit_status = limit_status
+                start_time = now
+                _range_window = 1000
+            if limit_status == limit - 1:
+                start_time = now
+                range_window = max(_range_window, 1000)
+            else:
+                range_window = max(_range_window, now - start_time)
+                n = (_limit_status - limit_status) if _limit_status > limit_status else 1
+                reset_time += n * range_window / limit
+            self.stats[path] = [limit_status, start_time, reset_time, range_window, limit]
+
+    async def wait(self, path):
+        if self.stats.get(path) is None:
+            return
+        limit_status, start_time, reset_time, range_window, limit = self.stats[path]
+        min_delay = range_window / limit
+        now = int(time.time() * 1000)
+        if limit_status <= 1:
+            delay = max(
+                random.randint(1000, 2000),  #NOSONAR python:S2245
+                max(reset_time, start_time + range_window) - now
+            ) / 1000
+        else:
+            delay = max(min_delay, reset_time - now) / 1000
+        await asyncio.sleep(delay)
+
+    def fire_exceeded_rate_limit(self, path):
+        if stats := self.stats.get(path):
+            limit_status, start_time, _reset_time, range_window, limit = stats
+            self.stats[path] = [
+                limit_status,
+                start_time,
+                int(time.time() * 1000) + range_window,
+                range_window,
+                limit
+            ]
 
 
 def fetch_server_time(res: dict) -> dict:

@@ -15,6 +15,9 @@ from exchanges_wrapper.errors import (
     HTTPError,
     QueryCanceled,
 )
+from exchanges_wrapper.parsers.bybit import RateLimitHandler
+
+
 logger = logging.getLogger(__name__)
 
 AJ = 'application/json'
@@ -39,6 +42,7 @@ class HttpClient:
         self._session_mutex = asyncio.Lock()
         self.ex_imps = {}  #  exchanges implementation
         self.declare_exchanges_implementation()
+        self.rate_limit_handler = RateLimitHandler() if self.exchange == 'bybit' else None
 
     def declare_exchanges_implementation(self):
         # noinspection PyTypeChecker
@@ -55,15 +59,15 @@ class HttpClient:
             async with self._session_mutex:
                 self.session = aiohttp.ClientSession(timeout=TIMEOUT)
 
-    async def handle_errors(self, response):
+    async def handle_errors(self, response, path=None):
         if response.status >= 500:
             raise ExchangeError(
                 f"{'API request rejected' if self.exchange == 'bitfinex' else 'An issue occurred on exchange side'}:"
                 f" {response.status}: {response.url}: {response.reason}"
             )
-        if response.status == 429:
+        if response.status == 429 or (self.exchange == 'bybit' and response.status == STATUS_FORBIDDEN):
             logger.error(f"API RateLimitReached: {response.url}")
-            self.rate_limit_reached = self.exchange in ('binance', 'okx')
+            self.rate_limit_reached = self.exchange in ('binance', 'okx', 'bybit')
             raise RateLimitReached(RateLimitReached.message)
 
         try:
@@ -75,6 +79,7 @@ class HttpClient:
             if response.status == STATUS_BAD_REQUEST:
                 if payload:
                     if payload.get("error", "") == "ERR_RATE_LIMIT":
+                        self.rate_limit_reached = True
                         raise RateLimitReached(RateLimitReached.message)
                     elif self.exchange == 'binance' and payload.get('code', 0) == -1021:
                         raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
@@ -102,6 +107,9 @@ class HttpClient:
                 return payload.get('result'), payload.get('time')
             elif payload.get('retCode') == 10002:
                 raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
+            elif payload.get('retCode') == 10006:
+                self.rate_limit_handler.fire_exceeded_rate_limit(path)
+                raise RateLimitReached(f"{payload.get('retMsg')}")
             else:
                 raise ExchangeError(f"API request failed: {response.status}:{response.reason}:{payload}")
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
@@ -126,10 +134,14 @@ class HttpClient:
             raise QueryCanceled(QueryCanceled.message)
         return await self.ex_imps[self.exchange](path, method, signed, send_api_key, endpoint, timeout, **kwargs)
 
-    async def send_request(self, method, url, timeout, query_kwargs):
+    async def send_request(self, method, url, timeout, query_kwargs, path=None):
         await self._create_session_if_required()
         try:
             async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
+
+                if self.exchange == 'bybit':
+                    self.rate_limit_handler.update(path, response.headers)
+
                 return await self.handle_errors(response)
         except (aiohttp.ClientConnectionError, asyncio.exceptions.TimeoutError):
             await self.session.close()
@@ -184,6 +196,9 @@ class HttpClient:
         return await self.send_request(method, url, timeout, query_kwargs)
 
     async def _bybit_request(self, path, method, signed, _send_api_key, endpoint, timeout, **kwargs):
+
+        await self.rate_limit_handler.wait(path)
+
         url = endpoint or self.endpoint
         query_kwargs = {}
         data = None
@@ -214,7 +229,7 @@ class HttpClient:
 
         query_kwargs['data'] = data
         query_kwargs['headers'] = headers
-        return await self.send_request(method, url, timeout, query_kwargs)
+        return await self.send_request(method, url, timeout, query_kwargs, path)
 
     async def _huobi_request(self, path, method, signed, _send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint

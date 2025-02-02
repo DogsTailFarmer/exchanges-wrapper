@@ -11,6 +11,7 @@ from expiringdict import ExpiringDict
 import uuid
 from decimal import Decimal, ROUND_HALF_DOWN
 import inspect
+import random
 
 from exchanges_wrapper.http_client import HttpClient
 from exchanges_wrapper.errors import ExchangePyError, ExchangeError
@@ -480,6 +481,8 @@ class Client:
             )
             _res = bbt.on_balance_update(res['list'], ts, symbol, 'internal')
 
+            await asyncio.sleep(random.randint(1, 5))  #NOSONAR python:S2245
+
             # Universal Transfer Records, ie from Sub account to Main account
             res, ts = await self.http.send_api_call(
                 "/v5/asset/transfer/query-universal-transfer-list",
@@ -495,6 +498,7 @@ class Client:
             )
 
             if not _res:
+                await asyncio.sleep(random.randint(1, 5))  #NOSONAR python:S2245
                 # Get Transaction Log
                 params.pop('status')
                 params['accountType'] = 'UNIFIED'
