@@ -109,7 +109,8 @@ class HttpClient:
                 raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
             elif payload.get('retCode') == 10006:
                 self.rate_limit_handler.fire_exceeded_rate_limit(path)
-                raise RateLimitReached(f"{payload.get('retMsg')}")
+                logger.warning(f"ByBit API: {payload.get('retMsg')}")
+                return payload.get('result'), payload.get('time')
             else:
                 raise ExchangeError(f"API request failed: {response.status}:{response.reason}:{payload}")
         elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):

@@ -28,6 +28,8 @@ import exchanges_wrapper.parsers.okx as okx
 import exchanges_wrapper.parsers.bybit as bbt
 from crypto_ws_api.ws_session import UserWSSession
 
+from exchanges_wrapper.errors import RateLimitReached
+
 logger = logging.getLogger(__name__)
 
 STATUS_TIMEOUT = 5  # sec, also use for lifetime limit for inactive order (Bitfinex) as 60 * STATUS_TIMEOUT
@@ -365,8 +367,11 @@ class Client:
             params = {'category': 'spot', 'symbol': symbol}
             server_time = await self.fetch_server_time()
             instruments, _ = await self.http.send_api_call("/v5/market/instruments-info", **params)
+
+            logger.info(f"fetch_exchange_info: instruments: {instruments.get('list')}")
+
             binance_res = bbt.exchange_info(server_time.get('serverTime'), instruments.get('list'))
-        # logger.info(f"fetch_exchange_info: binance_res: {binance_res}")
+        logger.info(f"fetch_exchange_info: binance_res: {binance_res}")
         return binance_res
 
     async def set_htx_ids(self):
@@ -473,15 +478,15 @@ class Client:
                 'status': 'SUCCESS',
                 'startTime': max(self.ts_start[symbol], (int(time.time()) - 300) * 1000)
             }
+            _res = []
             # Internal transfer, ie from Funding to UTA account
             res, ts = await self.http.send_api_call(
                 "/v5/asset/transfer/query-inter-transfer-list",
                 signed=True,
                 **params
             )
-            _res = bbt.on_balance_update(res['list'], ts, symbol, 'internal')
-
-            await asyncio.sleep(random.randint(1, 5))  #NOSONAR python:S2245
+            if res:
+                _res = bbt.on_balance_update(res['list'], ts, symbol, 'internal')
 
             # Universal Transfer Records, ie from Sub account to Main account
             res, ts = await self.http.send_api_call(
@@ -489,16 +494,16 @@ class Client:
                 signed=True,
                 **params
             )
-            _res += bbt.on_balance_update(
-                res['list'],
-                ts,
-                symbol,
-                'universal',
-                uid=self.account_uid
-            )
+            if res:
+                _res += bbt.on_balance_update(
+                    res['list'],
+                    ts,
+                    symbol,
+                    'universal',
+                    uid=self.account_uid
+                )
 
             if not _res:
-                await asyncio.sleep(random.randint(1, 5))  #NOSONAR python:S2245
                 # Get Transaction Log
                 params.pop('status')
                 params['accountType'] = 'UNIFIED'
@@ -510,12 +515,13 @@ class Client:
                     signed=True,
                     **params
                 )
-                _res += bbt.on_balance_update(
-                    res['list'],
-                    ts,
-                    symbol,
-                    'log'
-                )
+                if res:
+                    _res += bbt.on_balance_update(
+                        res['list'],
+                        ts,
+                        symbol,
+                        'log'
+                    )
 
             for i in _res:
                 _id = next(iter(i))

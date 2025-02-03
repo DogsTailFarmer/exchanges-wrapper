@@ -645,8 +645,8 @@ class Martin(mr.MartinBase):
                     response.event = json.dumps(balance)
                     yield response
 
-                if _get_event_from_queue:
-                    _queue.task_done()
+            if _get_event_from_queue:
+                _queue.task_done()
 
     async def on_order_update(self, request: mr.MarketRequest) -> AsyncGenerator[SimpleResponse, Any]:
         response = mr.SimpleResponse()
