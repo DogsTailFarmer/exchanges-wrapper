@@ -11,7 +11,6 @@ from expiringdict import ExpiringDict
 import uuid
 from decimal import Decimal, ROUND_HALF_DOWN
 import inspect
-import random
 
 from exchanges_wrapper.http_client import HttpClient
 from exchanges_wrapper.errors import ExchangePyError, ExchangeError
@@ -27,8 +26,6 @@ import exchanges_wrapper.parsers.huobi as hbp
 import exchanges_wrapper.parsers.okx as okx
 import exchanges_wrapper.parsers.bybit as bbt
 from crypto_ws_api.ws_session import UserWSSession
-
-from exchanges_wrapper.errors import RateLimitReached
 
 logger = logging.getLogger(__name__)
 
@@ -367,11 +364,8 @@ class Client:
             params = {'category': 'spot', 'symbol': symbol}
             server_time = await self.fetch_server_time()
             instruments, _ = await self.http.send_api_call("/v5/market/instruments-info", **params)
-
-            logger.info(f"fetch_exchange_info: instruments: {instruments.get('list')}")
-
             binance_res = bbt.exchange_info(server_time.get('serverTime'), instruments.get('list'))
-        logger.info(f"fetch_exchange_info: binance_res: {binance_res}")
+        # logger.info(f"fetch_exchange_info: binance_res: {binance_res}")
         return binance_res
 
     async def set_htx_ids(self):
@@ -1015,11 +1009,13 @@ class Client:
         elif self.exchange == 'bybit':
             params = {
                 'category': 'spot',
-                'symbol': symbol,
-                'orderId': str(order_id),
-                'orderLinkId': str(origin_client_order_id),
+                'symbol': symbol
             }
-            res, _ = await self.http.send_api_call("/v5/order/history", signed=True, **params)
+            if order_id:
+                params['orderId'] = str(order_id)
+            else:
+                params['orderLinkId'] = str(origin_client_order_id)
+            res, _ = await self.http.send_api_call("/v5/order/realtime", signed=True, **params)
             if res["list"]:
                 b_res = bbt.order(res["list"][0], response_type=response_type)
         return b_res

@@ -1,4 +1,7 @@
-## 2.1.28 2025-02-xx
+## 2.1.28 2025-02-06
+### Fix
+`ByBit`: `fetch_order`: was used incorrect endpoint
+
 ### Update
 * `ByBit`: API Rate Limit handler
 

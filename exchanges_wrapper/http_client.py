@@ -197,7 +197,6 @@ class HttpClient:
         return await self.send_request(method, url, timeout, query_kwargs)
 
     async def _bybit_request(self, path, method, signed, _send_api_key, endpoint, timeout, **kwargs):
-
         await self.rate_limit_handler.wait(path)
 
         url = endpoint or self.endpoint
