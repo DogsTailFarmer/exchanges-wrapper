@@ -1317,7 +1317,7 @@ class Client:
         elif self.exchange == 'bybit':
             params = {'category': 'spot', 'symbol': symbol}
             res, _ = await self.http.send_api_call("/v5/order/realtime", signed=True, **params)
-            binance_res = bbt.orders(res['list'], response_type=response_type)
+            binance_res = bbt.orders(res.get('list', []), response_type=response_type)
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#all-orders-user_data

@@ -1,6 +1,6 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021-2025 Jerry Fedorenko aka VM
-# __version__ = "2.1.21"
+# __version__ = "2.1.29"
 # region endpoint
 [endpoint]
     [endpoint.binance]
@@ -38,12 +38,12 @@
         ws_api = 'wss://api.huobi.pro/ws/trade'
 
     [endpoint.okx]
-        api_public = 'https://aws.okx.com'
-        api_auth = 'https://aws.okx.com'
-        ws_public = 'wss://wsaws.okx.com:8443/ws/v5/public'
-        ws_auth = 'wss://wsaws.okx.com:8443/ws/v5/private'
+        api_public = 'https://www.okx.com'
+        api_auth = 'https://www.okx.com'
+        ws_public = 'wss://ws.okx.com:8443/ws/v5/public'
+        ws_auth = 'wss://ws.okx.com:8443/ws/v5/private'
         ws_business = 'wss://ws.okx.com:8443/ws/v5/business'
-        api_test = 'https://aws.okx.com'
+        api_test = 'https://www.okx.com'
         ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
 
     [endpoint.bybit]

@@ -1,3 +1,10 @@
+## 2.1.29 2025-02-18
+### Fix
+* `ByBit`: `[2025-02-14 12:11:20,916: ERROR] Send request: fetch_open_orders::: KeyError: 'list'`
+
+### Update
+* `OKX`: [AWS domain is about to cease service](https://www.okx.com/docs-v5/log_en/#upcoming-changes-aws-domain-is-about-to-cease-service)
+
 ## 2.1.28 2025-02-06
 ### Fix
 `ByBit`: `fetch_order`: was used incorrect endpoint
