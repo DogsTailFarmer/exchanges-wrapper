@@ -22,7 +22,7 @@ dependencies = [
     "simplejson==3.19.3",
     "toml~=0.10.2",
     "aiohttp~=3.11.11",
-    "websockets==14.2",
+    "websockets==15.0",
     "expiringdict~=1.2.2",
     "ujson~=5.10.0",
     "betterproto==2.0.0b7",
