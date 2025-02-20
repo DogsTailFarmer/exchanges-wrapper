@@ -1,6 +1,6 @@
 crypto-ws-api==2.0.16
 pyotp==2.9.0
-simplejson==3.19.3
+simplejson==3.20.1
 toml~=0.10.2
 aiohttp~=3.11.12
 websockets==15.0
