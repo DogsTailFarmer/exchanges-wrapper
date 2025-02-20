@@ -1,3 +1,7 @@
+## 2.1.30 2025-02-20
+### Update
+* Bump requirements
+
 ## 2.1.29 2025-02-18
 ### Fix
 * `ByBit`: `[2025-02-14 12:11:20,916: ERROR] Send request: fetch_open_orders::: KeyError: 'list'`
