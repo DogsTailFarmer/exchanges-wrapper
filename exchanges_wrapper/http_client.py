@@ -63,7 +63,7 @@ class HttpClient:
         if response.status >= 500:
             raise ExchangeError(
                 f"{'API request rejected' if self.exchange == 'bitfinex' else 'An issue occurred on exchange side'}:"
-                f" {response.status}: {response.url}: {response.reason}"
+                f" {response.status}: {response.reason}"
             )
         if response.status == 429 or (self.exchange == 'bybit' and response.status == STATUS_FORBIDDEN):
             logger.error(f"API RateLimitReached: {response.url}")

@@ -170,6 +170,7 @@ def order(res: {}, response_type=None) -> {}:
             "side": side,
         }
 
+
 def order_cancelled(symbol, order_id=None, origin_client_order_id=None,) -> {}:
     return {
         "symbol": symbol,
@@ -188,27 +189,44 @@ def order_cancelled(symbol, order_id=None, origin_client_order_id=None,) -> {}:
         "side": '',
     }
 
+
 def account_information(res: {}) -> {}:
-    balances = []
+    """
+    This function parses the Huobi API response for account information and
+    returns a dictionary with relevant details.
+
+    Args:
+        res (dict): The API response from the Huobi exchange.
+
+    Returns:
+        dict: A dictionary containing the user's account information.
+    """
+
+    # Filter out balances that have zero value
     res[:] = [i for i in res if i.get('balance') != '0']
+
     assets = {}
     for balance in res:
-        asset = balance.get('currency')
-        asset_i = assets.get(asset, {})
+        asset = balance['currency']
+        assets.setdefault(asset, {
+            'available': Decimal(0),
+            'frozen': Decimal(0)
+        })
+
+        # Update available and frozen balances
         if balance.get('available'):
-            asset_i.setdefault('available', balance.get('available'))
+            assets[asset]['available'] += Decimal(balance['available'])
         else:
-            asset_i.setdefault('frozen', balance.get('balance', '0'))
-        assets[asset] = asset_i
-    for asset in assets:
-        free = assets.get(asset, {}).get('available', '0')
-        locked = assets.get(asset, {}).get('frozen', '0')
-        _binance_res = {
+            assets[asset]['frozen'] += Decimal(balance['balance'])
+
+    balances = [
+        {
             "asset": asset.upper(),
-            "free": free,
-            "locked": locked,
+            "free": str(assets[asset]["available"]),
+            "locked": str(assets[asset]["frozen"])
         }
-        balances.append(_binance_res)
+        for asset in assets
+    ]
 
     return {
         "makerCommission": 0,
@@ -226,20 +244,16 @@ def account_information(res: {}) -> {}:
 
 
 def order_book(res: {}) -> {}:
-    binance_order_book = {"lastUpdateId": res.get('ts')}
-    binance_order_book.setdefault('bids', res.get('bids'))
-    binance_order_book.setdefault('asks', res.get('asks'))
-    return binance_order_book
+    res["lastUpdateId"] = res.pop("ts")
+    return res
 
 
 def order_book_ws(res: {}, symbol: str) -> {}:
-    bids = res.get('tick').get('bids')[:5]
-    asks = res.get('tick').get('asks')[:5]
     return {
         'stream': f"{symbol}@depth5",
-        'data': {'lastUpdateId': res.get('ts'),
-                 'bids': bids,
-                 'asks': asks,
+        'data': {'lastUpdateId': res['ts'],
+                 'bids': res['tick']['bids'][:5],
+                 'asks': res['tick']['asks'][:5],
                  }
     }
 

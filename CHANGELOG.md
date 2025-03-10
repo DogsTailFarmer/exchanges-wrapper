@@ -1,3 +1,17 @@
+## 2.1.31 2025-03-10
+### Update
+1. **Version updates**: The `requirements.txt` file has been updated to reflect new versions of dependencies:
+	* `crypto-ws-api` was updated from version 2.0.17 to 2.0.18.
+2. **Account information handling**:
+	* In the `exchanges_wrapper` module, specifically in the `account_information` function (in multiple files), there
+are minor changes related to handling account balance data.
+These changes likely fix issues with formatting or parsing of balance data.
+3. **Logger usage**: The use of a logger has been introduced in some places.
+4. **Docstrings**: Some docstrings have been added or updated to provide better documentation for the functions.
+
+The overall changes seem to be related to maintenance tasks, such as updating dependencies and fixing minor issues 
+with data handling. There are no major new features or functionality additions in this diff output.
+
 ## 2.1.30 2025-02-20
 ### Update
 * Bump requirements

@@ -1515,11 +1515,13 @@ class Client:
         params = {}
         binance_res = {}
         if self.exchange == 'binance':
+            params["omitZeroBalances"] = "true"
             if receive_window:
                 params["recvWindow"] = receive_window
             binance_res = await self.user_session.handle_request(
                 trade_id,
                 "account.status",
+                _params=params,
                 send_api_key=True,
                 _signed=True
             )
@@ -1548,7 +1550,7 @@ class Client:
             params = {'accountType': 'UNIFIED'}
             res, ts = await self.http.send_api_call("/v5/account/wallet-balance", signed=True, **params)
             binance_res = bbt.account_information(res["list"][0]["coin"], ts)
-        # print(f"fetch_account_information.binance_res: {binance_res}")
+        # logger.info(f"fetch_account_information.binance_res: {trade_id}: {binance_res}")
         return binance_res
 
     # https://binance-docs.github.io/apidocs/spot/en/#funding-wallet-user_data

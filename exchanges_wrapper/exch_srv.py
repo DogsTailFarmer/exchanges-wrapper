@@ -32,7 +32,7 @@ from exchanges_wrapper.martin import StreamResponse, SimpleResponse, OnKlinesUpd
 #
 HEARTBEAT = 1  # sec
 MAX_QUEUE_SIZE = 100
-WSS_TICKER_TIMEOUT = 300  # sec
+WSS_TICKER_TIMEOUT = 600  # sec
 #
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
