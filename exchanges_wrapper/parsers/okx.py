@@ -15,10 +15,11 @@ def fetch_server_time(res: []) -> {}:
 
 def exchange_info(server_time: int, trading_symbol: [], tickers: [], symbol_t) -> {}:
     symbols = []
-    symbols_price = {
-        pair.get('instId').replace('-', ''): Decimal(pair.get('last', '0'))
-        for pair in tickers
-    }
+    symbols_price = {}
+    for pair in tickers:
+        last_price = pair.get('last', '0')
+        if last_price != '':
+            symbols_price[pair.get('instId').replace('-', '')] = Decimal(last_price)
     for market in trading_symbol:
         _symbol = market.get("instId").replace('-', '')
         if symbols_price.get(_symbol) and _symbol == symbol_t:

@@ -1,3 +1,10 @@
+## 2.1.32 2025-03-19
+### Fix
+* `Exception get_exchange_info:
+     "Send request: fetch_exchange_info:OKX:FILUSDT: exception: [<class 'decimal.ConversionSyntax'>]"`
+  
+In `"/v5/market/instruments-info"` response, `last` field can be empty string, like `{"last": ''}`  
+
 ## 2.1.31 2025-03-10
 ### Update
 1. **Version updates**: The `requirements.txt` file has been updated to reflect new versions of dependencies:
