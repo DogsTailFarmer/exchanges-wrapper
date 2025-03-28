@@ -1,3 +1,7 @@
+## 2.1.33 2025-03-28
+### Update
+* ✨ feat(requirements.txt): Update crypto-ws-api and aiohttp to latest versions.
+
 ## 2.1.32 2025-03-19
 ### Fix
 * `Exception get_exchange_info:
