@@ -1,3 +1,15 @@
+## 2.1.34 2025-04-24
+🔧 fix(exchanges_wrapper): adjust return types for several functions to use 'list' and 'dict' annotations
+🔧 fix(exchanges_wrapper): ensure consistent return types in 'fetch_server_time' and 'get_symbols' functions
+🔧 fix(parsers): update 'orders', 'klines', and 'candle' functions in various parsers to use 'list' and 'dict' annotations
+✨ feat(client.py): Update `UserEventsDataStream` to use new API endpoint and remove deprecated methods  
+✨ feat(lib.py): Remove redundant check for `binance_us` exchange  
+✨ fix(web_sockets.py): Adjust `ping_interval` for `binance` and `huobi`  
+✨ fix(web_sockets.py): Refactor message handling for `binance` events  
+✨ fix(requirements.txt): Upgrade `crypto-ws-api` to version 2.0.20  
+📝 docs(README.md): Update documentation regarding `Ed25519` API key for `Binance`  
+✨ chore(toml): Update `exch_srv_cfg.toml.template` with new API key requirements  
+
 ## 2.1.33 2025-03-28
 ### Update
 * ✨ feat(requirements.txt): Update crypto-ws-api and aiohttp to latest versions.

@@ -17,7 +17,6 @@ class OrderBook:
         self.asks = {i[0]: i[1] for i in snapshot["a"]}
         self.bids = {i[0]: i[1] for i in snapshot["b"]}
 
-    # noinspection PyTypeChecker
     def get_book(self) -> dict:
         return {
             'stream': f"{self.symbol}@depth5",
@@ -541,7 +540,7 @@ def on_balance_update(data_in: list, ts: str, symbol: str, mode: str, uid=None) 
     return data_out
 
 
-def funding_wallet(res: []) -> []:
+def funding_wallet(res: list) -> list:
     balances = []
     for balance in res:
         _free = Decimal(balance["transferBalance"])
@@ -559,7 +558,7 @@ def funding_wallet(res: []) -> []:
     return balances
 
 
-def order_trade_list(res: []) -> []:
+def order_trade_list(res: list) -> list:
     trades = []
     for trade in reversed(res):
         trades.append(

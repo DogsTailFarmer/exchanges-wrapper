@@ -45,7 +45,6 @@ class HttpClient:
         self.rate_limit_handler = RateLimitHandler() if self.exchange == 'bybit' else None
 
     def declare_exchanges_implementation(self):
-        # noinspection PyTypeChecker
         self.ex_imps = {
         'binance': self._binance_request,
         'bitfinex': self._bitfinex_request,

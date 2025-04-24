@@ -77,9 +77,6 @@ def get_account(account_name: str) -> dict:
             ws_public = get_ws_public(endpoint, exchange, test_net)
             ws_api, ws_auth = get_ws_api_auth(endpoint, exchange, test_net)
 
-            if exchange == 'binance_us':
-                exchange = 'binance'
-
             return {
                 'exchange': exchange,
                 'sub_account': sub_account,
@@ -96,7 +93,7 @@ def get_account(account_name: str) -> dict:
                 'master_name': master_name,
                 'two_fa': account.get('two_fa'),
                 'ws_api': ws_api,
-            }
+           }
     return {}
 
 def get_ws_add_on(endpoint, exchange):
@@ -118,7 +115,7 @@ def get_ws_api_auth(endpoint, exchange, test_net):
     if exchange == 'bitfinex':
         ws_api = ws_auth = endpoint['ws_auth']
     else:
-        ws_auth = endpoint['ws_test'] if test_net else endpoint['ws_auth']
+        ws_auth = endpoint.get('ws_test') if test_net else endpoint.get('ws_auth')
         ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
         if exchange == 'okx':
             ws_api = ws_auth

@@ -79,7 +79,7 @@ def exchange_info(server_time: int, _symbol_params) -> {}:
     }
 
 
-def orders(res: [], response_type=None) -> []:
+def orders(res: list, response_type=None) -> list:
     binance_orders = []
     for _order in res:
         i_order = order(_order, response_type=response_type)
@@ -341,7 +341,7 @@ def interval2value(_interval) -> int:
     return resolution.get(_interval, 0)
 
 
-def klines(res: [], _interval: str) -> []:
+def klines(res: list, _interval: str) -> list:
     binance_klines = []
     for i in res:
         start_time = i.get('id') * 1000
@@ -363,7 +363,7 @@ def klines(res: [], _interval: str) -> []:
     return binance_klines
 
 
-def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
+def candle(res: dict, symbol: str = None, ch_type: str = None) -> {}:
     tick = res.get('tick')
     start_time = tick.get('id')
     _interval = ch_type.split('_')[1]
@@ -473,7 +473,7 @@ def on_order_update(_order: {}) -> {}:
     }
 
 
-def account_trade_list(res: []) -> []:
+def account_trade_list(res: list) -> list:
     binance_trade_list = []
     for trade in res:
         price = trade['price']

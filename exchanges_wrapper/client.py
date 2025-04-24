@@ -30,7 +30,6 @@ from crypto_ws_api.ws_session import UserWSSession
 logger = logging.getLogger(__name__)
 
 STATUS_TIMEOUT = 5  # sec, also use for lifetime limit for inactive order (Bitfinex) as 60 * STATUS_TIMEOUT
-USER_DATA_STREAM = "/api/v3/userDataStream"
 ORDER_ENDPOINT = "/api/v3/order"
 
 def fallback_warning(exchange, symbol=None):
@@ -161,7 +160,7 @@ class Client:
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
         user_data_stream = None
         if self.exchange == 'binance':
-            user_data_stream = await UserEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
+            user_data_stream = UserEventsDataStream(self, self.endpoint_ws_api, self.exchange, _trade_id)
         elif self.exchange == 'bitfinex':
             user_data_stream = BfxPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
         elif self.exchange == 'huobi':
@@ -185,7 +184,7 @@ class Client:
                 if not timeout:
                     logger.warning(f"{self.exchange} user WSS start timeout reached for {_trade_id}")
                     break
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.1)
 
     async def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
@@ -525,6 +524,7 @@ class Client:
                         self.ledgers_id.pop(0)
                     balances.append(i[_id])
             return balances
+        return None
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#recent-trades-list
     async def fetch_recent_trades_list(self, symbol, limit=500):
@@ -773,6 +773,7 @@ class Client:
                 params=params,
                 signed=True,
             )
+        return None
 
     async def fetch_api_info(self):
         res, _ = await self.http.send_api_call("/v5/user/query-api", signed=True)
@@ -816,7 +817,6 @@ class Client:
                 trade_id,
                 "order.place",
                 _params=params,
-                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -947,7 +947,6 @@ class Client:
                         trade_id,
                         "order.status",
                         _params=params,
-                        send_api_key=True,
                         _signed=True,
                     )
             if b_res is None:
@@ -1050,7 +1049,6 @@ class Client:
                 trade_id,
                 "order.cancel",
                 _params=params,
-                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1152,7 +1150,6 @@ class Client:
                 trade_id,
                 "openOrders.cancelAll",
                 _params=params,
-                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1275,7 +1272,6 @@ class Client:
                 trade_id,
                 "openOrders.status",
                 _params=params,
-                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1522,7 +1518,6 @@ class Client:
                 trade_id,
                 "account.status",
                 _params=params,
-                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1744,7 +1739,6 @@ class Client:
                 trade_id,
                 "myTrades",
                 _params=params,
-                send_api_key=True,
                 _signed=True
             )
             if binance_res is None:
@@ -1839,25 +1833,3 @@ class Client:
         return b_res
 
     # endregion
-
-    # USER DATA STREAM ENDPOINTS
-
-    # https://github.com/binance-exchange/binance-official-api-docs/blob/master/user-data-stream.md#create-a-listenkey
-    async def create_listen_key(self):
-        return await self.http.send_api_call(USER_DATA_STREAM, "POST")
-
-    # https://github.com/binance-exchange/binance-official-api-docs/blob/master/user-data-stream.md#close-a-listenkey
-    async def keep_alive_listen_key(self, listen_key):
-        if not listen_key:
-            raise ValueError("This query requires a listen_key.")
-        return await self.http.send_api_call(
-            USER_DATA_STREAM, "PUT", params={"listenKey": listen_key}
-        )
-
-    # https://github.com/binance-exchange/binance-official-api-docs/blob/master/user-data-stream.md#close-a-listenkey
-    async def close_listen_key(self, listen_key):
-        if not listen_key:
-            raise ValueError("This query requires a listen_key.")
-        return await self.http.send_api_call(
-            USER_DATA_STREAM, "DELETE", params={"listenKey": listen_key}
-        )

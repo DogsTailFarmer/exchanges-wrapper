@@ -8,12 +8,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def fetch_server_time(res: []) -> {}:
+def fetch_server_time(res: list) -> dict | None:
     if res:
         return {'serverTime': int(res[0].get('ts'))}
+    return None
 
 
-def exchange_info(server_time: int, trading_symbol: [], tickers: [], symbol_t) -> {}:
+def exchange_info(server_time: int, trading_symbol: list, tickers: list, symbol_t) -> {}:
     symbols = []
     symbols_price = {}
     for pair in tickers:
@@ -88,7 +89,7 @@ def exchange_info(server_time: int, trading_symbol: [], tickers: [], symbol_t) -
     }
 
 
-def orders(res: [], response_type=None) -> []:
+def orders(res: list, response_type=None) -> list:
     binance_orders = []
     for _order in res:
         i_order = order(_order, response_type=response_type)
@@ -201,7 +202,7 @@ def place_order_response(res: {}, req: {}) -> {}:
     }
 
 
-def account_information(res: [], u_time: str) -> {}:
+def account_balances(res: list) -> dict:
     balances = []
     for asset in res:
         _binance_res = {
@@ -210,24 +211,10 @@ def account_information(res: [], u_time: str) -> {}:
             "locked": asset.get('frozenBal'),
         }
         balances.append(_binance_res)
-
-    return {
-        "makerCommission": 0,
-        "takerCommission": 0,
-        "buyerCommission": 0,
-        "sellerCommission": 0,
-        "canTrade": True,
-        "canWithdraw": False,
-        "canDeposit": False,
-        "brokered": False,
-        "updateTime": int(u_time),
-        "accountType": "SPOT",
-        "balances": balances,
-        "permissions": ["SPOT"],
-    }
+    return {"balances": balances}
 
 
-def order_book(res: {}) -> {}:
+def order_book(res: dict) -> dict:
     asks = []
     bids = []
     binance_order_book = {"lastUpdateId": int(res.get('ts'))}
@@ -313,7 +300,7 @@ def interval(_interval: str) -> str:
     return resolution.get(_interval, 0)
 
 
-def klines(res: [], _interval: str) -> []:
+def klines(res: list, _interval: str) -> list:
     binance_klines = []
     for i in res:
         start_time = int(i[0])
@@ -352,7 +339,7 @@ def interval2value(_interval: str) -> int:
     return resolution.get(_interval, 0)
 
 
-def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
+def candle(res: list, symbol: str = None, ch_type: str = None) -> {}:
     symbol = symbol.replace('-', '').lower()
     start_time = int(res[0])
     _interval = ch_type.replace('kline_', '')
@@ -491,7 +478,7 @@ def on_balance_update(res: list, buffer: dict, transfer: bool) -> ():
     return res_diff, buffer
 
 
-def funding_wallet(res: []) -> []:
+def funding_wallet(res: list) -> list:
     balances = []
     for balance in res:
         _binance_res = {
@@ -506,7 +493,7 @@ def funding_wallet(res: []) -> []:
     return balances
 
 
-def order_trade_list(res: []) -> []:
+def order_trade_list(res: list) -> list:
     binance_trade_list = []
     for trade in res:
         price = trade['fillPx']

@@ -1,26 +1,15 @@
 # Parameters for exchanges-wrapper REST API Server exch_srv.py
 # Copyright © 2021-2025 Jerry Fedorenko aka VM
-# __version__ = "2.1.29"
+# __version__ = "2.1.34"
+
 # region endpoint
 [endpoint]
     [endpoint.binance]
         api_public = 'https://api.binance.com'
         api_auth = 'https://api.binance.com'
         ws_public = 'wss://stream.binance.com:9443'
-        ws_auth = 'wss://stream.binance.com:9443'
         api_test = 'https://testnet.binance.vision'
-        ws_test = 'wss://testnet.binance.vision/ws'
         ws_api = 'wss://ws-api.binance.com:443/ws-api/v3'
-        ws_api_test = 'wss://testnet.binance.vision/ws-api/v3'
-
-    [endpoint.binance_us]
-        api_public = 'https://api.binance.us'
-        api_auth = 'https://api.binance.us'
-        ws_public = 'wss://stream.binance.us:9443'
-        ws_auth = 'wss://stream.binance.us:9443'
-        api_test = 'https://testnet.binance.vision'
-        ws_test = 'wss://testnet.binance.vision/ws'
-        ws_api = 'wss://ws-api.binance.us:443/ws-api/v3'
         ws_api_test = 'wss://testnet.binance.vision/ws-api/v3'
 
     [endpoint.bitfinex]
@@ -58,35 +47,42 @@
 # endregion
 
 # region Binance.com accounts
+# How to Generate an Ed25519 Key Pair and Register then on Binance:
+# https://www.binance.com/en/support/faq/detail/6b9a63f1e3384cf48a2eedb82767a69a
 [[accounts]]
     exchange = 'binance'
     name = 'Demo - Binance'
-    api_key = '*********** Place API key there ************'
-    api_secret = '*********** Place secret API key there ************'
+    api_key = '*********** Place Ed25519 API key there ************'
+    api_secret = """
+-----BEGIN PRIVATE KEY-----
+*********** Place PRIVATE API key there ************
+-----END PRIVATE KEY-----
+"""
     test_net = true
 
 [[accounts]]
     exchange = 'binance'
     name = 'BinanceSub1'
-    api_key = '*********** Place API key there ************'
-    api_secret = '*********** Place secret API key there ************'
+    api_key = '*********** Place Ed25519 API key there ************'
+    api_secret = """
+-----BEGIN PRIVATE KEY-----
+*********** Place PRIVATE API key there ************
+-----END PRIVATE KEY-----
+"""
     test_net = false
 
 [[accounts]]
     exchange = 'binance'
     name = 'BinanceSub2'
-    api_key = '*********** Place API key there ************'
-    api_secret = '*********** Place secret API key there ************'
+    api_key = '*********** Place Ed25519 API key there ************'
+    api_secret = """
+-----BEGIN PRIVATE KEY-----
+*********** Place PRIVATE API key there ************
+-----END PRIVATE KEY-----
+"""
     master_email = 'sub1@mail.com'  # If set, 'BinanceSub1' use for collecting assets instead of Main
     test_net = false
 
-# Binance.us accounts
-[[accounts]]
-    exchange = 'binance_us'
-    name = 'Binance US'
-    api_key = '*********** Place API key there ************'
-    api_secret = '*********** Place secret API key there ************'
-    test_net = false
 # endregion
 
 # region Bitfinex accounts

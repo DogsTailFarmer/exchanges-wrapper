@@ -50,7 +50,7 @@ class OrderBook:
         return self
 
 
-def get_symbols(symbols_details: [], symbol) -> str:
+def get_symbols(symbols_details: list, symbol) -> str:
     symbols = []
     res = ",t"
     for symbol_details in symbols_details:
@@ -86,7 +86,7 @@ def symbol_name(_pair: str) -> ():
     return pair, base_asset, quote_asset
 
 
-def exchange_info(symbols_details: [], tickers: [], symbol_t) -> {}:
+def exchange_info(symbols_details: list, tickers: list, symbol_t) -> dict:
     symbols = []
     symbols_price = {
         pair[0].replace(':', '').upper()[1:]: pair[7] for pair in tickers
@@ -159,7 +159,7 @@ def exchange_info(symbols_details: [], tickers: [], symbol_t) -> {}:
     }
 
 
-def account_information(res: []) -> {}:
+def account_balances(res: list) -> dict:
     balances = []
     for balance in res:
         if balance[0] == 'exchange':
@@ -172,23 +172,10 @@ def account_information(res: []) -> {}:
                 "locked": locked,
             }
             balances.append(_binance_res)
-
-    return {
-        "makerCommission": 0,
-        "takerCommission": 0,
-        "buyerCommission": 0,
-        "sellerCommission": 0,
-        "canTrade": True,
-        "canWithdraw": False,
-        "canDeposit": False,
-        "updateTime": int(time.time() * 1000),
-        "accountType": "SPOT",
-        "balances": balances,
-        "permissions": ["SPOT"],
-    }
+    return {"balances": balances}
 
 
-def order(res: [], response_type=None, cancelled=False) -> {}:
+def order(res: list, response_type=None, cancelled=False) -> dict:
     # print(f"order.order: {res}")
     symbol = res[3][1:].replace(':', '')
     order_id = res[0]
@@ -275,7 +262,7 @@ def order(res: [], response_type=None, cancelled=False) -> {}:
         }
 
 
-def orders(res: [], response_type=None, cancelled=False) -> []:
+def orders(res: list, response_type=None, cancelled=False) -> list:
     binance_orders = []
     for _order in res:
         i_order = order(_order, response_type=response_type, cancelled=cancelled)
@@ -283,7 +270,7 @@ def orders(res: [], response_type=None, cancelled=False) -> []:
     return binance_orders
 
 
-def order_book(res: []) -> {}:
+def order_book(res: list) -> dict:
     binance_order_book = {"lastUpdateId": int(time.time() * 1000)}
     bids = []
     asks = []
@@ -297,7 +284,7 @@ def order_book(res: []) -> {}:
     return binance_order_book
 
 
-def ticker_price_change_statistics(res: [], symbol):
+def ticker_price_change_statistics(res: list, symbol):
     return {
         "symbol": symbol,
         "priceChange": str(res[4]),
@@ -323,7 +310,7 @@ def ticker_price_change_statistics(res: [], symbol):
     }
 
 
-def fetch_symbol_price_ticker(res: [], symbol) -> {}:
+def fetch_symbol_price_ticker(res: list, symbol) -> dict:
     return {
         "symbol": symbol,
         "price": str(res[6]),
@@ -348,7 +335,7 @@ def interval(_interval: str) -> int:
     return resolution.get(_interval, 0)
 
 
-def klines(res: [], _interval: str) -> []:
+def klines(res: list, _interval: str) -> list:
     binance_klines = []
     for i in res:
         start_time = i[0]
@@ -370,7 +357,7 @@ def klines(res: [], _interval: str) -> []:
     return binance_klines
 
 
-def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
+def candle(res: list, symbol: str = None, ch_type: str = None) -> dict:
     symbol = symbol[1:].replace(':', '')
     start_time = res[0]
     _interval = ch_type.split('_')[1]
@@ -403,7 +390,7 @@ def candle(res: [], symbol: str = None, ch_type: str = None) -> {}:
     }
 
 
-def account_trade_list(res: [], order_id=None) -> []:
+def account_trade_list(res: list, order_id=None) -> list:
     binance_trade_list = []
     for trade in res:
         if order_id is None or order_id == trade[3]:
@@ -429,7 +416,7 @@ def account_trade_list(res: [], order_id=None) -> []:
     return binance_trade_list
 
 
-def ticker(res: [], symbol: str = None) -> {}:
+def ticker(res: list, symbol: str = None) -> dict:
     _symbol = symbol[1:].replace(':', '').lower()
     return {
         'stream': f"{_symbol}@miniTicker",
@@ -447,7 +434,7 @@ def ticker(res: [], symbol: str = None) -> {}:
     }
 
 
-def on_funds_update(res: []) -> {}:
+def on_funds_update(res: list) -> dict:
     binance_funds = {
         'e': 'outboundAccountPosition',
         'E': int(time.time() * 1000),
@@ -471,7 +458,7 @@ def on_funds_update(res: []) -> {}:
     return binance_funds
 
 
-def on_balance_update(res: []) -> {}:
+def on_balance_update(res: list) -> dict:
     return {
         'e': 'balanceUpdate',
         'E': res[3],
@@ -481,7 +468,7 @@ def on_balance_update(res: []) -> {}:
     }
 
 
-def on_order_update(res: [], _order: {}) -> {}:
+def on_order_update(res: list, _order: {}) -> dict:
     # logger.info(f"on_order_update.res: {res}, order: {_order}")
     side = 'BUY' if res[7] > 0 else 'SELL'
     #
@@ -548,7 +535,7 @@ def on_order_update(res: [], _order: {}) -> {}:
     }
 
 
-def on_order_trade(_order: {}) -> {}:
+def on_order_trade(_order: dict) -> dict:
     # logger.info(f"on_order_trade._order: {_order}")
     event = _order['lastEvent']
     orig_qty = _order['origQty']
@@ -604,7 +591,7 @@ def on_order_trade(_order: {}) -> {}:
     }
 
 
-def funding_wallet(res: []) -> []:
+def funding_wallet(res: list) -> list:
     balances = []
     for balance in res:
         if balance[0] in ('exchange', 'funding'):
@@ -621,7 +608,6 @@ def funding_wallet(res: []) -> []:
                     "btcValuation": "0.0",
                 }
                 balances.append(_binance_res)
-
     return balances
 
 

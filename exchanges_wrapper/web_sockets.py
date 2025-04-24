@@ -1,5 +1,6 @@
 import sys
 import asyncio
+# noinspection PyPackageRequirements
 import ujson as json
 import logging.handlers
 from pathlib import Path
@@ -8,14 +9,16 @@ from decimal import Decimal
 import gzip
 from datetime import datetime, timezone
 
+# noinspection PyPackageRequirements
 from websockets.asyncio.client import connect
+# noinspection PyPackageRequirements
 from websockets import ConnectionClosed
 
 import exchanges_wrapper.parsers.bitfinex as bfx
 import exchanges_wrapper.parsers.huobi as hbp
 import exchanges_wrapper.parsers.okx as okx
 import exchanges_wrapper.parsers.bybit as bbt
-from crypto_ws_api.ws_session import generate_signature, compose_htx_ws_auth
+from crypto_ws_api.ws_session import generate_signature, compose_htx_ws_auth, compose_binance_ws_auth
 from exchanges_wrapper import LOG_PATH
 
 logger = logging.getLogger(__name__)
@@ -55,7 +58,7 @@ class EventsDataStream:
         async for self.websocket in connect(
                 self.endpoint,
                 logger=logger,
-                ping_interval=None if self.exchange == 'huobi' else 20
+                ping_interval=None if self.exchange in ('binance', 'huobi') else 20
         ):
             start_time = datetime.now(timezone.utc).replace(tzinfo=None)
             try:
@@ -100,7 +103,14 @@ class EventsDataStream:
     async def _handle_messages(self, msg, symbol=None, ch_type=str()):
         msg_data = json.loads(msg if isinstance(msg, str) else gzip.decompress(msg))
         if self.exchange == 'binance':
-            await self._handle_event(msg_data)
+            if "stream" in msg_data:
+                await self._handle_event(msg_data)
+            elif event := msg_data.get("event"):
+                await self._handle_event(event)
+            elif msg_data.get("status") == 200:
+                result = msg_data.get("result")
+                if isinstance(result, dict) and not result:
+                    self.wss_started = True
         elif self.exchange == 'bybit':
             if _data := msg_data.get('data'):
                 if ch_type == 'depth5':
@@ -368,7 +378,7 @@ class MarketEventsDataStream(EventsDataStream):
                 content = self._order_book.get_book()
         #
         stream_name = None
-        if isinstance(content, dict) and "stream" in content:
+        if isinstance(content, dict):
             stream_name = content["stream"]
             content = content["data"]
             content["stream"] = stream_name
@@ -593,33 +603,21 @@ class BBTPrivateEventsDataStream(EventsDataStream):
 
 
 class UserEventsDataStream(EventsDataStream):
-    def __init__(self, client, endpoint, exchange, trade_id):
-        super().__init__(client, endpoint, exchange, trade_id)
-        self.listen_key = None
-
-    async def async_init(self):
-        self.listen_key = (await self.client.create_listen_key())["listenKey"]
-        self.endpoint = f"{self.endpoint}/ws/{self.listen_key}"
-        self.wss_started = True
-        return self
-
-    def __await__(self):
-        return self.async_init().__await__()
-
-    async def _heartbeat(self, listen_key, interval=60 * 30):
-        # 30 minutes is recommended according to
-        # https://github.com/binance-exchange/binance-official-api-docs/blob/master/user-data-stream.md#pingkeep-alive-a-listenkey
-        while True:
-            await asyncio.sleep(interval)
-            await self.client.keep_alive_listen_key(listen_key)
 
     async def start_wss(self):
-        logger.info(f"Start User WSS for {self.exchange}")
-        self.tasks_manage(self._heartbeat(self.listen_key))
-        try:
-            await self.ws_listener()
-        finally:
-            self.tasks_cancel()
+        await self.websocket.send(
+            json.dumps(
+                compose_binance_ws_auth(self.trade_id, self.client.api_key, self.client.api_secret)
+            )
+        )
+        await asyncio.sleep(0)
+        await self._handle_messages(await self.websocket.recv())
+        #
+        request = {
+            "id": self.trade_id,
+            "method": "userDataStream.subscribe"
+        }
+        await self.ws_listener(request)
 
     async def _handle_event(self, content):
         # logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
