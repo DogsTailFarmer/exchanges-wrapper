@@ -1,3 +1,7 @@
+## 2.1.35 2025-04-24
+### Fix
+* Fixed incorrect merging of branches
+
 ## 2.1.34 2025-04-24
 🔧 fix(exchanges_wrapper): adjust return types for several functions to use 'list' and 'dict' annotations
 🔧 fix(exchanges_wrapper): ensure consistent return types in 'fetch_server_time' and 'get_symbols' functions

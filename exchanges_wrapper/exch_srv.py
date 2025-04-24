@@ -359,10 +359,9 @@ class Martin(mr.MartinBase):
         )
         # Send only balances
         res = account_information.get('balances', [])
-        # Create consolidated list of asset balances from SPOT and Funding wallets
         balances = [
             {'asset': i['asset'], 'free': i['free'], 'locked': i['locked']}
-            for i in res if float(i['free']) or float(i['locked'])
+            for i in res if Decimal(i['free']) or Decimal(i['locked'])
         ]
         response.items = list(map(json.dumps, balances))
         return response
@@ -374,7 +373,6 @@ class Martin(mr.MartinBase):
         res = []
         if client.exchange in ('bitfinex', 'okx', 'bybit') \
                 or (open_client.real_market and client.exchange == 'binance'):
-
             res, _, _ = await self.send_request(
                 'fetch_funding_wallet',
                 request,
@@ -383,7 +381,6 @@ class Martin(mr.MartinBase):
                 need_btc_valuation=request.need_btc_valuation,
                 receive_window=request.receive_window
             )
-
         response.items = list(map(json.dumps, res))
         return response
 
@@ -507,8 +504,7 @@ class Martin(mr.MartinBase):
             start_time=request.start_time,
             end_time=None,
             from_id=None,
-            limit=request.limit,
-            receive_window=None
+            limit=request.limit
         )
 
         response.items = list(map(json.dumps, res))
@@ -690,7 +686,6 @@ class Martin(mr.MartinBase):
             price=request.price,
             new_client_order_id=request.new_client_order_id,
             response_type=ResponseType.RESULT.value,
-            receive_window=None,
             test=False
         )
 
@@ -708,8 +703,7 @@ class Martin(mr.MartinBase):
             symbol=request.symbol,
             order_id=request.order_id,
             origin_client_order_id=None,
-            new_client_order_id=None,
-            receive_window=None
+            new_client_order_id=None
         )
 
         response.from_pydict(res)
@@ -788,7 +782,7 @@ class Martin(mr.MartinBase):
         return response
 
     async def client_restart(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        if session:=OpenClient.get_client(request.client_id).client.http.session:
+        if session := OpenClient.get_client(request.client_id).client.http.session:
             await session.close()
         OpenClient.remove_client(request.account_name)
         return mr.SimpleResponse(success=True)

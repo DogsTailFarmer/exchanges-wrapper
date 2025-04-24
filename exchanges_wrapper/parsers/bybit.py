@@ -266,7 +266,7 @@ def ticker_price_change_statistics(res: dict, ts: int) -> dict:
     }
 
 
-def account_information(res: list, ts: int) -> dict:
+def account_balances(res: list) -> dict:
     balances = []
     for asset in res:
         locked = asset["locked"]
@@ -276,20 +276,7 @@ def account_information(res: list, ts: int) -> dict:
             "free": free,
             "locked": locked,
         })
-    return {
-        "makerCommission": 0,
-        "takerCommission": 0,
-        "buyerCommission": 0,
-        "sellerCommission": 0,
-        "canTrade": True,
-        "canWithdraw": False,
-        "canDeposit": False,
-        "brokered": False,
-        "updateTime": ts,
-        "accountType": "SPOT",
-        "balances": balances,
-        "permissions": ["SPOT"],
-    }
+    return {"balances": balances}
 
 
 def ticker(res: dict) -> dict:

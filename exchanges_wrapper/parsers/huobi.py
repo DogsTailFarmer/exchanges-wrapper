@@ -190,7 +190,7 @@ def order_cancelled(symbol, order_id=None, origin_client_order_id=None,) -> {}:
     }
 
 
-def account_information(res: {}) -> {}:
+def account_balances(res: {}) -> {}:
     """
     This function parses the Huobi API response for account information and
     returns a dictionary with relevant details.
@@ -227,20 +227,7 @@ def account_information(res: {}) -> {}:
         }
         for asset in assets
     ]
-
-    return {
-        "makerCommission": 0,
-        "takerCommission": 0,
-        "buyerCommission": 0,
-        "sellerCommission": 0,
-        "canTrade": True,
-        "canWithdraw": False,
-        "canDeposit": False,
-        "updateTime": int(time.time() * 1000),
-        "accountType": "SPOT",
-        "balances": balances,
-        "permissions": ["SPOT"],
-    }
+    return {"balances": balances}
 
 
 def order_book(res: {}) -> {}:

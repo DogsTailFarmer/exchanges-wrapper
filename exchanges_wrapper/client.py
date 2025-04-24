@@ -146,7 +146,7 @@ class Client:
         logger.info(f"Info for {self.exchange}:{symbol} loaded successfully")
 
     async def close(self):
-        if self.http.session:
+        if self.http and self.http.session:
             await self.http.session.close()
 
     @property
@@ -558,29 +558,6 @@ class Client:
             "/api/v3/historicalTrades", params=params, signed=False
         )
 
-    # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#compressedaggregate-trades-list
-    async def fetch_aggregate_trades_list(
-            self, symbol, from_id=None, start_time=None, end_time=None, limit=500
-    ):
-        self.assert_symbol(symbol)
-        if limit == 500:
-            params = {"symbol": symbol}
-        elif 0 < limit <= 1000:
-            params = {"symbol": symbol, "limit": limit}
-        else:
-            raise ValueError(
-                f"{limit} is not a valid limit. A valid limit should be > 0 and <= to 1000."
-            )
-        if from_id:
-            params["fromId"] = from_id
-        if start_time:
-            params["startTime"] = start_time
-        if end_time:
-            params["endTime"] = end_time
-        return await self.http.send_api_call(
-            "/api/v3/aggTrades", params=params, signed=False
-        )
-
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#klinecandlestick-data
     async def fetch_klines(self, symbol, interval, start_time=None, end_time=None, limit=500):
         self.assert_symbol(symbol)
@@ -622,8 +599,6 @@ class Client:
                 endpoint=self.endpoint_api_public,
                 **params
             )
-            if res and isinstance(res, list):
-                res.sort(reverse=False)
             if res:
                 binance_res = bfx.klines(res, interval)
         elif self.exchange == 'huobi':
@@ -634,14 +609,12 @@ class Client:
                 "market/history/kline",
                 **params,
             )
-            # print(f"fetch_klines.res: {res[::-1]}")
             binance_res = hbp.klines(res[::-1], interval)
         elif self.exchange == 'okx':
             params = {'instId': self.symbol_to_okx(symbol),
                       'bar': interval,
                       'limit': str(min(limit, 300))}
             res = await self.http.send_api_call("/api/v5/market/candles", **params)
-            res.sort(reverse=False)
             binance_res = okx.klines(res, interval)
         elif self.exchange == 'bybit':
             params = {"category": "spot", "symbol": symbol, "interval": interval, "limit": limit}
@@ -651,20 +624,12 @@ class Client:
                 params["end"] = end_time
             res, _ = await self.http.send_api_call("/v5/market/kline", **params)
             res = res.get("list", [])
-            res.sort(reverse=False)
             binance_res = bbt.klines(res, interval)
-        # print(f"fetch_klines.binance_res: {binance_res}")
-        return binance_res
 
-    # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-average-price
-    async def fetch_average_price(self, symbol):
-        self.assert_symbol(symbol)
-        return await self.http.send_api_call(
-            "/api/v3/avgPrice",
-            params={"symbol": symbol},
-            signed=False,
-            send_api_key=False,
-        )
+        if self.exchange not in ('binance', 'huobi'):
+            binance_res.sort()
+
+        return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#24hr-ticker-price-change-statistics
     async def fetch_ticker_price_change_statistics(self, symbol=None):
@@ -791,7 +756,6 @@ class Client:
             price=None,
             new_client_order_id=None,
             response_type=None,
-            receive_window=None,
             test=False,
     ):
         self.assert_symbol(symbol)
@@ -811,8 +775,6 @@ class Client:
                 params["newClientOrderId"] = new_client_order_id
             if response_type:
                 params["newOrderRespType"] = response_type
-            if receive_window:
-                params["recvWindow"] = receive_window
             binance_res = await self.user_session.handle_request(
                 trade_id,
                 "order.place",
@@ -927,7 +889,6 @@ class Client:
             symbol,
             order_id=None,
             origin_client_order_id=None,
-            receive_window=None,
             response_type=None,
     ):
         self.assert_symbol(symbol)
@@ -941,8 +902,6 @@ class Client:
                 params["orderId"] = order_id
             else:
                 params["origClientOrderId"] = origin_client_order_id
-            if receive_window:
-                params["recvWindow"] = receive_window
             b_res = await self.user_session.handle_request(
                         trade_id,
                         "order.status",
@@ -1026,8 +985,7 @@ class Client:
             symbol,
             order_id=None,
             origin_client_order_id=None,
-            new_client_order_id=None,
-            receive_window=None,
+            new_client_order_id=None
     ):
         self.assert_symbol(symbol)
         binance_res = {}
@@ -1043,8 +1001,6 @@ class Client:
                 params["originClientOrderId"] = origin_client_order_id
             if new_client_order_id:
                 params["newClientOrderId"] = origin_client_order_id
-            if receive_window:
-                params["recvWindow"] = receive_window
             binance_res = await self.user_session.handle_request(
                 trade_id,
                 "order.cancel",
@@ -1139,13 +1095,11 @@ class Client:
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-all-open-orders-on-a-symbol-trade
-    async def cancel_all_orders(self, trade_id, symbol, receive_window=None):
+    async def cancel_all_orders(self, trade_id, symbol):
         self.assert_symbol(symbol)
         binance_res = []
         if self.exchange == 'binance':
             params = {"symbol": symbol}
-            if receive_window:
-                params["recvWindow"] = receive_window
             binance_res = await self.user_session.handle_request(
                 trade_id,
                 "openOrders.cancelAll",
@@ -1161,7 +1115,7 @@ class Client:
                     signed=True,
                     )
         elif self.exchange == 'bitfinex':
-            orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
+            orders = await self.fetch_open_orders(trade_id, symbol, response_type=True)
             orders_id = [order.get('orderId') for order in orders]
             params = {'id': orders_id}
             res = await self.user_session.handle_request(trade_id, "oc_multi", _params=params)
@@ -1179,7 +1133,7 @@ class Client:
             else:
                 logger.debug(f"bitfinex: cancel_all_orders.res: {res}")
         elif self.exchange == 'huobi':
-            orders = await self.fetch_open_orders(trade_id, symbol, receive_window=receive_window, response_type=True)
+            orders = await self.fetch_open_orders(trade_id, symbol, response_type=True)
             orders_id = [str(order.get('orderId')) for order in orders]
             params = {'order-ids': orders_id}
 
@@ -1202,7 +1156,6 @@ class Client:
             orders = await self.fetch_open_orders(
                 trade_id,
                 symbol,
-                receive_window=receive_window,
                 response_type=True
             )
             _symbol = self.symbol_to_okx(symbol)
@@ -1261,13 +1214,11 @@ class Client:
         return binance_res
 
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
-    async def fetch_open_orders(self, trade_id, symbol, receive_window=None, response_type=None):
+    async def fetch_open_orders(self, trade_id, symbol, response_type=None):
         self.assert_symbol(symbol)
         binance_res = []
         if self.exchange == 'binance':
             params = {"symbol": symbol}
-            if receive_window:
-                params["recvWindow"] = receive_window
             binance_res = await self.user_session.handle_request(
                 trade_id,
                 "openOrders.status",
@@ -1316,204 +1267,12 @@ class Client:
             binance_res = bbt.orders(res.get('list', []), response_type=response_type)
         return binance_res
 
-    # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#all-orders-user_data
-    async def fetch_all_orders(
-            self,
-            symbol,
-            order_id=None,
-            start_time=None,
-            end_time=None,
-            limit=500,
-            receive_window=None,
-    ):
-        self.assert_symbol(symbol)
-        if limit == 500:
-            params = {"symbol": symbol}
-        elif 0 < limit <= 1000:
-            params = {"symbol": symbol, "limit": limit}
-        else:
-            raise ValueError(
-                f"{limit} is not a valid limit. A valid limit should be > 0 and <= to 1000."
-            )
-        if order_id:
-            params["orderId"] = order_id
-        if start_time:
-            params["startTime"] = start_time
-        if end_time:
-            params["endTime"] = end_time
-        if receive_window:
-            params["recvWindow"] = receive_window
-        return await self.http.send_api_call(
-            "/api/v3/allOrders",
-            params=params,
-            signed=True,
-        )
-
-    # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#new-oco-trade
-    async def create_oco(
-            self,
-            symbol,
-            side,
-            quantity,
-            price,
-            stop_price,
-            list_client_order_id=None,
-            limit_iceberg_quantity=None,
-            stop_client_order_id=None,
-            stop_limit_price=None,
-            stop_iceberg_quantity=None,
-            stop_limit_time_in_force=None,
-            response_type=None,
-            receive_window=None,
-    ):
-        self.assert_symbol(symbol)
-        side = self.enum_to_value(side)
-        if not side:
-            raise ValueError("This query requires a side.")
-        if not quantity:
-            raise ValueError("This query requires a quantity.")
-        if not price:
-            raise ValueError("This query requires a price.")
-        if not stop_price:
-            raise ValueError("This query requires a stop_price.")
-
-        params = {
-            "symbol": symbol,
-            "side": side,
-            "quantity": self.refine_amount(symbol, quantity),
-            "price": self.refine_price(symbol, price),
-            "stopPrice": self.refine_price(symbol, stop_price),
-            "stopLimitPrice": self.refine_price(symbol, stop_limit_price),
-        }
-
-        if list_client_order_id:
-            params["listClientOrderId"] = list_client_order_id
-        if limit_iceberg_quantity:
-            params["limitIcebergQty"] = self.refine_amount(
-                symbol, limit_iceberg_quantity
-            )
-        if stop_client_order_id:
-            params["stopLimitPrice"] = self.refine_price(symbol, stop_client_order_id)
-        if stop_iceberg_quantity:
-            params["stopIcebergQty"] = self.refine_amount(symbol, stop_iceberg_quantity)
-        if stop_limit_time_in_force:
-            params["stopLimitTimeInForce"] = stop_limit_time_in_force
-        if response_type:
-            params["newOrderRespType"] = response_type
-        if receive_window:
-            params["recvWindow"] = receive_window
-
-        return await self.http.send_api_call(
-            "/api/v3/order/oco", "POST", data=params, signed=True
-        )
-
-    # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-oco-user_data
-    async def fetch_oco(  # lgtm [py/similar-function]
-            self,
-            symbol,
-            order_list_id=None,
-            origin_client_order_id=None,
-            receive_window=None,
-    ):
-        self.assert_symbol(symbol)
-        params = {"symbol": symbol}
-        if not order_list_id and not origin_client_order_id:
-            raise ValueError(
-                "This query requires an order_id or an origin_client_order_id."
-            )
-        if order_list_id:
-            params["orderListId"] = order_list_id
-        if origin_client_order_id:
-            params["originClientOrderId"] = origin_client_order_id
-        if receive_window:
-            params["recvWindow"] = receive_window
-
-        return await self.http.send_api_call(
-            "/api/v3/orderList",
-            params=params,
-            signed=True,
-        )
-
-    # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#cancel-oco-trade
-    async def cancel_oco(  # lgtm [py/similar-function]
-            self,
-            symbol,
-            order_list_id=None,
-            list_client_order_id=None,
-            new_client_order_id=None,
-            receive_window=None,
-    ):
-        self.assert_symbol(symbol)
-        params = {"symbol": symbol}
-        if not order_list_id and not list_client_order_id:
-            raise ValueError(
-                "This query requires a order_list_id or a list_client_order_id."
-            )
-        if order_list_id:
-            params["orderListId"] = order_list_id
-        if list_client_order_id:
-            params["listClientOrderId"] = list_client_order_id
-        if new_client_order_id:
-            params["newClientOrderId"] = new_client_order_id
-        if receive_window:
-            params["recvWindow"] = receive_window
-
-        return await self.http.send_api_call(
-            "/api/v3/order/oco",
-            "DELETE",
-            params=params,
-            signed=True,
-        )
-
-    # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-open-oco-user_data
-    async def fetch_open_oco(self, receive_window=None):
-        params = {}
-
-        if receive_window:
-            params["recvWindow"] = receive_window
-
-        return await self.http.send_api_call(
-            "/api/v3/openOrderList",
-            params=params,
-            signed=True,
-        )
-
-    # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#query-all-oco-user_data
-    async def fetch_all_oco(
-            self,
-            from_id=None,
-            start_time=None,
-            end_time=None,
-            limit=None,
-            receive_window=None,
-    ):
-        params = {}
-
-        if from_id:
-            params["fromId"] = from_id
-        if start_time:
-            params["startTime"] = start_time
-        if end_time:
-            params["endTime"] = end_time
-        if limit:
-            params["limit"] = limit
-        if receive_window:
-            params["recvWindow"] = receive_window
-
-        return await self.http.send_api_call(
-            "/api/v3/allOrderList",
-            params=params,
-            signed=True,
-        )
-
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#account-information-user_data
-    async def fetch_account_information(self, trade_id, receive_window=None):
+    async def fetch_account_information(self, trade_id):
         params = {}
         binance_res = {}
         if self.exchange == 'binance':
             params["omitZeroBalances"] = "true"
-            if receive_window:
-                params["recvWindow"] = receive_window
             binance_res = await self.user_session.handle_request(
                 trade_id,
                 "account.status",
@@ -1534,23 +1293,23 @@ class Client:
                 signed=True
             )
             if res:
-                binance_res = bfx.account_information(res)
+                binance_res = bfx.account_balances(res)
         elif self.exchange == 'huobi':
             res = await self.http.send_api_call(f"v1/account/accounts/{self.account_id}/balance", signed=True)
-            binance_res = hbp.account_information(res.get('list'))
+            binance_res = hbp.account_balances(res.get('list'))
         elif self.exchange == 'okx':
             res = await self.http.send_api_call("/api/v5/account/balance", signed=True)
-            binance_res = okx.account_information(res[0].get('details'), res[0].get('uTime'))
+            binance_res = okx.account_balances(res[0].get('details'))
         elif self.exchange == 'bybit':
             params = {'accountType': 'UNIFIED'}
-            res, ts = await self.http.send_api_call("/v5/account/wallet-balance", signed=True, **params)
-            binance_res = bbt.account_information(res["list"][0]["coin"], ts)
+            res, _ = await self.http.send_api_call("/v5/account/wallet-balance", signed=True, **params)
+            binance_res = bbt.account_balances(res["list"][0]["coin"])
         # logger.info(f"fetch_account_information.binance_res: {trade_id}: {binance_res}")
         return binance_res
 
     # https://binance-docs.github.io/apidocs/spot/en/#funding-wallet-user_data
     # Not can be used for Spot Test Network, for real SPOT market only
-    async def fetch_funding_wallet(self, asset=None, need_btc_valuation=None, receive_window=None):
+    async def fetch_funding_wallet(self, asset=None, need_btc_valuation=None):
         binance_res = []
         if self.exchange == 'binance':
             params = {}
@@ -1558,8 +1317,6 @@ class Client:
                 params["asset"] = asset
             if need_btc_valuation:
                 params["needBtcValuation"] = "true"
-            if receive_window:
-                params["recvWindow"] = receive_window
             binance_res = await self.http.send_api_call(
                 "/sapi/v1/asset/get-funding-asset",
                 method="POST",
@@ -1590,12 +1347,10 @@ class Client:
         return binance_res
 
     # https://developers.binance.com/docs/sub_account/asset-management/Transfer-to-Sub-account-of-Same-Master
-    async def transfer_to_sub(self, email, symbol, quantity, receive_window=None):
+    async def transfer_to_sub(self, email, symbol, quantity):
         if self.exchange == 'binance':
             quantity = any2str(Decimal(quantity).quantize(Decimal('0.01234567'), rounding=ROUND_HALF_DOWN))
             params = {"toEmail": email, "asset": symbol, "amount": quantity}
-            if receive_window:
-                params["recvWindow"] = receive_window
             return await self.http.send_api_call(
                 "/sapi/v1/sub-account/transfer/subToSub",
                 "POST",
@@ -1606,17 +1361,15 @@ class Client:
             raise ValueError(f"Can't implemented for {self.exchange}")
 
     # https://binance-docs.github.io/apidocs/spot/en/#transfer-to-master-for-sub-account
-    async def transfer_to_master(self, symbol, quantity, receive_window=None):
+    async def transfer_to_master(self, symbol, quantity):
         _quantity = any2str(Decimal(quantity).quantize(Decimal('0.01234567'), rounding=ROUND_HALF_DOWN))
         binance_res = {}
         if self.exchange == 'binance':
             if self.master_email:
                 logger.info(f"Collect {_quantity}{symbol} to {self.master_email} sub-account")
-                binance_res = await self.transfer_to_sub(self.master_email, symbol, quantity, receive_window)
+                binance_res = await self.transfer_to_sub(self.master_email, symbol, quantity)
             else:
                 params = {"asset": symbol, "amount": _quantity}
-                if receive_window:
-                    params["recvWindow"] = receive_window
                 binance_res = await self.http.send_api_call(
                     "/sapi/v1/sub-account/transfer/subToMaster",
                     "POST",
@@ -1711,8 +1464,7 @@ class Client:
             start_time=None,
             end_time=None,
             from_id=None,
-            limit=500,
-            receive_window=None,
+            limit=500
     ):
         self.assert_symbol(symbol)
         binance_res = []
@@ -1733,8 +1485,6 @@ class Client:
                 params["endTime"] = end_time
             if from_id:
                 params["fromId"] = from_id
-            if receive_window:
-                params["recvWindow"] = receive_window
             binance_res = await self.user_session.handle_request(
                 trade_id,
                 "myTrades",
