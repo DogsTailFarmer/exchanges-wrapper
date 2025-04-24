@@ -13,6 +13,7 @@
 <a href="https://pepy.tech/project/exchanges-wrapper" target="_blank"><img alt="Downloads" title="Downloads" src="https://static.pepy.tech/badge/exchanges-wrapper/month"/></a>
 ***
 On `Binance`: now API key type [Ed25519](https://www.binance.com/en/support/faq/detail/6b9a63f1e3384cf48a2eedb82767a69a) is used instead of `HMAC`
+
 From `2.1.34` must be updated `exch_srv_cfg.toml` from `exchanges_wrapper/exch_srv_cfg.toml.template`
 ***
 
@@ -54,9 +55,13 @@ at real bidding. First, run applications on the [Binance Spot Test Network](http
 ## Get started
 ### Prepare exchange account
 Create account on [Binance](https://accounts.binance.com/en/register?ref=FXQ6HY5O) and get 10% discount on all trading fee
+
 Create account on [HTX](https://www.htx.com/invite/en-us/1f?invite_code=9uaw3223) From every invitee, win a Mystery Box (up to 1,500 USDT) and 30% of their trading fees.
+
 Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
+
 Create account on [OKX](https://okx.com/join/2607649) and will be in for the chance to earn up to 100 USDT
+
 Create account on [Bybit](https://www.bybit.com/invite?ref=9KEW1K) and get exclusive referral rewards
 
 Also, you can start strategy on [Hetzner](https://hetzner.cloud/?ref=uFdrF8nsdGMc) cloud VPS only for 4.75 € per month
