@@ -39,7 +39,6 @@ class FetchFundingWalletRequest(betterproto.Message):
     trade_id: str = betterproto.string_field(2)
     asset: str = betterproto.string_field(3)
     need_btc_valuation: bool = betterproto.bool_field(4)
-    receive_window: int = betterproto.int64_field(5)
 
 
 @dataclass(eq=False, repr=False)

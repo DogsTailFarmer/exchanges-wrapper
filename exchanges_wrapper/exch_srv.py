@@ -261,8 +261,7 @@ class Martin(mr.MartinBase):
             trade_id=request.trade_id,
             symbol=request.symbol,
             order_id=request.order_id,
-            origin_client_order_id=request.client_order_id,
-            receive_window=None
+            origin_client_order_id=request.client_order_id
         )
         logger.debug(f"{msg_header}: {res}")
 
@@ -378,8 +377,7 @@ class Martin(mr.MartinBase):
                 request,
                 rate_limit=True,
                 asset=request.asset,
-                need_btc_valuation=request.need_btc_valuation,
-                receive_window=request.receive_window
+                need_btc_valuation=request.need_btc_valuation
             )
         response.items = list(map(json.dumps, res))
         return response

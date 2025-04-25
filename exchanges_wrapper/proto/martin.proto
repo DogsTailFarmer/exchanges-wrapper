@@ -56,7 +56,6 @@ message FetchFundingWalletRequest{
   string trade_id = 2;
   string asset = 3;
   bool need_btc_valuation = 4;
-  int64 receive_window = 5;
 }
 
 message CancelOrderResponse{

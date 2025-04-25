@@ -1,3 +1,8 @@
+## 2.1.36 2025-04-25
+🎨 refactor(exch_srv.py): remove `receive_window` from request handling  
+📝 chore(proto): delete `receive_window` field from `martin.proto`  
+♻️ refactor(martin/__init__.py): remove `receive_window` from data class
+
 ## 2.1.35 2025-04-24
 ### Fix
 * Fixed incorrect merging of branches
