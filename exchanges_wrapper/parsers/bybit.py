@@ -2,12 +2,13 @@
 Parser for convert Bybit REST API/WSS V5 response to Binance like result
 """
 import asyncio
-import random
 import time
 from decimal import Decimal
 import logging
 
 logger = logging.getLogger(__name__)
+
+TIMEOUT = 30
 
 
 class OrderBook:
@@ -54,8 +55,13 @@ class OrderBook:
 class RateLimitHandler:
     def __init__(self):
         self.stats = {}  # {'path': [limit_status, start_time, reset_time, range_window, limit]}
+        self.path_fired = set()
+        self.path_count = {}
 
     def update(self, path, headers):
+        if self.path_count[path]:
+            self.path_count[path] -= 1
+
         if limit := int(headers.get('X-Bapi-Limit', '0')):
             limit_status = int(headers['X-Bapi-Limit-Status'])
             now = int(time.time() * 1000)
@@ -72,34 +78,44 @@ class RateLimitHandler:
             else:
                 range_window = max(_range_window, now - start_time)
                 n = (_limit_status - limit_status) if _limit_status > limit_status else 1
-                reset_time += n * range_window / limit
+                reset_time += int(n * range_window / limit)
             self.stats[path] = [limit_status, start_time, reset_time, range_window, limit]
-
-    async def wait(self, path):
-        if self.stats.get(path) is None:
-            return
-        limit_status, start_time, reset_time, range_window, limit = self.stats[path]
-        min_delay = range_window / limit
-        now = int(time.time() * 1000)
-        if limit_status <= 1:
-            delay = max(
-                random.randint(1000, 2000),  #NOSONAR python:S2245
-                max(reset_time, start_time + range_window) - now
-            ) / 1000
         else:
-            delay = max(min_delay, reset_time - now) / 1000
-        await asyncio.sleep(delay)
+            self.path_fired.discard(path)
+
+    async def wait(self, path, count=0):
+        if path not in self.path_count:
+            self.path_count[path] = 0
+        self.path_count[path] += 1
+
+        _count = count or self.path_count[path]
+
+        if stats := self.stats.get(path):
+            limit_status, start_time, reset_time, range_window, limit = stats
+            if limit_status <= 1 or count >= limit - 1:
+                delay = (
+                    (
+                     max(reset_time, start_time + range_window)
+                        - time.time() * 1000
+                        + _count * range_window / limit
+                    ) / 1000
+                )
+                await asyncio.sleep(delay)
+        else:
+            if path in self.path_fired:
+                start_time = time.time()
+                while not self.stats.get(path) and (time.time() - start_time < TIMEOUT):
+                    await asyncio.sleep(0.1)
+                await self.wait(path, count=_count)
+            else:
+                self.path_fired.add(path)
 
     def fire_exceeded_rate_limit(self, path):
         if stats := self.stats.get(path):
-            limit_status, start_time, _reset_time, range_window, limit = stats
-            self.stats[path] = [
-                limit_status,
-                start_time,
-                int(time.time() * 1000) + range_window,
-                range_window,
-                limit
-            ]
+            _, start_time, _, range_window, limit = stats
+            new_reset_time = int(time.time() * 1000) + range_window
+            self.stats[path] = [0, start_time, new_reset_time, range_window, limit]
+            logger.warning(f"Bybit Rate limit exceeded for path: {path}")
 
 
 def fetch_server_time(res: dict) -> dict:

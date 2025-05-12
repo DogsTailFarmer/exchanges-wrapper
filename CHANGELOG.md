@@ -1,3 +1,10 @@
+## 2.1.37 2025-05-12
+🚀 feat(client): add 'limit' parameter to Bybit API order fetching  
+🔧 fix(http_client): handle errors with path in API response  
+🐛 fix(exch_srv): reset rate limit time properly for Bybit  
+🔄 refactor(bybit): enhance rate limit handling and waiting mechanism
+
+
 ## 2.1.36 2025-04-25
 🎨 refactor(exch_srv.py): remove `receive_window` from request handling  
 📝 chore(proto): delete `receive_window` field from `martin.proto`  
