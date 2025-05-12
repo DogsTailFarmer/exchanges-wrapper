@@ -12,7 +12,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "2.1.36"
+__version__ = "2.1.37"
 
 from pathlib import Path
 import shutil
@@ -23,7 +23,7 @@ from grpclib.utils import graceful_exit
 from grpclib import exceptions
 
 __all__ = [
-    Server, GRPCError, Status, Channel, graceful_exit, exceptions
+    'Server', 'GRPCError', 'Status', 'Channel', 'graceful_exit', 'exceptions'
 ]
 
 WORK_PATH = Path(Path.home(), ".MartinBinance")

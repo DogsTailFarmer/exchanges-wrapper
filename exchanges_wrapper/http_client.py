@@ -107,20 +107,23 @@ class HttpClient:
             elif payload.get('retCode') == 10002:
                 raise ExchangeError(ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW)
             elif payload.get('retCode') == 10006:
-                self.rate_limit_handler.fire_exceeded_rate_limit(path)
                 logger.warning(f"ByBit API: {payload.get('retMsg')}")
+                self.rate_limit_handler.fire_exceeded_rate_limit(path)
                 return payload.get('result'), payload.get('time')
             else:
                 raise ExchangeError(f"API request failed: {response.status}:{response.reason}:{payload}")
-        elif self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
+
+        if self.exchange == 'huobi' and payload and (payload.get('status') == 'ok' or payload.get('ok')):
             return payload.get('data', payload.get('tick'))
-        elif self.exchange == 'okx' and payload and payload.get('code') == '0':
+
+        if self.exchange == 'okx' and payload and payload.get('code') == '0':
             return payload.get('data', [])
-        elif self.exchange not in ('binance', 'bitfinex') \
+
+        if self.exchange not in ('binance', 'bitfinex') \
                 or (self.exchange == 'binance' and payload and "code" in payload):
             raise ExchangeError(f"API request failed: {response.status}:{response.reason}:{payload}")
-        else:
-            return payload
+
+        return payload
 
     async def send_api_call(self,
                             path,
@@ -142,7 +145,7 @@ class HttpClient:
                 if self.exchange == 'bybit':
                     self.rate_limit_handler.update(path, response.headers)
 
-                return await self.handle_errors(response)
+                return await self.handle_errors(response, path)
         except (aiohttp.ClientConnectionError, asyncio.exceptions.TimeoutError):
             await self.session.close()
             raise ExchangeError("HTTP ClientConnectionError, the connection will be restored")

@@ -94,7 +94,7 @@ class OpenClient:
 
 # noinspection PyPep8Naming,PyMethodMayBeStatic
 class Martin(mr.MartinBase):
-    rate_limit_reached_time = None
+    rate_limit_reached_time = 0
     rate_limiter = None
     ticker_update_time = {}
 
@@ -162,9 +162,9 @@ class Martin(mr.MartinBase):
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         if Martin.rate_limit_reached_time:
-            if time.time() - Martin.rate_limit_reached_time > 30:
+            if time.time() - Martin.rate_limit_reached_time > 600 if client.exchange == 'bybit' else 60:
                 client.http.rate_limit_reached = False
-                Martin.rate_limit_reached_time = None
+                Martin.rate_limit_reached_time = 0
                 logger.info(f"RateLimit error clear for {open_client.name}, trying one else time")
                 _success = True
         elif client.http.rate_limit_reached:

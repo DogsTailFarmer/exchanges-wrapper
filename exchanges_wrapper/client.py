@@ -1262,7 +1262,7 @@ class Client:
             # print(f"fetch_open_orders.res: {res}")
             binance_res = okx.orders(res, response_type=response_type)
         elif self.exchange == 'bybit':
-            params = {'category': 'spot', 'symbol': symbol}
+            params = {'category': 'spot', 'symbol': symbol, 'limit': 50}
             res, _ = await self.http.send_api_call("/v5/order/realtime", signed=True, **params)
             binance_res = bbt.orders(res.get('list', []), response_type=response_type)
         return binance_res
