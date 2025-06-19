@@ -23,7 +23,7 @@ dependencies = [
     "aiohttp~=3.12.13",
     "expiringdict~=1.2.2",
     "betterproto==2.0.0b7",
-    "grpclib~=0.4.7"
+    "grpclib~=0.4.8"
 ]
 
 [tool.flit.module]
