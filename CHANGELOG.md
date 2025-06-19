@@ -1,3 +1,8 @@
+## 2.1.38 2025-06-19
+🔧 fix(requirements.py): update `grpclib` version to `0.4.8` for compatibility improvements  
+🔧 fix(pyproject.toml): update `grpclib` version to `0.4.8` for compatibility improvements  
+🔧 fix(__init__.py): bump version to `2.1.38` for release
+
 ## 2.1.37 2025-05-12
 🚀 feat(client): add 'limit' parameter to Bybit API order fetching  
 🔧 fix(http_client): handle errors with path in API response  
