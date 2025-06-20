@@ -128,9 +128,7 @@ class Client:
             precision = symbol_infos["baseAssetPrecision"]
             if precision > self.highest_precision:
                 self.highest_precision = precision
-            symbol_infos["filters"] = dict(
-                map(lambda x: (x.pop("filterType"), x), symbol_infos["filters"])
-            )
+            symbol_infos["filters"] = {x.pop("filterType"): x for x in symbol_infos["filters"]}
             self.symbols[symbol] = symbol_infos
         decimal.getcontext().prec = (self.highest_precision + 4)  # for operations and rounding
         if self.exchange == 'bybit':
@@ -186,7 +184,7 @@ class Client:
                     break
                 await asyncio.sleep(0.1)
 
-    async def start_market_events_listener(self, _trade_id):
+    def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
         if self.exchange == 'binance':
             market_data_stream = MarketEventsDataStream(self, self.endpoint_ws_public, self.exchange, _trade_id)

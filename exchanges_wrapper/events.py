@@ -241,9 +241,7 @@ class OutboundAccountPositionWrapper(EventWrapper):
         super().__init__(event_data, handlers)
         self.event_time = event_data["E"]
         self.last_update = event_data["u"]
-        self.balances = dict(
-            map(lambda x: (x["a"], {"free": x["f"], "locked": x["l"]}), event_data["B"])
-        )
+        self.balances = {x["a"]: {"free": x["f"], "locked": x["l"]} for x in event_data["B"]}
 
 
 # BALANCE UPDATE
@@ -308,8 +306,4 @@ class ListStatus(EventWrapper):
         self.list_order_status = event_data["L"]
         self.list_reject_reason = event_data["r"]
         self.list_client_order_id = event_data["C"]
-        # noinspection PyArgumentList
-        self.orders = dict(
-            map(lambda x: (x["s"], {"orderId": x["i"], "clientOrderId": x["c"]})),
-            event_data["O"],
-        )
+        self.orders = {x["s"]: {"orderId": x["i"], "clientOrderId": x["c"]} for x in event_data["O"]}

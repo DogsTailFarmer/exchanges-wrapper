@@ -753,7 +753,7 @@ class Martin(mr.MartinBase):
                 len(v[request.trade_id]) for v in client.events.registered_streams.values() if request.trade_id in v
             )
         logger.info(f"Start WS streams for {open_client.name}")
-        await client.start_market_events_listener(request.trade_id)
+        client.start_market_events_listener(request.trade_id)
         await client.start_user_events_listener(request.trade_id, request.symbol)
         response.success = True
         return response

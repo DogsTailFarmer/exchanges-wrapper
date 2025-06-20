@@ -1,3 +1,7 @@
+## 2.1.39 2025-06-20
+✨ refactor(client, events): simplify filter and balance creation using dictionary comprehensions  
+🐛 fix(exch_srv): change `await` to synchronous call for `start_market_events_listener` method
+
 ## 2.1.38 2025-06-19
 🔧 fix(requirements.py): update `grpclib` version to `0.4.8` for compatibility improvements  
 🔧 fix(pyproject.toml): update `grpclib` version to `0.4.8` for compatibility improvements  
