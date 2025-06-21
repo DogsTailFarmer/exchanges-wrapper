@@ -1,3 +1,6 @@
+## 2.1.40 2025-06-21
+🚀 chore(README): remove CodeClimate maintainability badge from documentation
+
 ## 2.1.39 2025-06-20
 ✨ refactor(client, events): simplify filter and balance creation using dictionary comprehensions  
 🐛 fix(exch_srv): change `await` to synchronous call for `start_market_events_listener` method
