@@ -17,7 +17,7 @@ dynamic = ["version", "description"]
 requires-python = ">=3.10"
 
 dependencies = [
-    "crypto-ws-api==2.0.20",
+    "crypto-ws-api==2.1.0",
     "pyotp==2.9.0",
     "simplejson==3.20.1",
     "aiohttp~=3.12.13",
