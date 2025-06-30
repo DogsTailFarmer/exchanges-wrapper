@@ -3,6 +3,7 @@ Parser for convert OKX REST API/WSS V5 response to Binance like result
 """
 import time
 from decimal import Decimal
+from typing import Dict, List, Union
 import logging
 
 logger = logging.getLogger(__name__)
@@ -214,10 +215,14 @@ def account_balances(res: list) -> dict:
     return {"balances": balances}
 
 
-def order_book(res: dict) -> dict:
-    asks = []
-    bids = []
-    binance_order_book = {"lastUpdateId": int(res.get('ts'))}
+def order_book(res: dict) -> Dict[str, Union[int, List[List[str]]]]:
+    binance_order_book: Dict[str, Union[int, List[List[str]]]] = {
+        "lastUpdateId": int(time.time() * 1000)
+    }
+
+    bids: List[List[str]] = []
+    asks: List[List[str]] = []
+
     [asks.append(ask[:2]) for ask in res.get('asks')]
     binance_order_book['asks'] = asks
     [bids.append(bid[:2]) for bid in res.get('bids')]

@@ -4,7 +4,9 @@ from typing import Any, AsyncGenerator
 
 import grpclib.exceptions
 
+# noinspection PyPep8Naming
 from exchanges_wrapper import __version__ as VER_EW
+# noinspection PyPep8Naming
 from crypto_ws_api import __version__ as VER_CW
 import time
 import weakref
@@ -136,8 +138,6 @@ class Martin(mr.MartinBase):
 
         try:
             await asyncio.wait_for(open_client.client.load(request.symbol), timeout=HEARTBEAT * 60)
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
         except asyncio.exceptions.TimeoutError:
             await OpenClient.get_client(client_id).client.http.session.close()
             OpenClient.remove_client(request.account_name)
@@ -186,7 +186,7 @@ class Martin(mr.MartinBase):
 
         try:
             res = await asyncio.wait_for(getattr(client, client_method_name)(**kwargs), timeout=90)
-        except asyncio.exceptions.CancelledError:
+        except KeyboardInterrupt:
             raise GRPCError(status=Status.UNAVAILABLE, message=f"{msg_header} Server Shutdown")
         except asyncio.exceptions.TimeoutError:
             self.log_and_raise_grpc_error(msg_header, Status.DEADLINE_EXCEEDED, "timeout error")
@@ -834,7 +834,7 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
 def main():
     try:
         asyncio.run(amain())
-    except (asyncio.exceptions.CancelledError, grpclib.exceptions.StreamTerminatedError):
+    except grpclib.exceptions.StreamTerminatedError:
         pass  # Task cancellation should not be logged as an error
     except Exception as ex:
         print(f"Exception: {ex}")

@@ -56,7 +56,7 @@ class HttpClient:
     async def _create_session_if_required(self):
         if self.session is None or self.session.closed:
             async with self._session_mutex:
-                self.session = aiohttp.ClientSession(timeout=TIMEOUT)
+                self.session = aiohttp.ClientSession(trust_env=True, timeout=TIMEOUT)
 
     async def handle_errors(self, response, path=None):
         if response.status >= 500:
@@ -170,7 +170,7 @@ class HttpClient:
     async def _bitfinex_request(self, path, method, signed, send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint
         bfx_post = (method == 'POST' and kwargs) or "params" in kwargs
-        _params = json.dumps(kwargs) if bfx_post else None
+        _params = json.dumps(kwargs) if bfx_post else {}
         url = f'{_endpoint}/{path}'
         query_kwargs = {"headers": {"Accept": AJ}}
         if kwargs and not bfx_post:

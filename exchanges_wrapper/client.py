@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union
+from typing import Union, Dict
 import decimal
 import math
 import asyncio
@@ -587,7 +587,7 @@ class Client:
                 "/api/v3/klines", params=params, signed=False
             )
         elif self.exchange == 'bitfinex':
-            params = {'limit': limit, 'sort': -1}
+            params: Dict[str, Union[str, int]] = {'limit': limit, 'sort': -1}
             if start_time:
                 params["start"] = str(start_time)
             if end_time:

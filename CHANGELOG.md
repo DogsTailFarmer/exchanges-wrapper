@@ -1,3 +1,12 @@
+## 2.1.41 2025-06-30
+ 🐛 fix(client): update `params` type hint to `Dict[str, Union[str, int]]` for better type safety  
+🔧 fix(http_client): set `trust_env=True` in `aiohttp.ClientSession` for improved environment handling  
+🔧 fix(parsers): replace `map` with list comprehension for clarity in `get_book` method  
+🔧 fix(parsers): update `order_book` function signatures to use `Dict` and `List` for better type annotations  
+🔧 fix(exch_srv): replace `CancelledError` with `KeyboardInterrupt` in exception handling for server shutdown  
+🔧 fix(requirements): upgrade `crypto-ws-api` to version `2.1.0` for compatibility improvements  
+✏️ docs(README): add note about the new API key type `Ed25519` used on Binance  
+
 ## 2.1.40 2025-06-21
 🚀 chore(README): remove CodeClimate maintainability badge from documentation
 

@@ -23,8 +23,8 @@ class OrderBook:
             'stream': f"{self.symbol}@depth5",
             'data': {
                 'lastUpdateId': self.last_update_id,
-                'bids': list(map(list, self.bids.items()))[:5],
-                'asks': list(map(list, self.asks.items()))[:5],
+                'bids': [list(item) for item in self.bids.items()][:5],
+                'asks': [list(item) for item in self.asks.items()][:5],
             },
         }
 

@@ -4,6 +4,7 @@ Parser for convert Bitfinex REST API/WSS response to Binance like result
 import time
 from decimal import Decimal
 import logging
+from typing import Dict, List, Union
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +22,9 @@ class OrderBook:
                 self.asks[str(i[0])] = str(abs(i[2]))
 
     def get_book(self) -> dict:
-        bids = list(map(list, self.bids.items()))
+        bids = [list(item) for item in self.bids.items()]
         bids.sort(key=lambda x: float(x[0]), reverse=True)
-        asks = list(map(list, self.asks.items()))
+        asks = [list(item) for item in self.asks.items()]
         asks.sort(key=lambda x: float(x[0]), reverse=False)
         return {
             'stream': f"{self.symbol}@depth5",
@@ -270,15 +271,32 @@ def orders(res: list, response_type=None, cancelled=False) -> list:
     return binance_orders
 
 
-def order_book(res: list) -> dict:
-    binance_order_book = {"lastUpdateId": int(time.time() * 1000)}
-    bids = []
-    asks = []
+def order_book(res: List[List[float]]) -> Dict[str, Union[int, List[List[str]]]]:
+    """
+    Processes a list of raw order book entries into a structured dictionary.
+
+    Args:
+        res: A list of order entries, where each entry is a list like
+             [price (float), quantity (float), side_indicator (float)].
+             side_indicator > 0 for bids, < 0 for asks.
+
+    Returns:
+        A dictionary representing the order book with 'lastUpdateId', 'bids', and 'asks'.
+    """
+    binance_order_book: Dict[str, Union[int, List[List[str]]]] = {
+        "lastUpdateId": int(time.time() * 1000)
+    }
+
+    bids: List[List[str]] = []
+    asks: List[List[str]] = []
+
     for i in res:
-        if i[2] > 0:
-            bids.append([str(i[0]), str(i[2])])
-        else:
-            asks.append([str(i[0]), str(abs(i[2]))])
+        # Assuming i[2] determines bid/ask side and its absolute value is the quantity
+        if i[2] > 0: # This means it's a bid (positive quantity indicator)
+            bids.append([str(i[0]), str(i[2])]) # price, quantity
+        else: # This means it's an ask (negative quantity indicator or zero)
+            asks.append([str(i[0]), str(abs(i[2]))]) # price, absolute quantity
+
     binance_order_book['bids'] = bids
     binance_order_book['asks'] = asks
     return binance_order_book
@@ -435,7 +453,7 @@ def ticker(res: list, symbol: str = None) -> dict:
 
 
 def on_funds_update(res: list) -> dict:
-    binance_funds = {
+    binance_funds: Dict[str, Union[str, int, List]] = {
         'e': 'outboundAccountPosition',
         'E': int(time.time() * 1000),
         'u': int(time.time() * 1000),
