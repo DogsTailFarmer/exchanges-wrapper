@@ -18,7 +18,9 @@ import exchanges_wrapper.parsers.bitfinex as bfx
 import exchanges_wrapper.parsers.huobi as hbp
 import exchanges_wrapper.parsers.okx as okx
 import exchanges_wrapper.parsers.bybit as bbt
-from crypto_ws_api.ws_session import generate_signature, compose_htx_ws_auth, compose_binance_ws_auth
+from crypto_ws_api.ws_session import (
+    generate_signature, compose_htx_ws_auth, compose_binance_ws_auth, tasks_manage, tasks_cancel
+)
 from exchanges_wrapper import LOG_PATH
 
 logger = logging.getLogger(__name__)
@@ -51,7 +53,6 @@ class EventsDataStream:
         self._order_book = None
         self._price = None
         self.tasks = set()
-        self.wss_started = False
         self.ping = 0
 
     async def start(self):
@@ -66,7 +67,7 @@ class EventsDataStream:
             except ConnectionClosed as ex:
                 ct = str(datetime.now(timezone.utc).replace(tzinfo=None) - start_time).rsplit('.')[0]
                 logger.info(f"WSS life time for {self.exchange} is {ct}")
-                self.tasks_cancel()
+                await tasks_cancel(self.tasks)
                 if ex.rcvd and ex.rcvd.code == 4000:
                     logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")
                     break
@@ -74,7 +75,7 @@ class EventsDataStream:
                     logger.warning(f"Restart WSS for {self.exchange}: {ex}")
                     continue
             except Exception as ex:
-                self.tasks_cancel()
+                await tasks_cancel(self.tasks)
                 logger.error(f"WSS start() other exception: {ex}")
 
     async def start_wss(self):
@@ -84,18 +85,9 @@ class EventsDataStream:
         """
         Stop data stream
         """
-        self.tasks_cancel()
+        await tasks_cancel(self.tasks)
         if self.websocket:
             await self.websocket.close(code=4000)
-
-    def tasks_cancel(self):
-        [task.cancel() for task in self.tasks if not task.done()]
-        self.tasks.clear()
-
-    def tasks_manage(self, coro):
-        _t = asyncio.create_task(coro)
-        self.tasks.add(_t)
-        _t.add_done_callback(self.tasks.discard)
 
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
@@ -109,8 +101,11 @@ class EventsDataStream:
                 await self._handle_event(event)
             elif msg_data.get("status") == 200:
                 result = msg_data.get("result")
-                if isinstance(result, dict) and not result:
-                    self.wss_started = True
+                if isinstance(result, dict) and 'authorizedSince' in result:
+                    logger.info(f"Binance User Data Stream started for {self.trade_id}")
+            else:
+                logger.warning(f"Reconnecting Binance User Data Stream for {self.trade_id}, msg_data: {msg_data}")
+                raise ConnectionClosed(None, None)
         elif self.exchange == 'bybit':
             if _data := msg_data.get('data'):
                 if ch_type == 'depth5':
@@ -127,9 +122,11 @@ class EventsDataStream:
                 return
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and msg_data.get("success")):
-                self.tasks_manage(self.bybit_heartbeat(ch_type or "private"))
+                tasks_manage(
+                    self.tasks, self.bybit_heartbeat(ch_type or "private"), f"bybit_heartbeat-{symbol}-{ch_type}"
+                )
                 if msg_data["op"] == "subscribe" and msg_data["success"] and not msg_data["ret_msg"]:
-                    self.wss_started = True
+                    logger.info(f"ByBit User Data Stream started for {self.trade_id}")
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and not msg_data.get("success")):
                 logger.warning(f"Reconnecting ByBit WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
@@ -146,7 +143,7 @@ class EventsDataStream:
             elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
                 return
             elif msg_data.get("event") == "subscribe" and msg_data.get('arg', {}).get('channel') == 'orders':
-                self.wss_started = True
+                logger.info(f"OKX User Data Stream started for {self.trade_id}")
             elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
                 logger.warning(f"Reconnecting OKX WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
                 raise ConnectionClosed(None, None)
@@ -184,8 +181,7 @@ class EventsDataStream:
                     logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
                 elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
                     chan_id = msg_data.get('chanId')
-                    self.wss_started = True
-                    logger.info(f"bitfinex, user stream chan_id: {chan_id}")
+                    logger.info(f"Bitfinex, user stream chan_id: {chan_id}")
 
             # data handling
             elif isinstance(msg_data, list) and len(msg_data) == 2 and msg_data[1] == 'hb':
@@ -222,7 +218,7 @@ class EventsDataStream:
                     await self._handle_event(msg_data, symbol, ch_type)
             elif msg_data.get('action') in ('req', 'sub') and msg_data.get('code') == 200:
                 if msg_data.get('ch') == f"trade.clearing#{symbol.lower()}#0":
-                    self.wss_started = True
+                    logger.info(f"HTX User Data Stream started for {self.trade_id}")
             elif 'subbed' in msg_data and msg_data.get('status') == 'ok':
                 logger.info(f"Huobi WSS started: {msg_data['subbed']}")
             elif (msg_data.get('action') == 'sub' and
@@ -246,10 +242,10 @@ class EventsDataStream:
             try:
                 await self.websocket.send(json.dumps({"req_id": req_id, "op": "ping"}))
             except (ConnectionClosed, asyncio.exceptions.TimeoutError):
-                pass  # handled elsewhere
+                break
 
     async def htx_keepalive(self, interval=60):
-        await asyncio.sleep(interval * 10)
+        await asyncio.sleep(interval)
         while True:
             await asyncio.sleep(interval)
             if self.ping:
@@ -330,7 +326,7 @@ class MarketEventsDataStream(EventsDataStream):
                 elif ch_type == 'depth5':
                     request = {'sub': f"market.{symbol}.depth.step0"}
 
-                self.tasks_manage(self.htx_keepalive(interval=30))
+                tasks_manage(self.tasks, self.htx_keepalive(interval=30), f"htx_keepalive-{symbol}-{ch_type}")
 
         await self.ws_listener(request, symbol, ch_type)
 
@@ -423,7 +419,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "action": "sub",
             "ch": f"trade.clearing#{self.symbol.lower()}#0"
         }
-        self.tasks_manage(self.htx_keepalive())
+        tasks_manage(self.tasks, self.htx_keepalive(), f"htx_keepalive-user-{self.symbol}")
         await self.ws_listener(request, symbol=self.symbol)
 
     async def _handle_event(self, msg_data, *args):

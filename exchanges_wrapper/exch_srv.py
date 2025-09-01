@@ -29,9 +29,13 @@ from exchanges_wrapper.lib import (
     REST_RATE_LIMIT_INTERVAL,
     FILTER_TYPE_MAP,
 )
-from exchanges_wrapper.martin import StreamResponse, SimpleResponse, OnKlinesUpdateResponse, OnTickerUpdateResponse, \
-    FetchOrderBookResponse
-
+from exchanges_wrapper.martin import (
+    StreamResponse,
+    SimpleResponse,
+    OnKlinesUpdateResponse,
+    OnTickerUpdateResponse,
+    FetchOrderBookResponse,
+)
 #
 HEARTBEAT = 1  # sec
 MAX_QUEUE_SIZE = 100
@@ -227,7 +231,7 @@ class Martin(mr.MartinBase):
         server_time = res.get('serverTime')
         return mr.FetchServerTimeResponse(server_time=server_time)
 
-    async def one_click_arrival_deposit(self, request: mr.MarketRequest) -> mr.SimpleResponse():
+    async def one_click_arrival_deposit(self, request: mr.MarketRequest) -> mr.SimpleResponse:
         res, _, _ = await self.send_request('one_click_arrival_deposit', request, tx_id=request.symbol)
         return mr.SimpleResponse(success=True, result=json.dumps(str(res)))
 
@@ -297,7 +301,7 @@ class Martin(mr.MartinBase):
             await _queue.put(weakref.ref(event)())
         logger.debug(f"{msg_header}: {trades}")
 
-    async def cancel_all_orders(self, request: mr.MarketRequest) -> mr.SimpleResponse():
+    async def cancel_all_orders(self, request: mr.MarketRequest) -> mr.SimpleResponse:
         response = mr.SimpleResponse()
 
         res, _, _ = await self.send_request(
@@ -754,7 +758,7 @@ class Martin(mr.MartinBase):
             )
         logger.info(f"Start WS streams for {open_client.name}")
         client.start_market_events_listener(request.trade_id)
-        await client.start_user_events_listener(request.trade_id, request.symbol)
+        client.start_user_events_listener(request.trade_id, request.symbol)
         response.success = True
         return response
 
@@ -836,8 +840,8 @@ def main():
         asyncio.run(amain())
     except grpclib.exceptions.StreamTerminatedError:
         pass  # Task cancellation should not be logged as an error
-    except Exception as ex:
-        print(f"Exception: {ex}")
+    except Exception as expt:
+        print(f"Exception: {expt}")
         print(traceback.format_exc())
 
 

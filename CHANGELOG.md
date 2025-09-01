@@ -1,3 +1,8 @@
+## 2.1.42 2025-09-xx
+[✨] feat(exch_srv): refactor method signatures for `one_click_arrival_deposit` and `cancel_all_orders`
+[✨] feat(web_sockets): manage tasks with `tasks_manage` and `tasks_cancel` in `start` and `stop` methods
+[✨] feat(client): streamline task management for user and market event listeners with `tasks_manage`
+
 ## 2.1.41 2025-06-30
  🐛 fix(client): update `params` type hint to `Dict[str, Union[str, int]]` for better type safety  
 🔧 fix(http_client): set `trust_env=True` in `aiohttp.ClientSession` for improved environment handling  

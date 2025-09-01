@@ -4,7 +4,10 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "exchanges-wrapper"
-authors = [{name = "Thomas Marchand", email = "thomas.marchand@tuta.io"}, {name = "Jerry Fedorenko", email = "jerry.fedorenko@yahoo.com"}]
+authors = [
+    {name = "Thomas Marchand", email = "thomas.marchand@tuta.io"},
+    {name = "Jerry Fedorenko", email = "jerry.fedorenko@yahoo.com"}
+]
 readme = "README.md"
 license = {file = "LICENSE.md"}
 classifiers=["Programming Language :: Python :: 3",
@@ -17,10 +20,10 @@ dynamic = ["version", "description"]
 requires-python = ">=3.10"
 
 dependencies = [
-    "crypto-ws-api==2.1.0",
+    "crypto-ws-api==2.1.2",
     "pyotp==2.9.0",
     "simplejson==3.20.1",
-    "aiohttp~=3.12.13",
+    "aiohttp~=3.12.15",
     "expiringdict~=1.2.2",
     "betterproto==2.0.0b7",
     "grpclib~=0.4.8"

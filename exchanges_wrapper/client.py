@@ -25,15 +25,17 @@ import exchanges_wrapper.parsers.bitfinex as bfx
 import exchanges_wrapper.parsers.huobi as hbp
 import exchanges_wrapper.parsers.okx as okx
 import exchanges_wrapper.parsers.bybit as bbt
-from crypto_ws_api.ws_session import UserWSSession
+from crypto_ws_api.ws_session import UserWSSession, tasks_manage, tasks_cancel
 
 logger = logging.getLogger(__name__)
 
 STATUS_TIMEOUT = 5  # sec, also use for lifetime limit for inactive order (Bitfinex) as 60 * STATUS_TIMEOUT
 ORDER_ENDPOINT = "/api/v3/order"
 
+
 def fallback_warning(exchange, symbol=None):
     logger.warning(f"Called by: {inspect.stack()[1][3]}: {exchange}:{symbol}: Fallback to HTTP API call")
+
 
 def truncate(f, n):
     return math.floor(f * 10 ** n) / 10 ** n
@@ -98,14 +100,9 @@ class Client:
         self.main_account_uid = None
         self.ledgers_id = []
         self.ts_start = {}
-        self.tasks = set()
+        self.tasks: dict[str, set] = {}
         self.request_event = asyncio.Event()
         self.request_event.set()
-
-    def tasks_manage(self, coro):
-        _t = asyncio.create_task(coro)
-        self.tasks.add(_t)
-        _t.add_done_callback(self.tasks.discard)
 
     async def fetch_object(self, key):
         res = None
@@ -154,9 +151,8 @@ class Client:
             self._events = Events()  # skipcq: PYL-W0201
         return self._events
 
-    async def start_user_events_listener(self, _trade_id, symbol):
+    def start_user_events_listener(self, _trade_id, symbol):
         logger.info(f"Start '{self.exchange}' user events listener for {_trade_id}")
-        user_data_stream = None
         if self.exchange == 'binance':
             user_data_stream = UserEventsDataStream(self, self.endpoint_ws_api, self.exchange, _trade_id)
         elif self.exchange == 'bitfinex':
@@ -173,24 +169,27 @@ class Client:
             )
         elif self.exchange == 'bybit':
             user_data_stream = BBTPrivateEventsDataStream(self, self.endpoint_ws_auth, self.exchange, _trade_id)
-        if user_data_stream:
-            self.data_streams[_trade_id] |= {user_data_stream}
-            self.tasks_manage(user_data_stream.start())
-            timeout = STATUS_TIMEOUT / 0.1
-            while not user_data_stream.wss_started:
-                timeout -= 1
-                if not timeout:
-                    logger.warning(f"{self.exchange} user WSS start timeout reached for {_trade_id}")
-                    break
-                await asyncio.sleep(0.1)
+        else:
+            raise UserWarning(f"User Data Stream: exchange {self.exchange} not serviced")
+
+        self.data_streams[_trade_id] |= {user_data_stream}
+
+        trade_tasks = self.tasks.pop(_trade_id, set())
+        tasks_manage(trade_tasks, user_data_stream.start(), f"user_data_stream-{self.exchange}-{_trade_id}")
+        self.tasks[_trade_id] = trade_tasks
 
     def start_market_events_listener(self, _trade_id):
         _events = self.events.registered_streams.get(self.exchange, {}).get(_trade_id, set())
         if self.exchange == 'binance':
             market_data_stream = MarketEventsDataStream(self, self.endpoint_ws_public, self.exchange, _trade_id)
             self.data_streams[_trade_id] |= {market_data_stream}
-            self.tasks_manage(market_data_stream.start())
+
+            trade_tasks = self.tasks.pop(_trade_id, set())
+            tasks_manage(trade_tasks, market_data_stream.start(), f"market_data_stream-{self.exchange}-{_trade_id}")
+            self.tasks[_trade_id] = trade_tasks
+
         else:
+            trade_tasks = self.tasks.pop(_trade_id, set())
             for channel in _events:
                 # https://www.okx.com/help-center/changes-to-v5-api-websocket-subscription-parameter-and-url
                 if self.exchange == 'okx' and 'kline' in channel:
@@ -200,15 +199,21 @@ class Client:
                 #
                 market_data_stream = MarketEventsDataStream(self, _endpoint, self.exchange, _trade_id, channel)
                 self.data_streams[_trade_id] |= {market_data_stream}
-                self.tasks_manage(market_data_stream.start())
+                tasks_manage(
+                    trade_tasks, market_data_stream.start(), f"market_data_stream-{self.exchange}-{channel}-{_trade_id}"
+                )
+            self.tasks[_trade_id] = trade_tasks
 
     async def stop_events_listener(self, _trade_id):
         logger.info(f"Stop events listener data streams for {_trade_id}")
         stopped_data_stream = self.data_streams.pop(_trade_id, set())
         for data_stream in stopped_data_stream:
             await data_stream.stop()
+        if trade_tasks := self.tasks.pop(_trade_id, set()):
+            await tasks_cancel(trade_tasks)
+
         if self.user_session:
-            await self.user_session.stop()
+            await self.user_session.stop(_trade_id)
 
     def assert_symbol_exists(self, symbol):
         if self.loaded and symbol not in self.symbols:
@@ -835,7 +840,7 @@ class Client:
                     **params,
                 )
             if res:
-                timeout = STATUS_TIMEOUT / 0.1
+                timeout = int(STATUS_TIMEOUT / 0.1)
                 while not self.active_orders.get(int(res)) and timeout:
                     timeout -= 1
                     await asyncio.sleep(0.1)
@@ -908,7 +913,7 @@ class Client:
                     )
             if b_res is None:
                 fallback_warning(self.exchange, symbol)
-                b_res =  await self.http.send_api_call(
+                b_res = await self.http.send_api_call(
                     ORDER_ENDPOINT,
                     params=params,
                     signed=True,
@@ -1030,7 +1035,7 @@ class Client:
                         **params
                 )
             if res and isinstance(res, list) and res[6] == 'SUCCESS':
-                timeout = STATUS_TIMEOUT / 0.1
+                timeout = int(STATUS_TIMEOUT / 0.1)
                 while timeout:
                     timeout -= 1
                     if self.active_orders.get(order_id, {}).get('cancelled', False):
@@ -1046,7 +1051,7 @@ class Client:
                 signed=True
             )
             if res:
-                timeout = STATUS_TIMEOUT / 0.1
+                timeout = int(STATUS_TIMEOUT / 0.1)
                 while not self.active_orders.get(order_id, {}).get('cancelled', False) and timeout:
                     timeout -= 1
                     await asyncio.sleep(0.1)
