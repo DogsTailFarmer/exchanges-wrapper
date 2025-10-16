@@ -15,7 +15,7 @@ def fetch_server_time(res: list) -> dict | None:
     return None
 
 
-def exchange_info(server_time: int, trading_symbol: list, tickers: list, symbol_t) -> {}:
+def exchange_info(server_time: int, trading_symbol: list, tickers: list, symbol_t) -> dict:
     symbols = []
     symbols_price = {}
     for pair in tickers:
@@ -98,7 +98,7 @@ def orders(res: list, response_type=None) -> list:
     return binance_orders
 
 
-def order(res: {}, response_type=None) -> {}:
+def order(res: dict, response_type=None) -> dict:
     symbol = res.get('instId').replace('-', '')
     order_id = int(res.get('ordId'))
     order_list_id = -1
@@ -186,7 +186,7 @@ def order(res: {}, response_type=None) -> {}:
         }
 
 
-def place_order_response(res: {}, req: {}) -> {}:
+def place_order_response(res: dict, req: dict) -> dict:
     return {
         "symbol": req["instId"].replace('-', ''),
         "orderId": int(res["ordId"]),
@@ -230,7 +230,7 @@ def order_book(res: dict) -> Dict[str, Union[int, List[List[str]]]]:
     return binance_order_book
 
 
-def ticker_price_change_statistics(res: {}) -> {}:
+def ticker_price_change_statistics(res: dict) -> dict:
     price_change = str(Decimal(res.get('last')) - Decimal(res.get('open24h')))
     price_change_percent = str(100 * (Decimal(res.get('last')) - Decimal(res.get('open24h'))) /
                                Decimal(res.get('open24h')))
@@ -263,14 +263,14 @@ def ticker_price_change_statistics(res: {}) -> {}:
     }
 
 
-def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
+def fetch_symbol_price_ticker(res: dict, symbol) -> dict:
     return {
         "symbol": symbol,
         "price": res.get('last')
     }
 
 
-def ticker(res: {}) -> {}:
+def ticker(res: dict) -> dict:
     symbol = res.get('instId').replace('-', '')
     return {
         'stream': f"{symbol.lower()}@miniTicker",
@@ -344,7 +344,7 @@ def interval2value(_interval: str) -> int:
     return resolution.get(_interval, 0)
 
 
-def candle(res: list, symbol: str = None, ch_type: str = None) -> {}:
+def candle(res: list, symbol: str = None, ch_type: str = None) -> dict:
     symbol = symbol.replace('-', '').lower()
     start_time = int(res[0])
     _interval = ch_type.replace('kline_', '')
@@ -378,7 +378,7 @@ def candle(res: list, symbol: str = None, ch_type: str = None) -> {}:
     }
 
 
-def order_book_ws(res: {}, symbol: str) -> {}:
+def order_book_ws(res: dict, symbol: str) -> dict:
     symbol = symbol.replace('-', '').lower()
     return {
         'stream': f"{symbol}@depth5",
@@ -386,7 +386,7 @@ def order_book_ws(res: {}, symbol: str) -> {}:
     }
 
 
-def on_funds_update(res: {}) -> {}:
+def on_funds_update(res: dict) -> dict:
     event_time = int(time.time() * 1000)
     data = res.get('details')
     funds = []
@@ -408,7 +408,7 @@ def on_funds_update(res: {}) -> {}:
     }
 
 
-def on_order_update(res: {}) -> {}:
+def on_order_update(res: dict) -> dict:
     # print(f"on_order_update.res: {res}")
     order_quantity = res.get('sz')
     order_price = res.get('px')
@@ -464,7 +464,7 @@ def on_order_update(res: {}) -> {}:
     }
 
 
-def on_balance_update(res: list, buffer: dict, transfer: bool) -> ():
+def on_balance_update(res: list, buffer: dict, transfer: bool) -> tuple:
     res_diff = []
     for i in res:
         asset = i.get('ccy')

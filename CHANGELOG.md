@@ -1,7 +1,14 @@
-## 2.1.42 2025-09-xx
-[✨] feat(exch_srv): refactor method signatures for `one_click_arrival_deposit` and `cancel_all_orders`
-[✨] feat(web_sockets): manage tasks with `tasks_manage` and `tasks_cancel` in `start` and `stop` methods
-[✨] feat(client): streamline task management for user and market event listeners with `tasks_manage`
+## 2.1.42 2025-10-16
+✨ feat(exch_srv): refactor method signatures for `one_click_arrival_deposit` and `cancel_all_orders`  
+✨ feat(web_sockets): manage tasks with `tasks_manage` and `tasks_cancel` in `start` and `stop` methods  
+✨ feat(client): streamline task management for user and market event listeners with `tasks_manage`  
+✨ feat(exch_srv): close HTTP session with close_session method in OpenClient  
+✨ feat(exch_srv): rename stop_stream to stop_stream_ex for clarity  
+🔧 fix(web_sockets): improve logging mechanism using set_logger  
+🔧 fix(okx): change function return types from {} to dict for clarity  
+🔧 fix(http_client): rename session.close() to close_session in HttpClient  
+🔧 fix(client): ensure HTTP session closure is handled correctly  
+🔧 fix(requirements.txt): Upgrade `crypto-ws-api` to version 2.1.3  
 
 ## 2.1.41 2025-06-30
  🐛 fix(client): update `params` type hint to `Dict[str, Union[str, int]]` for better type safety  

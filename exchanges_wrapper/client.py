@@ -46,6 +46,19 @@ def any2str(_x) -> str:
 
 
 class Client:
+    __slots__ = (
+        'exchange', 'sub_account', 'test_net', 'api_key', 'api_secret',
+        'passphrase', 'endpoint_api_public', 'endpoint_ws_public',
+        'endpoint_api_auth', 'endpoint_ws_auth', 'endpoint_ws_api',
+        'ws_add_on', 'master_email', 'master_name', 'two_fa', 'http',
+        'user_session', 'loaded', 'symbols', 'highest_precision',
+        'rate_limits', 'data_streams', 'active_orders', 'wss_buffer',
+        'stream_queue', 'on_order_update_queues', 'account_id',
+        'account_uid', 'main_account_id', 'main_account_uid',
+        'ledgers_id', 'ts_start', 'tasks', 'request_event',
+        '_events'
+    )
+
     def __init__(self, acc: dict):
         self.exchange = acc['exchange']
         self.sub_account = acc['sub_account']
@@ -141,8 +154,8 @@ class Client:
         logger.info(f"Info for {self.exchange}:{symbol} loaded successfully")
 
     async def close(self):
-        if self.http and self.http.session:
-            await self.http.session.close()
+        if self.http:
+            await self.http.close_session()
 
     @property
     def events(self):
@@ -210,7 +223,7 @@ class Client:
         for data_stream in stopped_data_stream:
             await data_stream.stop()
         if trade_tasks := self.tasks.pop(_trade_id, set()):
-            await tasks_cancel(trade_tasks)
+            await tasks_cancel(trade_tasks, _logger=logger)
 
         if self.user_session:
             await self.user_session.stop(_trade_id)
@@ -1187,7 +1200,7 @@ class Client:
                         signed=True,
                         data=params,
                     )
-                ids_canceled = [int(ordr['ordId']) for ordr in res if ordr['sCode'] == '0']
+                ids_canceled = [int(order['ordId']) for order in res if order['sCode'] == '0']
                 orders_canceled[:] = [i for i in orders_canceled if i['orderId'] in ids_canceled]
                 binance_res.extend(orders_canceled)
         elif self.exchange == 'bybit':

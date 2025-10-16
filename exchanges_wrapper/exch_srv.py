@@ -143,7 +143,7 @@ class Martin(mr.MartinBase):
         try:
             await asyncio.wait_for(open_client.client.load(request.symbol), timeout=HEARTBEAT * 60)
         except asyncio.exceptions.TimeoutError:
-            await OpenClient.get_client(client_id).client.http.session.close()
+            await OpenClient.get_client(client_id).client.http.close_session()
             OpenClient.remove_client(request.account_name)
             raise GRPCError(status=Status.UNAVAILABLE, message=f"'{open_client.name}' timeout error")
         except Exception as ex:
@@ -767,7 +767,7 @@ class Martin(mr.MartinBase):
         if open_client := OpenClient.get_client(request.client_id):
             client = open_client.client
             logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
-            await stop_stream(client, request.trade_id)
+            await stop_stream_ex(client, request.trade_id)
             response.success = True
         else:
             response.success = False
@@ -784,13 +784,13 @@ class Martin(mr.MartinBase):
         return response
 
     async def client_restart(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        if session := OpenClient.get_client(request.client_id).client.http.session:
-            await session.close()
+        if session := OpenClient.get_client(request.client_id).client.http:
+            await session.close_session()
         OpenClient.remove_client(request.account_name)
         return mr.SimpleResponse(success=True)
 
 
-async def stop_stream(client, trade_id):
+async def stop_stream_ex(client, trade_id):
     await client.stop_events_listener(trade_id)
     client.events.unregister(client.exchange, trade_id)
     [await _queue.put(trade_id) for _queue in client.stream_queue.get(trade_id, [])]
@@ -806,10 +806,7 @@ async def event_handler(_queue, client, trade_id, _event_type, event):
     except asyncio.QueueFull:
         logger.warning(f"For {_event_type} asyncio queue full and wold be closed")
         client.stream_queue.get(trade_id, set()).discard(_queue)
-        await stop_stream(client, trade_id)
-        global MAX_QUEUE_SIZE
-        MAX_QUEUE_SIZE += int(MAX_QUEUE_SIZE / 10)
-        logger.info(f"MAX_QUEUE_SIZE was updated: new value is {MAX_QUEUE_SIZE}")
+        await stop_stream_ex(client, trade_id)
 
 
 def is_port_in_use(port: int) -> bool:
@@ -829,8 +826,8 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
         await server.wait_closed()
 
         for oc in OpenClient.open_clients:
-            if oc.client.http.session:
-                await oc.client.http.session.close()
+            if oc.client.http:
+                await oc.client.http.close_session()
 
         [task.cancel() for task in asyncio.all_tasks() if not task.done() and task is not asyncio.current_task()]
 
@@ -843,7 +840,6 @@ def main():
     except Exception as expt:
         print(f"Exception: {expt}")
         print(traceback.format_exc())
-
 
 if __name__ == '__main__':
     main()

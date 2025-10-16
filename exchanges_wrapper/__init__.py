@@ -12,7 +12,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "2.1.42b01"
+__version__ = "2.1.42"
 
 from pathlib import Path
 import shutil
@@ -33,9 +33,11 @@ __all__ = [
     'LOG_PATH',
     'WORK_PATH',
     'LOG_FILE',
-    'CONFIG_FILE'
+    'CONFIG_FILE',
+    'DEBUG_LOG'
 ]
 
+DEBUG_LOG = 'debug'  # The exchange for which log files, separated by trade_id with DEBUG level, will be generated
 WORK_PATH = Path(Path.home(), ".MartinBinance")
 CONFIG_PATH = Path(WORK_PATH, "config")
 CONFIG_FILE = Path(CONFIG_PATH, "exch_srv_cfg.toml")

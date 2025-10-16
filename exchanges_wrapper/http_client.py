@@ -29,6 +29,21 @@ ERR_TIMESTAMP_OUTSIDE_RECV_WINDOW = "Timestamp for this request is outside of th
 TIMEOUT = aiohttp.ClientTimeout(total=60)
 
 class HttpClient:
+    __slots__ = (
+        'api_key',
+        'api_secret',
+        'passphrase',
+        'endpoint',
+        'exchange',
+        'test_net',
+        'rate_limit_reached',
+        'rest_cycle_lock',
+        'session',
+        '_session_mutex',
+        'ex_imps',
+        'rate_limit_handler'
+    )
+
     def __init__(self, params: dict):
         self.api_key = params['api_key']
         self.api_secret = params['api_secret']
@@ -54,9 +69,14 @@ class HttpClient:
         }
 
     async def _create_session_if_required(self):
-        if self.session is None or self.session.closed:
+        if not self.session:
             async with self._session_mutex:
                 self.session = aiohttp.ClientSession(trust_env=True, timeout=TIMEOUT)
+
+    async def close_session(self):
+        if self.session:
+            await self.session.close()
+            self.session = None
 
     async def handle_errors(self, response, path=None):
         if response.status >= 500:
@@ -141,13 +161,12 @@ class HttpClient:
         await self._create_session_if_required()
         try:
             async with self.session.request(method, url, timeout=timeout, **query_kwargs) as response:
-
                 if self.exchange == 'bybit':
                     self.rate_limit_handler.update(path, response.headers)
 
                 return await self.handle_errors(response, path)
         except (aiohttp.ClientConnectionError, asyncio.exceptions.TimeoutError):
-            await self.session.close()
+            await self.close_session()
             raise ExchangeError("HTTP ClientConnectionError, the connection will be restored")
 
     async def _binance_request(self, path, method, signed, send_api_key, endpoint, timeout, **kwargs):

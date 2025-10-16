@@ -25,7 +25,7 @@ FILTER_TYPE_MAP = {
 
 
 class OrderTradesEvent:
-    def __init__(self, event_data: {}):
+    def __init__(self, event_data: dict):
         self.symbol = event_data["symbol"]
         self.client_order_id = event_data["clientOrderId"]
         self.side = "BUY" if event_data["isBuyer"] else "SELL"

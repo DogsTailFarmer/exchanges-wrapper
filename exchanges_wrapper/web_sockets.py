@@ -1,8 +1,10 @@
 import sys
 import asyncio
+import gc
+import logging
+
 # noinspection PyPackageRequirements
 import ujson as json
-import logging.handlers
 from pathlib import Path
 import time
 from decimal import Decimal
@@ -19,29 +21,35 @@ import exchanges_wrapper.parsers.huobi as hbp
 import exchanges_wrapper.parsers.okx as okx
 import exchanges_wrapper.parsers.bybit as bbt
 from crypto_ws_api.ws_session import (
-    generate_signature, compose_htx_ws_auth, compose_binance_ws_auth, tasks_manage, tasks_cancel
+    set_logger,
+    generate_signature,
+    compose_htx_ws_auth,
+    compose_binance_ws_auth,
+    tasks_manage,
+    tasks_cancel
 )
-from exchanges_wrapper import LOG_PATH
+from exchanges_wrapper import LOG_PATH, DEBUG_LOG
 
-logger = logging.getLogger(__name__)
-formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
-#
-fh = logging.handlers.RotatingFileHandler(Path(LOG_PATH, 'websockets.log'), maxBytes=1000000, backupCount=10)
-fh.setFormatter(formatter)
-fh.setLevel(logging.INFO)
-#
-sh = logging.StreamHandler()
-sh.setFormatter(formatter)
-sh.setLevel(logging.INFO)
-
-logger.addHandler(fh)
-logger.addHandler(sh)
-logger.propagate = False
-
+logger = set_logger(__name__, Path(LOG_PATH, 'websockets.log'))
 sys.tracebacklimit = 0
 
 
 class EventsDataStream:
+    __slots__ = (
+        'client',
+        'endpoint',
+        'exchange',
+        'trade_id',
+        'websocket',
+        'try_count',
+        'wss_event_buffer',
+        '_order_book',
+        '_price',
+        'tasks',
+        'ping',
+        'logger'
+    )
+
     def __init__(self, client, endpoint, exchange, trade_id):
         self.client = client
         self.endpoint = endpoint
@@ -54,40 +62,53 @@ class EventsDataStream:
         self._price = None
         self.tasks = set()
         self.ping = 0
+        self.logger = logger
+
+        if exchange == DEBUG_LOG:
+            log_key = f"web_s_{trade_id}"
+            if log_key in logging.root.manager.loggerDict:
+                self.logger = logging.root.manager.loggerDict[log_key]
+            else:
+                self.logger = set_logger(log_key, Path(LOG_PATH, f"{log_key}.log"), logging.DEBUG)
 
     async def start(self):
         async for self.websocket in connect(
                 self.endpoint,
-                logger=logger,
+                logger=self.logger,
                 ping_interval=None if self.exchange in ('binance', 'huobi') else 20
         ):
+            await self.cycle_init()
             start_time = datetime.now(timezone.utc).replace(tzinfo=None)
             try:
                 await self.start_wss()
             except ConnectionClosed as ex:
+                self.websocket = None
                 ct = str(datetime.now(timezone.utc).replace(tzinfo=None) - start_time).rsplit('.')[0]
-                logger.info(f"WSS life time for {self.exchange} is {ct}")
-                await tasks_cancel(self.tasks)
+                self.logger.info(f"WSS life time for {self.exchange} is {ct}")
                 if ex.rcvd and ex.rcvd.code == 4000:
-                    logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")
+                    self.logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")
                     break
                 else:
-                    logger.warning(f"Restart WSS for {self.exchange}: {ex}")
+                    self.logger.warning(f"Restart WSS for {self.exchange}: {ex}")
                     continue
             except Exception as ex:
-                await tasks_cancel(self.tasks)
-                logger.error(f"WSS start() other exception: {ex}")
+                self.logger.error(f"WSS start() other exception: {ex}")
 
     async def start_wss(self):
         pass  # meant to be overridden in a subclass
+
+    async def cycle_init(self):
+        await tasks_cancel(self.tasks, _logger=logger)
+        self.wss_event_buffer.clear()
+        gc.collect()
 
     async def stop(self):
         """
         Stop data stream
         """
-        await tasks_cancel(self.tasks)
         if self.websocket:
             await self.websocket.close(code=4000)
+        await self.cycle_init()
 
     async def _handle_event(self, *args):
         pass  # meant to be overridden in a subclass
@@ -102,9 +123,9 @@ class EventsDataStream:
             elif msg_data.get("status") == 200:
                 result = msg_data.get("result")
                 if isinstance(result, dict) and 'authorizedSince' in result:
-                    logger.info(f"Binance User Data Stream started for {self.trade_id}")
+                    self.logger.info(f"Binance User Data Stream started for {self.trade_id}")
             else:
-                logger.warning(f"Reconnecting Binance User Data Stream for {self.trade_id}, msg_data: {msg_data}")
+                self.logger.warning(f"Reconnecting Binance User Data Stream for {self.trade_id}, msg_data: {msg_data}")
                 raise ConnectionClosed(None, None)
         elif self.exchange == 'bybit':
             if _data := msg_data.get('data'):
@@ -126,13 +147,13 @@ class EventsDataStream:
                     self.tasks, self.bybit_heartbeat(ch_type or "private"), f"bybit_heartbeat-{symbol}-{ch_type}"
                 )
                 if msg_data["op"] == "subscribe" and msg_data["success"] and not msg_data["ret_msg"]:
-                    logger.info(f"ByBit User Data Stream started for {self.trade_id}")
+                    self.logger.info(f"ByBit User Data Stream started for {self.trade_id}")
             elif ((msg_data.get("ret_msg") == "subscribe" or msg_data.get("op") in ("auth", "subscribe"))
                   and not msg_data.get("success")):
-                logger.warning(f"Reconnecting ByBit WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
+                self.logger.warning(f"Reconnecting ByBit WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
                 raise ConnectionClosed(None, None)
             else:
-                logger.info(f"ByBit undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                self.logger.info(f"ByBit undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'okx':
             if (not ch_type and
                     msg_data.get('arg', {}).get('channel') in ('account', 'orders', 'balance_and_position')
@@ -143,45 +164,45 @@ class EventsDataStream:
             elif msg_data.get("event") == "login" and msg_data.get("code") == "0":
                 return
             elif msg_data.get("event") == "subscribe" and msg_data.get('arg', {}).get('channel') == 'orders':
-                logger.info(f"OKX User Data Stream started for {self.trade_id}")
+                self.logger.info(f"OKX User Data Stream started for {self.trade_id}")
             elif msg_data.get("event") in ("login", "error") and msg_data.get("code") != "0":
-                logger.warning(f"Reconnecting OKX WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
+                self.logger.warning(f"Reconnecting OKX WSS: {symbol}: {ch_type}, msg_data: {msg_data}")
                 raise ConnectionClosed(None, None)
             else:
-                logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                self.logger.debug(f"OKX undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'bitfinex':
             # info and error handling
             if isinstance(msg_data, dict):
                 if msg_data.get('version') and msg_data.get('version') != 2:
-                    logger.critical('Change WSS version detected')
+                    self.logger.critical('Change WSS version detected')
                 if msg_data.get('platform') and msg_data.get('platform').get('status') != 1:
-                    logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
+                    self.logger.warning(f"Exchange in maintenance mode, trying reconnect. Exchange info: {msg}")
                     await asyncio.sleep(60)
                     raise ConnectionClosed(None, None)
                 elif 'code' in msg_data:
                     code = msg_data.get('code')
                     if code == 10300:
-                        logger.warning('WSS Subscription failed (generic)')
+                        self.logger.warning('WSS Subscription failed (generic)')
                         raise ConnectionClosed(None, None)
                     elif code == 10301:
-                        logger.error('WSS Already subscribed')
+                        self.logger.error('WSS Already subscribed')
                     elif code == 10302:
                         raise UserWarning(f"WSS Unknown channel {ch_type}")
                     elif code == 10305:
                         raise UserWarning('WSS Reached limit of open channels')
                     elif code == 20051:
-                        logger.warning('WSS reconnection request received from exchange')
+                        self.logger.warning('WSS reconnection request received from exchange')
                         raise ConnectionClosed(None, None)
                     elif code == 20060:
-                        logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
+                        self.logger.info('WSS entering in maintenance mode, trying reconnect after 120s')
                         await asyncio.sleep(120)
                         raise ConnectionClosed(None, None)
                 elif msg_data.get('event') == 'subscribed':
                     chan_id = msg_data.get('chanId')
-                    logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
+                    self.logger.info(f"bitfinex, ch_type: {ch_type}, chan_id: {chan_id}")
                 elif msg_data.get('event') == 'auth' and msg_data.get('status') == 'OK':
                     chan_id = msg_data.get('chanId')
-                    logger.info(f"Bitfinex, user stream chan_id: {chan_id}")
+                    self.logger.info(f"Bitfinex, user stream chan_id: {chan_id}")
 
             # data handling
             elif isinstance(msg_data, list) and len(msg_data) == 2 and msg_data[1] == 'hb':
@@ -192,7 +213,7 @@ class EventsDataStream:
                 else:
                     await self._handle_event(msg_data, symbol, ch_type)
             else:
-                logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                self.logger.debug(f"Bitfinex undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
         elif self.exchange == 'huobi':
             if ping := msg_data.get('ping'):
                 self.ping = 0
@@ -218,16 +239,16 @@ class EventsDataStream:
                     await self._handle_event(msg_data, symbol, ch_type)
             elif msg_data.get('action') in ('req', 'sub') and msg_data.get('code') == 200:
                 if msg_data.get('ch') == f"trade.clearing#{symbol.lower()}#0":
-                    logger.info(f"HTX User Data Stream started for {self.trade_id}")
+                    self.logger.info(f"HTX User Data Stream started for {self.trade_id}")
             elif 'subbed' in msg_data and msg_data.get('status') == 'ok':
-                logger.info(f"Huobi WSS started: {msg_data['subbed']}")
+                self.logger.info(f"Huobi WSS started: {msg_data['subbed']}")
             elif (msg_data.get('action') == 'sub' and
                   msg_data.get('code') == 500 and
                   msg_data.get('message') == '系统异常:'):
-                logger.warning(f"Reconnecting Huobi user {ch_type} channel")
+                self.logger.warning(f"Reconnecting Huobi user {ch_type} channel")
                 raise ConnectionClosed(None, None)
             else:
-                logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
+                self.logger.debug(f"Huobi undefined WSS: symbol: {symbol}, ch_type: {ch_type}, msg_data: {msg_data}")
 
     async def ws_listener(self, request=None, symbol=None, ch_type=str()):
         if request:
@@ -252,11 +273,13 @@ class EventsDataStream:
                 break
             else:
                 self.ping = 1
-        logger.warning("From HTX server PING timeout exceeded")
+        self.logger.warning("From HTX server PING timeout exceeded")
         await self.websocket.close()
 
 
 class MarketEventsDataStream(EventsDataStream):
+    __slots__ = ('channel', 'candles_max_time', 'endpoint')
+
     def __init__(self, client, endpoint, exchange, trade_id, channel=None):
         super().__init__(client, endpoint, exchange, trade_id)
         self.channel = channel
@@ -267,7 +290,7 @@ class MarketEventsDataStream(EventsDataStream):
             self.endpoint = f"{endpoint}/stream?streams={combined_streams}"
 
     async def start_wss(self):
-        logger.info(f"Start market WSS {self.channel or ''} for {self.exchange}")
+        self.logger.info(f"Start market WSS {self.channel or ''} for {self.exchange}")
         symbol = None
         ch_type = str()
         request = {}
@@ -331,7 +354,7 @@ class MarketEventsDataStream(EventsDataStream):
         await self.ws_listener(request, symbol, ch_type)
 
     async def _handle_event(self, content, symbol=None, ch_type=str()):
-        # logger.info(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
+        # self.logger.info(f"MARKET_handle_event.content: symbol: {symbol}, ch_type: {ch_type}, content: {content}")
         self.try_count = 0
         if self.exchange == 'bitfinex':
             if 'candles' in ch_type:
@@ -386,6 +409,8 @@ class MarketEventsDataStream(EventsDataStream):
 
 
 class HbpPrivateEventsDataStream(EventsDataStream):
+    __slots__ = ('symbol',)
+
     def __init__(self, client, endpoint, exchange, trade_id, symbol):
         super().__init__(client, endpoint, exchange, trade_id)
         self.symbol = symbol
@@ -442,11 +467,12 @@ class HbpPrivateEventsDataStream(EventsDataStream):
                 content = hbp.on_order_update(self.client.active_orders[order_id])
 
         if content:
-            logger.debug(f"HTXPrivateEvents.content: {content}")
+            self.logger.debug(f"HTXPrivateEvents.content: {content}")
             await self.client.events.wrap_event(content).fire(self.trade_id)
 
 
 class BfxPrivateEventsDataStream(EventsDataStream):
+    __slots__ = ()
 
     async def start_wss(self):
         ts = int(time.time() * 1000)
@@ -501,6 +527,8 @@ class BfxPrivateEventsDataStream(EventsDataStream):
 
 
 class OkxPrivateEventsDataStream(EventsDataStream):
+    __slots__ = ('symbol',)
+
     def __init__(self, client, endpoint, exchange, trade_id, symbol):
         super().__init__(client, endpoint, exchange, trade_id)
         self.symbol = symbol
@@ -557,6 +585,7 @@ class OkxPrivateEventsDataStream(EventsDataStream):
 
 
 class BBTPrivateEventsDataStream(EventsDataStream):
+    __slots__ = ()
 
     async def start_wss(self):
         ts = int((time.time() + 1) * 1000)
@@ -587,7 +616,7 @@ class BBTPrivateEventsDataStream(EventsDataStream):
                 await self.client.events.wrap_event(content).fire(self.trade_id)
             content = None
         elif ch_type == 'order.spot':
-            # logger.info(f"_handle_event: ch_type: {ch_type}, msg_data: {msg_data}")
+            # self.logger.info(f"_handle_event: ch_type: {ch_type}, msg_data: {msg_data}")
             event = msg_data[0]
             if event.get('orderStatus') in ("Cancelled", "PartiallyFilledCanceled"):
                 self.client.wss_buffer[f"oc-{event.get('orderId')}"] = bbt.order(event, response_type=True)
@@ -599,6 +628,7 @@ class BBTPrivateEventsDataStream(EventsDataStream):
 
 
 class UserEventsDataStream(EventsDataStream):
+    __slots__ = ()
 
     async def start_wss(self):
         await self.websocket.send(
@@ -616,5 +646,5 @@ class UserEventsDataStream(EventsDataStream):
         await self.ws_listener(request)
 
     async def _handle_event(self, content):
-        # logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
+        # self.logger.debug(f"UserEventsDataStream._handle_event.content: {content}")
         await self.client.events.wrap_event(content).fire(self.trade_id)
