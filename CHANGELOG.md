@@ -1,3 +1,7 @@
+## 2.1.43b01 2025-11-05
+✨ feat(exch_srv): enhance `fetch_order` and `create_trade_stream_event` methods with client queue support  
+🐛 fix(web_sockets): handle additional `AttributeError` in `htx_keepalive` method 
+
 ## 2.1.42 2025-10-16
 ✨ feat(exch_srv): refactor method signatures for `one_click_arrival_deposit` and `cancel_all_orders`  
 ✨ feat(web_sockets): manage tasks with `tasks_manage` and `tasks_cancel` in `start` and `stop` methods  

@@ -95,6 +95,7 @@ class OpenClient:
 
     @classmethod
     def remove_client(cls, _account_name):
+        # noinspection PyTypeHints
         cls.open_clients[:] = [i for i in cls.open_clients if i.name != _account_name]
 
 
@@ -258,7 +259,7 @@ class Martin(mr.MartinBase):
 
     async def fetch_order(self, request: mr.FetchOrderRequest) -> mr.FetchOrderResponse:
         response = mr.FetchOrderResponse()
-        res, _, msg_header = await self.send_request(
+        res, client, msg_header = await self.send_request(
             'fetch_order',
             request,
             rate_limit=True,
@@ -269,22 +270,21 @@ class Martin(mr.MartinBase):
         )
         logger.debug(f"{msg_header}: {res}")
 
-        if res and request.filled_update_call and Decimal(res['executedQty']):
-            request.order_id = res['orderId']
-            await self.create_trade_stream_event(request, res)
+        if _queue := client.on_order_update_queues.get(request.trade_id):
+            if res and request.filled_update_call and Decimal(res['executedQty']):
+                request.order_id = res['orderId']
+                await self.create_trade_stream_event(request, res, _queue)
         response.from_pydict(res)
         return response
 
-    async def create_trade_stream_event(self, request, order):
-        trades, client, msg_header = await self.send_request(
+    async def create_trade_stream_event(self, request, order, _queue):
+        trades, _, msg_header = await self.send_request(
             'fetch_order_trade_list',
             request,
             trade_id=request.trade_id,
             symbol=request.symbol,
             order_id=request.order_id
         )
-
-        _queue = client.on_order_update_queues.get(request.trade_id)
 
         for trade in trades:
             trade['updateTime'] = trade.pop('time')

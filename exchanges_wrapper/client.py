@@ -51,7 +51,7 @@ class Client:
         'passphrase', 'endpoint_api_public', 'endpoint_ws_public',
         'endpoint_api_auth', 'endpoint_ws_auth', 'endpoint_ws_api',
         'ws_add_on', 'master_email', 'master_name', 'two_fa', 'http',
-        'user_session', 'loaded', 'symbols', 'highest_precision',
+        'user_session', 'symbols', 'highest_precision',
         'rate_limits', 'data_streams', 'active_orders', 'wss_buffer',
         'stream_queue', 'on_order_update_queues', 'account_id',
         'account_uid', 'main_account_id', 'main_account_uid',
@@ -98,7 +98,6 @@ class Client:
         else:
             self.user_session = None
         #
-        self.loaded = False
         self.symbols = {}
         self.highest_precision = None
         self.rate_limits = None
@@ -150,7 +149,6 @@ class Client:
                 logger.info(f"Main ByBit account UID: {self.main_account_uid}, sub-UID: {self.account_uid}")
         # load rate limits
         self.rate_limits = infos["rateLimits"]
-        self.loaded = True
         logger.info(f"Info for {self.exchange}:{symbol} loaded successfully")
 
     async def close(self):
@@ -229,7 +227,7 @@ class Client:
             await self.user_session.stop(_trade_id)
 
     def assert_symbol_exists(self, symbol):
-        if self.loaded and symbol not in self.symbols:
+        if symbol not in self.symbols:
             raise ExchangePyError(f"Symbol {symbol} is not valid according to the loaded exchange infos")
 
     def symbol_to_bfx(self, symbol) -> str:
@@ -279,32 +277,31 @@ class Client:
     def refine_amount(self, symbol, amount: Union[str, Decimal], _quote=False):
         if type(amount) is str:  # to save time for developers
             amount = Decimal(amount)
-        if self.loaded:
-            precision = self.symbols[symbol]["baseAssetPrecision"]
-            lot_size_filter = self.symbols[symbol]["filters"]["LOT_SIZE"]
-            step_size = Decimal(lot_size_filter["stepSize"])
-            # noinspection PyStringFormat
-            amount = (
-                (f"%.{precision}f" % truncate(amount if _quote else (amount - amount % step_size), precision))
-                .rstrip("0")
-                .rstrip(".")
-            )
+
+        precision = self.symbols[symbol]["baseAssetPrecision"]
+        lot_size_filter = self.symbols[symbol]["filters"]["LOT_SIZE"]
+        step_size = Decimal(lot_size_filter["stepSize"])
+        # noinspection PyStringFormat
+        amount = (
+            (f"%.{precision}f" % truncate(amount if _quote else (amount - amount % step_size), precision))
+            .rstrip("0")
+            .rstrip(".")
+        )
         return amount
 
     def refine_price(self, symbol, price: Union[str, Decimal]):
         if isinstance(price, str):  # to save time for developers
             price = Decimal(price)
 
-        if self.loaded:
-            precision = self.symbols[symbol]["baseAssetPrecision"]
-            price_filter = self.symbols[symbol]["filters"]["PRICE_FILTER"]
-            price = price - (price % Decimal(price_filter["tickSize"]))
-            # noinspection PyStringFormat
-            price = (
-                (f"%.{precision}f" % truncate(price, precision))
-                .rstrip("0")
-                .rstrip(".")
-            )
+        precision = self.symbols[symbol]["baseAssetPrecision"]
+        price_filter = self.symbols[symbol]["filters"]["PRICE_FILTER"]
+        price = price - (price % Decimal(price_filter["tickSize"]))
+        # noinspection PyStringFormat
+        price = (
+            (f"%.{precision}f" % truncate(price, precision))
+            .rstrip("0")
+            .rstrip(".")
+        )
         return price
 
     def assert_symbol(self, symbol):

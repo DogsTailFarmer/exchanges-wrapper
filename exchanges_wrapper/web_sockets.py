@@ -262,7 +262,7 @@ class EventsDataStream:
             await asyncio.sleep(interval)
             try:
                 await self.websocket.send(json.dumps({"req_id": req_id, "op": "ping"}))
-            except (ConnectionClosed, asyncio.exceptions.TimeoutError):
+            except (ConnectionClosed, asyncio.exceptions.TimeoutError, AttributeError):
                 break
 
     async def htx_keepalive(self, interval=60):
