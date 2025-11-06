@@ -59,6 +59,7 @@ root_logger.addHandler(sh)
 
 logging.basicConfig()
 logging.getLogger('hpack').setLevel(logging.INFO)
+logging.getLogger('grpclib.protocol').setLevel(logging.INFO)
 
 
 class OpenClient:
@@ -529,10 +530,12 @@ class Martin(mr.MartinBase):
         _event_type = f"{_symbol}@miniTicker"
         client.events.register_event(functools.partial(event_handler, _queue, client, request.trade_id, _event_type),
                                      _event_type, client.exchange, request.trade_id)
+        Martin.ticker_update_time[request.trade_id] = time.time()
         while True:
             _event = await _queue.get()
             if isinstance(_event, str) and _event == request.trade_id:
                 client.stream_queue.get(request.trade_id, set()).discard(_queue)
+                Martin.ticker_update_time.pop(request.trade_id, None)
                 logger.info(f"OnTickerUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
@@ -774,13 +777,15 @@ class Martin(mr.MartinBase):
         return response
 
     async def check_stream(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        response = mr.SimpleResponse()
-        check_time = time.time() - Martin.ticker_update_time.get(request.trade_id, time.time() - WSS_TICKER_TIMEOUT - 1)
-        if check_time < WSS_TICKER_TIMEOUT:
-            response.success = True
-        else:
-            response.success = False
+        last_update = Martin.ticker_update_time.get(request.trade_id, 0)
+        check_time = time.time() - last_update
+        success = check_time < WSS_TICKER_TIMEOUT
+        response = mr.SimpleResponse(success=success)
+
+        if not success:
+            Martin.ticker_update_time.pop(request.trade_id, None)
             logger.warning(f"CheckStream request failed for {request.trade_id}")
+
         return response
 
     async def client_restart(self, request: mr.MarketRequest) -> mr.SimpleResponse:
@@ -832,7 +837,7 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
         [task.cancel() for task in asyncio.all_tasks() if not task.done() and task is not asyncio.current_task()]
 
 
-def main():
+if __name__ == '__main__':
     try:
         asyncio.run(amain())
     except grpclib.exceptions.StreamTerminatedError:
@@ -840,6 +845,3 @@ def main():
     except Exception as expt:
         print(f"Exception: {expt}")
         print(traceback.format_exc())
-
-if __name__ == '__main__':
-    main()
