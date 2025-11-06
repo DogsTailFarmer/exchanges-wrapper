@@ -1,3 +1,8 @@
+## 2.1.43b02 2025-11-06
+🔧 fix(exch_srv): set logging level for 'grpclib.protocol' and update ticker handling logic  
+🔧 fix(pyproject.toml): update 'aiohttp' dependency version to 3.13.2  
+🔧 fix(requirements.txt): update 'aiohttp' dependency version to 3.13.2 
+
 ## 2.1.43b01 2025-11-05
 ✨ feat(exch_srv): enhance `fetch_order` and `create_trade_stream_event` methods with client queue support  
 🐛 fix(web_sockets): handle additional `AttributeError` in `htx_keepalive` method 
