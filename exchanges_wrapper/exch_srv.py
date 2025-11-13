@@ -95,10 +95,9 @@ class OpenClient:
         return res
 
     @classmethod
-    def remove_client(cls, _account_name):
+    def remove_client(cls, _id):
         # noinspection PyTypeHints
-        cls.open_clients[:] = [i for i in cls.open_clients if i.name != _account_name]
-
+        cls.open_clients[:] = [i for i in cls.open_clients if id(i) != _id]
 
 # noinspection PyPep8Naming,PyMethodMayBeStatic
 class Martin(mr.MartinBase):
@@ -146,7 +145,7 @@ class Martin(mr.MartinBase):
             await asyncio.wait_for(open_client.client.load(request.symbol), timeout=HEARTBEAT * 60)
         except asyncio.exceptions.TimeoutError:
             await OpenClient.get_client(client_id).client.http.close_session()
-            OpenClient.remove_client(request.account_name)
+            OpenClient.remove_client(client_id)
             raise GRPCError(status=Status.UNAVAILABLE, message=f"'{open_client.name}' timeout error")
         except Exception as ex:
             logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
@@ -781,17 +780,19 @@ class Martin(mr.MartinBase):
         check_time = time.time() - last_update
         success = check_time < WSS_TICKER_TIMEOUT
         response = mr.SimpleResponse(success=success)
-
         if not success:
             Martin.ticker_update_time.pop(request.trade_id, None)
             logger.warning(f"CheckStream request failed for {request.trade_id}")
-
         return response
 
     async def client_restart(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        if session := OpenClient.get_client(request.client_id).client.http:
-            await session.close_session()
-        OpenClient.remove_client(request.account_name)
+        await self.stop_stream(request)
+        if client := OpenClient.get_client(request.client_id).client:
+            if user_session := client.user_session:
+                await user_session.stop(request.trade_id)
+            if session := client.http:
+                await session.close_session()
+        OpenClient.remove_client(request.client_id)
         return mr.SimpleResponse(success=True)
 
 
@@ -802,6 +803,7 @@ async def stop_stream_ex(client, trade_id):
     await asyncio.sleep(0)
     client.on_order_update_queues.pop(trade_id, None)
     client.stream_queue.pop(trade_id, None)
+    Martin.ticker_update_time.pop(trade_id, None)
     gc.collect(generation=2)
 
 
@@ -837,7 +839,7 @@ async def amain(host: str = '127.0.0.1', port: int = 50051):
         [task.cancel() for task in asyncio.all_tasks() if not task.done() and task is not asyncio.current_task()]
 
 
-if __name__ == '__main__':
+def main():
     try:
         asyncio.run(amain())
     except grpclib.exceptions.StreamTerminatedError:
@@ -845,3 +847,7 @@ if __name__ == '__main__':
     except Exception as expt:
         print(f"Exception: {expt}")
         print(traceback.format_exc())
+
+
+if __name__ == '__main__':
+    main()

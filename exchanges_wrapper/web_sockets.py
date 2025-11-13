@@ -274,7 +274,8 @@ class EventsDataStream:
             else:
                 self.ping = 1
         self.logger.warning("From HTX server PING timeout exceeded")
-        await self.websocket.close()
+        if self.websocket:
+            await self.websocket.close()
 
 
 class MarketEventsDataStream(EventsDataStream):
