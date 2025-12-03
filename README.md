@@ -134,7 +134,7 @@ docker run -itP \
 *USDT* (TRC20) TN8F3Dz8BU8VwECRh3LTKi7FrsU8eWfsZz
 
 ## Powered by exchanges-wrapper
-<a><img align="middle" src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="50"></a>
+<a><img align="middle" src="https://raw.githubusercontent.com/DogsTailFarmer/martin-binance/55758a8d32b08c4deb1b34add01c5e259b88f738/doc/Modified%20martingale.svg" width="50"></a>
 [martin-binance](https://github.com/DogsTailFarmer/martin-binance)
 
 Free trading system for crypto exchanges SPOT markets. Adaptive customizable reverse grid strategy based on martingale.
