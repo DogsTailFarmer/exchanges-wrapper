@@ -8,6 +8,8 @@ import grpclib.exceptions
 from exchanges_wrapper import __version__ as VER_EW
 # noinspection PyPep8Naming
 from crypto_ws_api import __version__ as VER_CW
+from crypto_ws_api.ws_session import set_logger
+
 import time
 import weakref
 import gc
@@ -16,8 +18,9 @@ import asyncio
 import functools
 # noinspection PyPackageRequirements
 import ujson as json
-import logging.handlers
+import logging
 from decimal import Decimal
+import ctypes, ctypes.util
 
 import exchanges_wrapper.martin as mr
 from exchanges_wrapper import WORK_PATH, LOG_FILE, errors, Server, Status, GRPCError, graceful_exit
@@ -41,25 +44,12 @@ HEARTBEAT = 1  # sec
 MAX_QUEUE_SIZE = 100
 WSS_TICKER_TIMEOUT = 600  # sec
 #
-logger = logging.getLogger(__name__)
-formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
-#
-fh = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1000000, backupCount=10)
-fh.setFormatter(formatter)
-fh.setLevel(logging.DEBUG)
-#
-sh = logging.StreamHandler()
-sh.setFormatter(formatter)
-sh.setLevel(logging.INFO)
-#
-root_logger = logging.getLogger()
-root_logger.setLevel(min([fh.level, sh.level]))
-root_logger.addHandler(fh)
-root_logger.addHandler(sh)
-
-logging.basicConfig()
+logger = set_logger(__name__, LOG_FILE, file_level=logging.DEBUG, set_root_logger=True)
 logging.getLogger('hpack').setLevel(logging.INFO)
 logging.getLogger('grpclib.protocol').setLevel(logging.INFO)
+
+def malloc_trim(trim_type: int = 0):
+    ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(trim_type)
 
 
 class OpenClient:
@@ -805,6 +795,7 @@ async def stop_stream_ex(client, trade_id):
     client.stream_queue.pop(trade_id, None)
     Martin.ticker_update_time.pop(trade_id, None)
     gc.collect(generation=2)
+    malloc_trim()
 
 
 async def event_handler(_queue, client, trade_id, _event_type, event):

@@ -1,3 +1,8 @@
+## 2.1.43 2025-12-03
+✨ feat(exch_srv): set logger using `set_logger` and implement `malloc_trim` for memory management  
+🔧 fix(web_sockets): enhance WSS lifetime logging with trade ID  
+🔧 fix(dependencies): update `crypto-ws-api` version to `2.1.4`
+
 ## 2.1.43b02 2025-11-06
 🔧 fix(exch_srv): set logging level for 'grpclib.protocol' and update ticker handling logic  
 🔧 fix(pyproject.toml): update 'aiohttp' dependency version to 3.13.2  

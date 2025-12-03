@@ -84,7 +84,7 @@ class EventsDataStream:
             except ConnectionClosed as ex:
                 self.websocket = None
                 ct = str(datetime.now(timezone.utc).replace(tzinfo=None) - start_time).rsplit('.')[0]
-                self.logger.info(f"WSS life time for {self.exchange} is {ct}")
+                self.logger.info(f"WSS life time for {self.exchange}:{self.trade_id} is {ct}")
                 if ex.rcvd and ex.rcvd.code == 4000:
                     self.logger.info(f"WSS closed for {self.exchange}:{self.trade_id}")
                     break
