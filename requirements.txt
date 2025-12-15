@@ -4,4 +4,4 @@ simplejson==3.20.2
 aiohttp~=3.13.2
 expiringdict~=1.2.2
 betterproto==2.0.0b7
-grpclib~=0.4.8
+grpclib~=0.4.9
