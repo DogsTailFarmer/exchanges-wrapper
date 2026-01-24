@@ -78,6 +78,7 @@ def exchange_info(server_time: int, trading_symbol: list, tickers: list, symbol_
                 "isMarginTradingAllowed": False,
                 "filters": [_price_filter, _lot_size, _min_notional, _percent_price],
                 "permissions": ["SPOT"],
+                "instIdCode": market.get("instIdCode")
             }
             symbols.append(symbol)
 

@@ -1,3 +1,6 @@
+## 2.1.44 2026-01-24
+♻️ chore(client/okx): add `symbol_to_id` method and use `instIdCode` for OKX requests
+
 ## 2.1.43 2025-12-03
 ✨ feat(exch_srv): set logger using `set_logger` and implement `malloc_trim` for memory management  
 🔧 fix(web_sockets): enhance WSS lifetime logging with trade ID  

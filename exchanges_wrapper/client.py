@@ -244,6 +244,9 @@ class Client:
         symbol_info = self.symbols.get(symbol)
         return f"{symbol_info.get('baseAsset')}-{symbol_info.get('quoteAsset')}"
 
+    def symbol_to_id(self, symbol) -> int:
+        return self.symbols.get(symbol).get('instIdCode')
+
     def active_order(self, order_id: int, quantity="0", executed_qty="0", last_event=None):
         quantity_decimal = Decimal(quantity)
         executed_qty_decimal = Decimal(executed_qty)
@@ -858,7 +861,7 @@ class Client:
                 self.active_order(int(res), quantity, binance_res['executedQty'])
         elif self.exchange == 'okx':
             params = {
-                "instId": self.symbol_to_okx(symbol),
+                "instIdCode": self.symbol_to_id(symbol),
                 "tdMode": "cash",
                 "clOrdId": new_client_order_id,
                 "side": side.lower(),
@@ -867,6 +870,7 @@ class Client:
                 "px": price,
             }
             res = await self.user_session.handle_request(trade_id, "order", _params=params)
+            params["instId"] = self.symbol_to_okx(symbol)
             if res is None:
                 fallback_warning(self.exchange, symbol)
                 res = await self.http.send_api_call(
@@ -1071,19 +1075,19 @@ class Client:
             _queue = asyncio.Queue()
             self.on_order_update_queues.update({f"{_symbol}{order_id}": _queue})
             params = {
-                "instId": _symbol,
+                "instIdCode": self.symbol_to_id(symbol),
                 "ordId": str(order_id),
                 "clOrdId": str(origin_client_order_id),
             }
-            _res = (
-                    await self.user_session.handle_request(trade_id, "cancel-order", _params=params)
-                    or await self.http.send_api_call(
-                        "/api/v5/trade/cancel-order",
-                        method="POST",
-                        signed=True,
-                        **params,
-                    )
-            )
+            _res = await self.user_session.handle_request(trade_id, "cancel-order", _params=params)
+            if _res is None:
+                params["instId"] = self.symbol_to_okx(symbol)
+                _res = await self.http.send_api_call(
+                    "/api/v5/trade/cancel-order",
+                    method="POST",
+                    signed=True,
+                    **params,
+                )
             if _res[0].get('sCode') != '0':
                 raise UserWarning(_res[0].get('sMsg'))
             try:
@@ -1180,7 +1184,13 @@ class Client:
                 for order in orders:
                     order['status'] = 'CANCELED'
                     orders_canceled.append(order)
-                    params.append({'instId': _symbol, 'ordId': order.get('orderId')})
+                    params.append(
+                        {
+                            "instIdCode": self.symbol_to_id(symbol),
+                            'instId': _symbol,
+                            'ordId': order.get('orderId')
+                        }
+                    )
                     if i >= 19:
                         break
                     i += 1
