@@ -1,4 +1,4 @@
-crypto-ws-api==2.1.5
+crypto-ws-api==2.1.6
 pyotp==2.9.0
 simplejson==3.20.2
 aiohttp~=3.13.3

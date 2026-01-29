@@ -1,7 +1,5 @@
-## 2.1.45 2026-01-29
-[♻️] chore(version): Bump to 2.1.45  
-[📝] docs(changelog): Add 2.1.44 entry  
-[📦] dep(crypto-ws-api): Upgrade to 2.1.5
+## 2.1.46 2026-01-29
+[♻️] chore(version): Bump to 2.1.46 and update **crypto-ws-api**/**aiohttp** dependencies
 
 ## 2.1.45 2026-01-29
 [♻️] chore(version): Bump to 2.1.45  
