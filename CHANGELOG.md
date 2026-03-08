@@ -1,3 +1,6 @@
+## 2.1.47 2026-03-08
+♻️ chore(version): Bump **crypto-ws-api** to 2.1.7 and update version to 2.1.47 in **CHANGELOG.md**
+
 ## 2.1.46 2026-01-29
 [♻️] chore(version): Bump to 2.1.46 and update **crypto-ws-api**/**aiohttp** dependencies
 
