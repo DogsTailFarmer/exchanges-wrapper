@@ -1,3 +1,8 @@
+## 2.1.48 2026-04-03
+🔧 fix(exch_srv): Handle `RateLimitReached` exception in `OpenClientConnection` gracefully  
+♻️ chore(requirements): Update `crypto-ws-api` to version 2.1.8  
+♻️ chore(requirements): Upgrade `aiohttp` to version 3.13.4  
+
 ## 2.1.47 2026-03-08
 ♻️ chore(version): Bump **crypto-ws-api** to 2.1.7 and update version to 2.1.47 in **CHANGELOG.md**
 

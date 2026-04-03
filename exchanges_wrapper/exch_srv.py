@@ -39,6 +39,7 @@ from exchanges_wrapper.martin import (
     OnTickerUpdateResponse,
     FetchOrderBookResponse,
 )
+from exchanges_wrapper.errors import RateLimitReached
 #
 HEARTBEAT = 1  # sec
 MAX_QUEUE_SIZE = 100
@@ -137,6 +138,16 @@ class Martin(mr.MartinBase):
             await OpenClient.get_client(client_id).client.http.close_session()
             OpenClient.remove_client(client_id)
             raise GRPCError(status=Status.UNAVAILABLE, message=f"'{open_client.name}' timeout error")
+        except RateLimitReached:
+            await OpenClient.get_client(client_id).client.http.close_session()
+            OpenClient.remove_client(client_id)
+            logger.warning(f"OpenClientConnection LOADS for {open_client.name}: {RateLimitReached.message},"
+                           f" trying some later")
+            await asyncio.sleep(HEARTBEAT * 60)
+            raise GRPCError(
+                status=Status.RESOURCE_EXHAUSTED,
+                message=f"'{open_client.name}: {RateLimitReached.message}'"
+            )
         except Exception as ex:
             logger.warning(f"OpenClientConnection for '{open_client.name}' exception: {ex}")
             logger.debug(f"Exception traceback: {traceback.format_exc()}")
