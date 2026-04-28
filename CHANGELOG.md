@@ -1,3 +1,10 @@
+## 2.1.49 2026-04-28
+🔄 chore(requirements): Upgrade `crypto-ws-api` to version 2.1.9  
+🔄 chore(requirements): Update `simplejson` to version 4.1.1  
+🔄 chore(requirements): Upgrade `aiohttp` to version 3.13.5  
+🔄 chore(pyproject): Require `flit_core` version >=3.12.0  
+🔄 chore(pyproject): Update Python requirement to >=3.12
+
 ## 2.1.48 2026-04-03
 🔧 fix(exch_srv): Handle `RateLimitReached` exception in `OpenClientConnection` gracefully  
 ♻️ chore(requirements): Update `crypto-ws-api` to version 2.1.8  
