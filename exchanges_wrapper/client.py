@@ -230,7 +230,7 @@ class Client:
             raise ExchangePyError(f"Symbol {symbol} is not valid according to the loaded exchange infos")
 
     def symbol_to_bfx(self, symbol) -> str:
-        symbol_info = self.symbols.get(symbol)
+        symbol_info = self.symbols.get(symbol, {})
         base_asset = symbol_info.get('baseAsset')
         quote_asset = symbol_info.get('quoteAsset')
         return (
@@ -240,11 +240,11 @@ class Client:
         )
 
     def symbol_to_okx(self, symbol) -> str:
-        symbol_info = self.symbols.get(symbol)
+        symbol_info = self.symbols.get(symbol, {})
         return f"{symbol_info.get('baseAsset')}-{symbol_info.get('quoteAsset')}"
 
     def symbol_to_id(self, symbol) -> int:
-        return self.symbols.get(symbol).get('instIdCode')
+        return self.symbols.get(symbol, {}).get('instIdCode')
 
     def active_order(self, order_id: int, quantity="0", executed_qty="0", last_event=None):
         quantity_decimal = Decimal(quantity)
@@ -343,6 +343,9 @@ class Client:
     # https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#exchange-information
     async def fetch_exchange_info(self, symbol):
         binance_res = {}
+        server_time = {}
+        if self.exchange in ('huobi', 'okx', 'bybit'):
+            server_time: dict = await self.fetch_server_time()
         if self.exchange == 'binance':
             binance_res = await self.http.send_api_call(
                 "/api/v3/exchangeInfo",
@@ -363,20 +366,17 @@ class Client:
             if symbols_details and tickers:
                 binance_res = bfx.exchange_info(symbols_details, tickers, symbol)
         elif self.exchange == 'huobi':
-            server_time = await self.fetch_server_time()
             params = {'symbols': symbol.lower()}
             trading_symbol = await self.http.send_api_call("v1/settings/common/market-symbols", **params)
             await self.set_htx_ids()
             binance_res = hbp.exchange_info(server_time.get('serverTime'), trading_symbol[0])
         elif self.exchange == 'okx':
             params = {'instType': 'SPOT'}
-            server_time = await self.fetch_server_time()
             instruments = await self.http.send_api_call("/api/v5/public/instruments", **params)
             tickers = await self.http.send_api_call("/api/v5/market/tickers", **params)
             binance_res = okx.exchange_info(server_time.get('serverTime'), instruments, tickers, symbol)
         elif self.exchange == 'bybit':
             params = {'category': 'spot', 'symbol': symbol}
-            server_time = await self.fetch_server_time()
             instruments, _ = await self.http.send_api_call("/v5/market/instruments-info", **params)
             binance_res = bbt.exchange_info(server_time.get('serverTime'), instruments.get('list'))
         # logger.info(f"fetch_exchange_info: binance_res: {binance_res}")

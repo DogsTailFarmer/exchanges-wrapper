@@ -1,3 +1,6 @@
+## 2.1.50post1 2026-06-17
+✨ feat(client): Add default empty dict for `symbol_info` in methods  
+
 ## 2.1.50 2026-06-17
 🔄 chore(requirements): Upgrade `pyotp` to version 2.10.0 in `requirements.txt`  
 🔄 chore(requirements): Upgrade `aiohttp` to version 3.14.1 in `requirements.txt`  
