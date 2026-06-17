@@ -21,9 +21,9 @@ requires-python = ">=3.12"
 
 dependencies = [
     "crypto-ws-api==2.1.9",
-    "pyotp==2.9.0",
+    "pyotp==2.10.0",
     "simplejson==4.1.1",
-    "aiohttp==3.13.5",
+    "aiohttp==3.14.1",
     "expiringdict~=1.2.2",
     "betterproto==2.0.0b7",
     "grpclib~=0.4.8"

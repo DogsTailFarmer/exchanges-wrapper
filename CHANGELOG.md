@@ -1,3 +1,11 @@
+## 2.1.50 2026-06-17
+🔄 chore(requirements): Upgrade `pyotp` to version 2.10.0 in `requirements.txt`  
+🔄 chore(requirements): Upgrade `aiohttp` to version 3.14.1 in `requirements.txt`  
+🧹 refactor(Client): Remove `sub_account` from `__slots__` in `client.py`  
+🧹 refactor(Client): Remove `sub_account` from `__init__` in `client.py`  
+🧹 refactor(lib): Remove `sub_account` from return value in `get_account_details` in `lib.py`  
+🧹 refactor(template): Remove `sub_account_name` from template in `exch_srv_cfg.toml.template`
+
 ## 2.1.49 2026-04-28
 🔄 chore(requirements): Upgrade `crypto-ws-api` to version 2.1.9  
 🔄 chore(requirements): Update `simplejson` to version 4.1.1  

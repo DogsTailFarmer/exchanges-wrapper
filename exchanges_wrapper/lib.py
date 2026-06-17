@@ -65,7 +65,6 @@ def get_account(account_name: str) -> dict:
     for account in accounts:
         if account.get('name') == account_name:
             exchange = account['exchange']
-            sub_account = account.get('sub_account_name')
             test_net = account['test_net']
             master_email = account.get('master_email')
             master_name = account.get('master_name')
@@ -79,7 +78,6 @@ def get_account(account_name: str) -> dict:
 
             return {
                 'exchange': exchange,
-                'sub_account': sub_account,
                 'test_net': test_net,
                 'api_key': account['api_key'],
                 'api_secret': account['api_secret'],

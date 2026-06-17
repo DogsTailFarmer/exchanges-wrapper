@@ -47,7 +47,7 @@ def any2str(_x) -> str:
 
 class Client:
     __slots__ = (
-        'exchange', 'sub_account', 'test_net', 'api_key', 'api_secret',
+        'exchange', 'test_net', 'api_key', 'api_secret',
         'passphrase', 'endpoint_api_public', 'endpoint_ws_public',
         'endpoint_api_auth', 'endpoint_ws_auth', 'endpoint_ws_api',
         'ws_add_on', 'master_email', 'master_name', 'two_fa', 'http',
@@ -61,7 +61,6 @@ class Client:
 
     def __init__(self, acc: dict):
         self.exchange = acc['exchange']
-        self.sub_account = acc['sub_account']
         self.test_net = acc['test_net']
         self.api_key = acc['api_key']
         self.api_secret = acc['api_secret']
