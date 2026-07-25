@@ -1,3 +1,9 @@
+## 2.1.51 2026-07-25
+🔧 fix(requirements): Update `crypto-ws-api` to version 2.1.11  
+🔧 fix(requirements): Update `aiohttp` to version 3.14.2  
+🔧 fix(requirements): Update `grpclib` to version 0.4.9  
+📝 docs(CHANGELOG): Add release notes for version 2.1.51
+
 ## 2.1.50post1 2026-06-17
 ✨ feat(client): Add default empty dict for `symbol_info` in methods  
 
