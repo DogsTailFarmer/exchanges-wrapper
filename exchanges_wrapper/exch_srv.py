@@ -669,7 +669,6 @@ class Martin(mr.MartinBase):
             else:
                 event = vars(_event)
                 event.pop('handlers', None)
-                # logger.info(f"OnOrderUpdate: {open_client.name}: {event}")
                 response.success = True
                 response.result = json.dumps(event)
                 yield response

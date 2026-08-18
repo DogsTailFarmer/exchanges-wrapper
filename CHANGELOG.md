@@ -1,3 +1,7 @@
+## 2.1.52 2026-08-18
+🔧 fix(requirements): Update dependencies
+🔧 fix(logging): Remove commented debug line in **`OnOrderUpdate`** method
+
 ## 2.1.51 2026-07-25
 🔧 fix(requirements): Update `crypto-ws-api` to version 2.1.11  
 🔧 fix(requirements): Update `aiohttp` to version 3.14.2  
