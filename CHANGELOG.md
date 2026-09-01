@@ -1,3 +1,8 @@
+## 2.2.2 2026-09-01
+📦 Deps(dependencies): Update `crypto-ws-api` to 2.1.15
+🔧 Config(pyproject): Relax flit_core version constraint
+📋 Version(__init__): Bump version to 2.2.2
+
 ## 2.2.1 2026-09-01
 Replace gRPC string fields with bytes and switch JSON serialization to orjson for improved performance
 

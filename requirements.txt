@@ -1,4 +1,4 @@
-crypto-ws-api==2.1.14
+crypto-ws-api==2.1.15
 pyotp==2.10.0
 aiohttp==3.14.3
 expiringdict==1.2.2
