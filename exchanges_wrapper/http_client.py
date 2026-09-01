@@ -1,7 +1,6 @@
 import asyncio
-import ujson as json
+import orjson
 from urllib.parse import urlencode, urlparse
-
 import aiohttp
 import logging
 import time
@@ -189,7 +188,7 @@ class HttpClient:
     async def _bitfinex_request(self, path, method, signed, send_api_key, endpoint, timeout, **kwargs):
         _endpoint = endpoint or self.endpoint
         bfx_post = (method == 'POST' and kwargs) or "params" in kwargs
-        _params = json.dumps(kwargs) if bfx_post else {}
+        _params = orjson.dumps(kwargs).decode() if bfx_post else {}
         url = f'{_endpoint}/{path}'
         query_kwargs = {"headers": {"Accept": AJ}}
         if kwargs and not bfx_post:
@@ -236,7 +235,7 @@ class HttpClient:
                 signature_payload = f"{ts}{self.api_key}{query_string}"
             else:
                 url += path
-                data = json.dumps(kwargs)
+                data = orjson.dumps(kwargs).decode()
                 signature_payload = f"{ts}{self.api_key}{data}"
 
             signature = generate_signature(self.exchange, self.api_secret, signature_payload)
@@ -288,7 +287,7 @@ class HttpClient:
         if signed:
             ts = f"{datetime.now(timezone.utc).replace(tzinfo=None).isoformat('T', 'milliseconds')}Z"
             if method == 'POST' and kwargs:
-                data = json.dumps(kwargs.get('data') if 'data' in kwargs else kwargs)
+                data = orjson.dumps(kwargs.get('data') if 'data' in kwargs else kwargs).decode()
                 signature_payload = f"{ts}{method}{path}{data}"
             else:
                 signature_payload = f"{ts}{method}{path}"

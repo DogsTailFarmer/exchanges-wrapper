@@ -1,3 +1,11 @@
+## 2.2.1 2026-09-01
+Replace gRPC string fields with bytes and switch JSON serialization to orjson for improved performance
+
+- Rename `JSONResponse` to `BytesResponse` and convert `string` proto fields to `bytes`
+- Replace `ujson`/`simplejson` with `orjson` across all serialization/deserialization paths
+- Use `orjson.dumps()` to write raw bytes directly into proto fields, eliminating redundant string encoding
+- Bump version to 2.2.1 and update dependencies
+
 ## 2.1.52 2026-08-18
 🔧 fix(requirements): Update dependencies
 🔧 fix(logging): Remove commented debug line in **`OnOrderUpdate`** method

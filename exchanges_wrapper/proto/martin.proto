@@ -1,4 +1,5 @@
 /*
+__version__ = "2.2.1"
 Protocol buffer definition for exchanges-wrapper exch_srv.py
 https://grpc.io/docs/languages/python/quickstart/
 For compile use next commands
@@ -16,11 +17,11 @@ service Martin {
   rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {}
   rpc CheckStream (MarketRequest) returns (SimpleResponse) {}
   rpc CreateLimitOrder (CreateLimitOrderRequest) returns (CreateLimitOrderResponse) {}
-  rpc FetchAccountInformation (OpenClientConnectionId) returns (JSONResponse) {}
-  rpc FetchAccountTradeList (AccountTradeListRequest) returns (JSONResponse) {}
+  rpc FetchAccountInformation (OpenClientConnectionId) returns (BytesResponse) {}
+  rpc FetchAccountTradeList (AccountTradeListRequest) returns (BytesResponse) {}
   rpc FetchExchangeInfoSymbol (MarketRequest) returns (FetchExchangeInfoSymbolResponse) {}
-  rpc FetchFundingWallet(FetchFundingWalletRequest) returns (JSONResponse) {}
-  rpc FetchKlines (FetchKlinesRequest) returns (JSONResponse) {}
+  rpc FetchFundingWallet(FetchFundingWalletRequest) returns (BytesResponse) {}
+  rpc FetchKlines (FetchKlinesRequest) returns (BytesResponse) {}
   rpc FetchOpenOrders (MarketRequest) returns (FetchOpenOrdersResponse) {}
   rpc FetchOrder (FetchOrderRequest) returns (FetchOrderResponse) {}
   rpc FetchOrderBook (MarketRequest) returns (FetchOrderBookResponse) {}
@@ -43,12 +44,12 @@ service Martin {
   rpc ClientRestart (MarketRequest) returns (SimpleResponse) {}
 }
 
-message JSONResponse {
-  repeated string items = 1;
+message BytesResponse {
+  repeated bytes items = 1;
 }
 
 message StreamResponse {
-  string event = 1;
+  bytes event = 1;
 }
 
 message FetchFundingWalletRequest{
@@ -157,7 +158,7 @@ message OnFundsUpdateRequest {
 
 message SimpleResponse {
   bool success = 1;
-  string result = 2;
+  bytes result = 2;
 }
 
 message OnTickerUpdateResponse {
@@ -177,7 +178,7 @@ message AccountTradeListRequest {
 message OnKlinesUpdateResponse {
   string symbol = 1;
   string interval =2;
-  string candle = 3;
+  bytes candle = 3;
 }
 
 message FetchKlinesRequest {
@@ -186,6 +187,7 @@ message FetchKlinesRequest {
   string symbol = 3;
   string interval = 4;
   uint32 limit = 5;
+  bytes intervals = 6;
 }
 
 message FetchTickerPriceChangeStatisticsResponse {
@@ -219,8 +221,8 @@ message FetchSymbolPriceTickerResponse {
 
 message FetchOrderBookResponse {
   uint64 lastUpdateId = 1;
-  repeated string bids = 2;
-  repeated string asks = 3;
+  repeated bytes bids = 2;
+  repeated bytes asks = 3;
 }
 
 message FetchExchangeInfoSymbolResponse {
@@ -362,7 +364,7 @@ message FetchOrderResponse {
 
 message FetchOpenOrdersResponse {
   int32 rate_limiter = 1;
-  repeated string orders = 2;
+  repeated bytes orders = 2;
 }
 
 message MarketRequest {

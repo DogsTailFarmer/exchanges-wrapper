@@ -16,7 +16,6 @@ import betterproto
 import grpclib
 from betterproto.grpc.grpclib_server import ServiceBase
 
-
 if TYPE_CHECKING:
     import grpclib.server
     from betterproto.grpc.grpclib_client import MetadataLike
@@ -24,13 +23,13 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False, repr=False)
-class JsonResponse(betterproto.Message):
-    items: List[str] = betterproto.string_field(1)
+class BytesResponse(betterproto.Message):
+    items: List[bytes] = betterproto.bytes_field(1)
 
 
 @dataclass(eq=False, repr=False)
 class StreamResponse(betterproto.Message):
-    event: str = betterproto.string_field(1)
+    event: bytes = betterproto.bytes_field(1)
 
 
 @dataclass(eq=False, repr=False)
@@ -146,7 +145,7 @@ class OnFundsUpdateRequest(betterproto.Message):
 @dataclass(eq=False, repr=False)
 class SimpleResponse(betterproto.Message):
     success: bool = betterproto.bool_field(1)
-    result: str = betterproto.string_field(2)
+    result: bytes = betterproto.bytes_field(2)
 
 
 @dataclass(eq=False, repr=False)
@@ -169,7 +168,7 @@ class AccountTradeListRequest(betterproto.Message):
 class OnKlinesUpdateResponse(betterproto.Message):
     symbol: str = betterproto.string_field(1)
     interval: str = betterproto.string_field(2)
-    candle: str = betterproto.string_field(3)
+    candle: bytes = betterproto.bytes_field(3)
 
 
 @dataclass(eq=False, repr=False)
@@ -179,6 +178,7 @@ class FetchKlinesRequest(betterproto.Message):
     symbol: str = betterproto.string_field(3)
     interval: str = betterproto.string_field(4)
     limit: int = betterproto.uint32_field(5)
+    intervals: bytes = betterproto.bytes_field(6)
 
 
 @dataclass(eq=False, repr=False)
@@ -215,8 +215,8 @@ class FetchSymbolPriceTickerResponse(betterproto.Message):
 @dataclass(eq=False, repr=False)
 class FetchOrderBookResponse(betterproto.Message):
     last_update_id: int = betterproto.uint64_field(1)
-    bids: List[str] = betterproto.string_field(2)
-    asks: List[str] = betterproto.string_field(3)
+    bids: List[bytes] = betterproto.bytes_field(2)
+    asks: List[bytes] = betterproto.bytes_field(3)
 
 
 @dataclass(eq=False, repr=False)
@@ -397,7 +397,7 @@ class FetchOrderResponse(betterproto.Message):
 @dataclass(eq=False, repr=False)
 class FetchOpenOrdersResponse(betterproto.Message):
     rate_limiter: int = betterproto.int32_field(1)
-    orders: List[str] = betterproto.string_field(2)
+    orders: List[bytes] = betterproto.bytes_field(2)
 
 
 @dataclass(eq=False, repr=False)
@@ -526,11 +526,11 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> "JsonResponse":
+    ) -> "BytesResponse":
         return await self._unary_unary(
             "/martin.Martin/FetchAccountInformation",
             open_client_connection_id,
-            JsonResponse,
+            BytesResponse,
             timeout=timeout,
             deadline=deadline,
             metadata=metadata,
@@ -543,11 +543,11 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> "JsonResponse":
+    ) -> "BytesResponse":
         return await self._unary_unary(
             "/martin.Martin/FetchAccountTradeList",
             account_trade_list_request,
-            JsonResponse,
+            BytesResponse,
             timeout=timeout,
             deadline=deadline,
             metadata=metadata,
@@ -577,11 +577,11 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> "JsonResponse":
+    ) -> "BytesResponse":
         return await self._unary_unary(
             "/martin.Martin/FetchFundingWallet",
             fetch_funding_wallet_request,
-            JsonResponse,
+            BytesResponse,
             timeout=timeout,
             deadline=deadline,
             metadata=metadata,
@@ -594,11 +594,11 @@ class MartinStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> "JsonResponse":
+    ) -> "BytesResponse":
         return await self._unary_unary(
             "/martin.Martin/FetchKlines",
             fetch_klines_request,
-            JsonResponse,
+            BytesResponse,
             timeout=timeout,
             deadline=deadline,
             metadata=metadata,
@@ -973,12 +973,12 @@ class MartinBase(ServiceBase):
 
     async def fetch_account_information(
         self, open_client_connection_id: "OpenClientConnectionId"
-    ) -> "JsonResponse":
+    ) -> "BytesResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def fetch_account_trade_list(
         self, account_trade_list_request: "AccountTradeListRequest"
-    ) -> "JsonResponse":
+    ) -> "BytesResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def fetch_exchange_info_symbol(
@@ -988,12 +988,12 @@ class MartinBase(ServiceBase):
 
     async def fetch_funding_wallet(
         self, fetch_funding_wallet_request: "FetchFundingWalletRequest"
-    ) -> "JsonResponse":
+    ) -> "BytesResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def fetch_klines(
         self, fetch_klines_request: "FetchKlinesRequest"
-    ) -> "JsonResponse":
+    ) -> "BytesResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def fetch_open_orders(
@@ -1128,14 +1128,14 @@ class MartinBase(ServiceBase):
         await stream.send_message(response)
 
     async def __rpc_fetch_account_information(
-        self, stream: "grpclib.server.Stream[OpenClientConnectionId, JsonResponse]"
+        self, stream: "grpclib.server.Stream[OpenClientConnectionId, BytesResponse]"
     ) -> None:
         request = await stream.recv_message()
         response = await self.fetch_account_information(request)
         await stream.send_message(response)
 
     async def __rpc_fetch_account_trade_list(
-        self, stream: "grpclib.server.Stream[AccountTradeListRequest, JsonResponse]"
+        self, stream: "grpclib.server.Stream[AccountTradeListRequest, BytesResponse]"
     ) -> None:
         request = await stream.recv_message()
         response = await self.fetch_account_trade_list(request)
@@ -1150,14 +1150,14 @@ class MartinBase(ServiceBase):
         await stream.send_message(response)
 
     async def __rpc_fetch_funding_wallet(
-        self, stream: "grpclib.server.Stream[FetchFundingWalletRequest, JsonResponse]"
+        self, stream: "grpclib.server.Stream[FetchFundingWalletRequest, BytesResponse]"
     ) -> None:
         request = await stream.recv_message()
         response = await self.fetch_funding_wallet(request)
         await stream.send_message(response)
 
     async def __rpc_fetch_klines(
-        self, stream: "grpclib.server.Stream[FetchKlinesRequest, JsonResponse]"
+        self, stream: "grpclib.server.Stream[FetchKlinesRequest, BytesResponse]"
     ) -> None:
         request = await stream.recv_message()
         response = await self.fetch_klines(request)
@@ -1356,13 +1356,13 @@ class MartinBase(ServiceBase):
                 self.__rpc_fetch_account_information,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 OpenClientConnectionId,
-                JsonResponse,
+                BytesResponse,
             ),
             "/martin.Martin/FetchAccountTradeList": grpclib.const.Handler(
                 self.__rpc_fetch_account_trade_list,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 AccountTradeListRequest,
-                JsonResponse,
+                BytesResponse,
             ),
             "/martin.Martin/FetchExchangeInfoSymbol": grpclib.const.Handler(
                 self.__rpc_fetch_exchange_info_symbol,
@@ -1374,13 +1374,13 @@ class MartinBase(ServiceBase):
                 self.__rpc_fetch_funding_wallet,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 FetchFundingWalletRequest,
-                JsonResponse,
+                BytesResponse,
             ),
             "/martin.Martin/FetchKlines": grpclib.const.Handler(
                 self.__rpc_fetch_klines,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 FetchKlinesRequest,
-                JsonResponse,
+                BytesResponse,
             ),
             "/martin.Martin/FetchOpenOrders": grpclib.const.Handler(
                 self.__rpc_fetch_open_orders,

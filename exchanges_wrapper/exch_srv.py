@@ -16,8 +16,7 @@ import gc
 import traceback
 import asyncio
 import functools
-# noinspection PyPackageRequirements
-import ujson as json
+import orjson
 import logging
 from decimal import Decimal
 import ctypes, ctypes.util
@@ -162,7 +161,7 @@ class Martin(mr.MartinBase):
             real_market=open_client.real_market
         )
 
-    async def reset_rate_limit(self, request: mr.OpenClientConnectionId) -> mr.SimpleResponse:
+    async def reset_rate_limit(self, request: mr.OpenClientConnectionId) -> SimpleResponse:
         Martin.rate_limiter = max(Martin.rate_limiter or 0, request.rate_limiter)
         _success = False
         open_client = OpenClient.get_client(request.client_id)
@@ -175,7 +174,7 @@ class Martin(mr.MartinBase):
                 _success = True
         elif client.http.rate_limit_reached:
             Martin.rate_limit_reached_time = time.time()
-        return mr.SimpleResponse(success=_success)
+        return SimpleResponse(success=_success)
 
     async def send_request(self, client_method_name, request, rate_limit=False, **kwargs):
         open_client_instance = OpenClient.get_client(request.client_id)
@@ -233,9 +232,9 @@ class Martin(mr.MartinBase):
         server_time = res.get('serverTime')
         return mr.FetchServerTimeResponse(server_time=server_time)
 
-    async def one_click_arrival_deposit(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+    async def one_click_arrival_deposit(self, request: mr.MarketRequest) -> SimpleResponse:
         res, _, _ = await self.send_request('one_click_arrival_deposit', request, tx_id=request.symbol)
-        return mr.SimpleResponse(success=True, result=json.dumps(str(res)))
+        return SimpleResponse(success=True, result=orjson.dumps(res))
 
     async def fetch_open_orders(self, request: mr.MarketRequest) -> mr.FetchOpenOrdersResponse:
         response = mr.FetchOpenOrdersResponse()
@@ -248,7 +247,7 @@ class Martin(mr.MartinBase):
         )
         for order in res:
             order_id = order['orderId']
-            response.orders.append(json.dumps(order))
+            response.orders.append(orjson.dumps(order))
             if client.exchange in ('bitfinex', 'huobi'):
                 client.active_order(order_id, order['origQty'], order['executedQty'])
 
@@ -302,8 +301,8 @@ class Martin(mr.MartinBase):
             await _queue.put(weakref.ref(event)())
         logger.debug(f"{msg_header}: {trades}")
 
-    async def cancel_all_orders(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        response = mr.SimpleResponse()
+    async def cancel_all_orders(self, request: mr.MarketRequest) -> SimpleResponse:
+        response = SimpleResponse()
 
         res, _, _ = await self.send_request(
             'cancel_all_orders',
@@ -313,7 +312,7 @@ class Martin(mr.MartinBase):
         )
 
         response.success = True
-        response.result = json.dumps(str(res))
+        response.result = orjson.dumps(res)
         return response
 
     async def fetch_exchange_info_symbol(self, request: mr.MarketRequest) -> mr.FetchExchangeInfoSymbolResponse:
@@ -353,8 +352,8 @@ class Martin(mr.MartinBase):
                 setattr(filters, filter_type.lower(), filter_instance)
         return filters
 
-    async def fetch_account_information(self, request: mr.OpenClientConnectionId) -> mr.JsonResponse:
-        response = mr.JsonResponse()
+    async def fetch_account_information(self, request: mr.OpenClientConnectionId) -> mr.BytesResponse:
+        response = mr.BytesResponse()
         account_information, _, _ = await self.send_request(
             'fetch_account_information',
             request,
@@ -363,17 +362,21 @@ class Martin(mr.MartinBase):
         )
         # Send only balances
         res = account_information.get('balances', [])
-        balances = [
-            {'asset': i['asset'], 'free': i['free'], 'locked': i['locked']}
-            for i in res if Decimal(i['free']) or Decimal(i['locked'])
-        ]
-        response.items = list(map(json.dumps, balances))
+        response.items.extend(
+            orjson.dumps({
+                'asset': i['asset'],
+                'free': i['free'],
+                'locked': i['locked']
+            })
+            for i in res
+            if float(i['free']) or float(i['locked'])
+        )
         return response
 
-    async def fetch_funding_wallet(self, request: mr.FetchFundingWalletRequest) -> mr.JsonResponse:
+    async def fetch_funding_wallet(self, request: mr.FetchFundingWalletRequest) -> mr.BytesResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = mr.JsonResponse()
+        response = mr.BytesResponse()
         res = []
         if client.exchange in ('bitfinex', 'okx', 'bybit') \
                 or (open_client.real_market and client.exchange == 'binance'):
@@ -384,7 +387,7 @@ class Martin(mr.MartinBase):
                 asset=request.asset,
                 need_btc_valuation=request.need_btc_valuation
             )
-        response.items = list(map(json.dumps, res))
+        response.items.extend(orjson.dumps(item) for item in res)
         return response
 
     async def fetch_order_book(self, request: mr.MarketRequest) -> mr.FetchOrderBookResponse:
@@ -396,9 +399,10 @@ class Martin(mr.MartinBase):
             symbol=request.symbol
         )
 
-        res['bids'] = [json.dumps(v) for v in res.get('bids', [])]
-        res['asks'] = [json.dumps(v) for v in res.get('asks', [])]
-        return response.from_pydict(res)
+        response.last_update_id = res.get('lastUpdateId', 0)
+        response.bids.extend(orjson.dumps(v) for v in res.get('bids', []))
+        response.asks.extend(orjson.dumps(v) for v in res.get('asks', []))
+        return response
 
     async def fetch_symbol_price_ticker(self, request: mr.MarketRequest) -> mr.FetchSymbolPriceTickerResponse:
         response = mr.FetchSymbolPriceTickerResponse()
@@ -423,8 +427,8 @@ class Martin(mr.MartinBase):
         )
         return response.from_pydict(res)
 
-    async def fetch_klines(self, request: mr.FetchKlinesRequest) -> mr.JsonResponse:
-        response = mr.JsonResponse()
+    async def fetch_klines(self, request: mr.FetchKlinesRequest) -> mr.BytesResponse:
+        response = mr.BytesResponse()
 
         res, _, _ = await self.send_request(
             'fetch_klines',
@@ -437,16 +441,16 @@ class Martin(mr.MartinBase):
             limit=request.limit
         )
 
-        response.items = list(map(json.dumps, res))
+        response.items.extend(orjson.dumps(item) for item in res)
         return response
 
     async def on_klines_update(self, request: mr.FetchKlinesRequest) -> AsyncGenerator[OnKlinesUpdateResponse, Any]:
-        response = mr.OnKlinesUpdateResponse()
+        response = OnKlinesUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
         client.stream_queue[request.trade_id] |= {_queue}
-        _intervals = json.loads(request.interval)
+        _intervals = orjson.loads(request.intervals)
         event_types = []
         # Register streams for intervals
         if client.exchange == 'bitfinex':
@@ -477,7 +481,7 @@ class Martin(mr.MartinBase):
                 # logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
                 response.symbol = _event.symbol
                 response.interval = _event.kline_interval
-                response.candle = json.dumps(
+                response.candle = orjson.dumps(
                     [_event.kline_start_time,
                      _event.kline_open_price,
                      _event.kline_high_price,
@@ -495,8 +499,8 @@ class Martin(mr.MartinBase):
                 yield response
                 _queue.task_done()
 
-    async def fetch_account_trade_list(self, request: mr.AccountTradeListRequest) -> mr.JsonResponse:
-        response = mr.JsonResponse()
+    async def fetch_account_trade_list(self, request: mr.AccountTradeListRequest) -> mr.BytesResponse:
+        response = mr.BytesResponse()
 
         res, _, _ = await self.send_request(
             'fetch_account_trade_list',
@@ -510,11 +514,11 @@ class Martin(mr.MartinBase):
             limit=request.limit
         )
 
-        response.items = list(map(json.dumps, res))
+        response.items.extend(orjson.dumps(item) for item in res)
         return response
 
     async def on_ticker_update(self, request: mr.MarketRequest) -> AsyncGenerator[OnTickerUpdateResponse, Any]:
-        response = mr.OnTickerUpdateResponse()
+        response = OnTickerUpdateResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -551,7 +555,7 @@ class Martin(mr.MartinBase):
                 _queue.task_done()
 
     async def on_order_book_update(self, request: mr.MarketRequest) -> AsyncGenerator[FetchOrderBookResponse, Any]:
-        response = mr.FetchOrderBookResponse()
+        response = FetchOrderBookResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.LifoQueue(MAX_QUEUE_SIZE * 5)
@@ -579,13 +583,13 @@ class Martin(mr.MartinBase):
             else:
                 if _event.bids and _event.asks:
                     response.last_update_id = _event.last_update_id
-                    response.bids = list(map(json.dumps, _event.bids))
-                    response.asks = list(map(json.dumps, _event.asks))
+                    response.bids.extend(orjson.dumps(v) for v in _event.bids)
+                    response.asks.extend(orjson.dumps(v) for v in _event.asks)
                     yield response
                 _queue.task_done()
 
     async def on_funds_update(self, request: mr.OnFundsUpdateRequest) -> AsyncGenerator[StreamResponse, Any]:
-        response = mr.StreamResponse()
+        response = StreamResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -600,12 +604,12 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnFundsUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             else:
-                response.event = json.dumps(_event.balances)
+                response.event = orjson.dumps(_event.balances)
                 yield response
                 _queue.task_done()
 
     async def on_balance_update(self, request: mr.MarketRequest) -> AsyncGenerator[StreamResponse, Any]:
-        response = mr.StreamResponse()
+        response = StreamResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -644,14 +648,14 @@ class Martin(mr.MartinBase):
                         "balance_delta": _event.balance_delta,
                         "clear_time": _event.clear_time
                     }
-                    response.event = json.dumps(balance)
+                    response.event = orjson.dumps(balance)
                     yield response
 
             if _get_event_from_queue:
                 _queue.task_done()
 
     async def on_order_update(self, request: mr.MarketRequest) -> AsyncGenerator[SimpleResponse, Any]:
-        response = mr.SimpleResponse()
+        response = SimpleResponse()
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
         _queue = asyncio.Queue(MAX_QUEUE_SIZE)
@@ -670,7 +674,7 @@ class Martin(mr.MartinBase):
                 event = vars(_event)
                 event.pop('handlers', None)
                 response.success = True
-                response.result = json.dumps(event)
+                response.result = orjson.dumps(event)
                 yield response
                 _queue.task_done()
 
@@ -713,8 +717,8 @@ class Martin(mr.MartinBase):
         response.from_pydict(res)
         return response
 
-    async def transfer_to_sub(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        response = mr.SimpleResponse()
+    async def transfer_to_sub(self, request: mr.MarketRequest) -> SimpleResponse:
+        response = SimpleResponse()
         response.success = False
 
         res, _, _ = await self.send_request(
@@ -728,11 +732,11 @@ class Martin(mr.MartinBase):
 
         if res and res.get("txnId"):
             response.success = True
-        response.result = json.dumps(res)
+        response.result = orjson.dumps(res)
         return response
 
-    async def transfer_to_master(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        response = mr.SimpleResponse()
+    async def transfer_to_master(self, request: mr.MarketRequest) -> SimpleResponse:
+        response = SimpleResponse()
         response.success = False
 
         res, _, _ = await self.send_request(
@@ -745,13 +749,13 @@ class Martin(mr.MartinBase):
 
         if res and res.get("txnId"):
             response.success = True
-        response.result = json.dumps(res)
+        response.result = orjson.dumps(res)
         return response
 
-    async def start_stream(self, request: mr.StartStreamRequest) -> mr.SimpleResponse:
+    async def start_stream(self, request: mr.StartStreamRequest) -> SimpleResponse:
         open_client = OpenClient.get_client(request.client_id)
         client = open_client.client
-        response = mr.SimpleResponse()
+        response = SimpleResponse()
         _market_stream_count = 0
         while _market_stream_count < request.market_stream_count:
             await asyncio.sleep(HEARTBEAT)
@@ -764,8 +768,8 @@ class Martin(mr.MartinBase):
         response.success = True
         return response
 
-    async def stop_stream(self, request: mr.MarketRequest) -> mr.SimpleResponse:
-        response = mr.SimpleResponse()
+    async def stop_stream(self, request: mr.MarketRequest) -> SimpleResponse:
+        response = SimpleResponse()
         if open_client := OpenClient.get_client(request.client_id):
             client = open_client.client
             logger.info(f"StopStream request for {request.symbol} on {client.exchange}")
@@ -775,17 +779,17 @@ class Martin(mr.MartinBase):
             response.success = False
         return response
 
-    async def check_stream(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+    async def check_stream(self, request: mr.MarketRequest) -> SimpleResponse:
         last_update = Martin.ticker_update_time.get(request.trade_id, 0)
         check_time = time.time() - last_update
         success = check_time < WSS_TICKER_TIMEOUT
-        response = mr.SimpleResponse(success=success)
+        response = SimpleResponse(success=success)
         if not success:
             Martin.ticker_update_time.pop(request.trade_id, None)
             logger.warning(f"CheckStream request failed for {request.trade_id}")
         return response
 
-    async def client_restart(self, request: mr.MarketRequest) -> mr.SimpleResponse:
+    async def client_restart(self, request: mr.MarketRequest) -> SimpleResponse:
         await self.stop_stream(request)
         if client := OpenClient.get_client(request.client_id).client:
             if user_session := client.user_session:
@@ -793,7 +797,7 @@ class Martin(mr.MartinBase):
             if session := client.http:
                 await session.close_session()
         OpenClient.remove_client(request.client_id)
-        return mr.SimpleResponse(success=True)
+        return SimpleResponse(success=True)
 
 
 async def stop_stream_ex(client, trade_id):

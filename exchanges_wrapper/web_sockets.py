@@ -2,9 +2,7 @@ import sys
 import asyncio
 import gc
 import logging
-
-# noinspection PyPackageRequirements
-import ujson as json
+import orjson
 from pathlib import Path
 import time
 from decimal import Decimal
@@ -114,7 +112,7 @@ class EventsDataStream:
         pass  # meant to be overridden in a subclass
 
     async def _handle_messages(self, msg, symbol=None, ch_type=str()):
-        msg_data = json.loads(msg if isinstance(msg, str) else gzip.decompress(msg))
+        msg_data = orjson.loads(msg if isinstance(msg, str) else gzip.decompress(msg))
         if self.exchange == 'binance':
             if "stream" in msg_data:
                 await self._handle_event(msg_data)
@@ -217,7 +215,7 @@ class EventsDataStream:
         elif self.exchange == 'huobi':
             if ping := msg_data.get('ping'):
                 self.ping = 0
-                await self.websocket.send(json.dumps({"pong": ping}))
+                await self.websocket.send(orjson.dumps({"pong": ping}), text = True)
                 await asyncio.sleep(0)
             elif msg_data.get('action') == 'ping':
                 self.ping = 0
@@ -227,7 +225,7 @@ class EventsDataStream:
                           "ts": msg_data.get('data').get('ts')
                     }
                 }
-                await self.websocket.send(json.dumps(pong))
+                await self.websocket.send(orjson.dumps(pong), text = True)
                 await asyncio.sleep(0)
             elif msg_data.get('tick') or msg_data.get('data'):
                 if ch_type == 'ticker':
@@ -252,7 +250,7 @@ class EventsDataStream:
 
     async def ws_listener(self, request=None, symbol=None, ch_type=str()):
         if request:
-            await self.websocket.send(json.dumps(request))
+            await self.websocket.send(orjson.dumps(request), text = True)
             await asyncio.sleep(0)
         async for msg_data in self.websocket:
             await self._handle_messages(msg_data, symbol, ch_type)
@@ -261,7 +259,7 @@ class EventsDataStream:
         while True:
             await asyncio.sleep(interval)
             try:
-                await self.websocket.send(json.dumps({"req_id": req_id, "op": "ping"}))
+                await self.websocket.send(orjson.dumps({"req_id": req_id, "op": "ping"}), text = True)
             except (ConnectionClosed, asyncio.exceptions.TimeoutError, AttributeError):
                 break
 
@@ -418,9 +416,10 @@ class HbpPrivateEventsDataStream(EventsDataStream):
 
     async def start_wss(self):
         await self.websocket.send(
-            json.dumps(
+            orjson.dumps(
                 compose_htx_ws_auth(self.endpoint, self.exchange, self.client.api_key, self.client.api_secret)
-            )
+            ),
+            text = True
         )
         await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
@@ -429,7 +428,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "action": "sub",
             "ch": "accounts.update#2"
         }
-        await self.websocket.send(json.dumps(request))
+        await self.websocket.send(orjson.dumps(request), text = True)
         await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
         #
@@ -437,7 +436,7 @@ class HbpPrivateEventsDataStream(EventsDataStream):
             "action": "sub",
             "ch": f"orders#{self.symbol.lower()}"
         }
-        await self.websocket.send(json.dumps(request))
+        await self.websocket.send(orjson.dumps(request), text = True)
         await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv(), symbol=self.symbol)
         #
@@ -546,7 +545,7 @@ class OkxPrivateEventsDataStream(EventsDataStream):
                              "sign": signature}
                             ]
                    }
-        await self.websocket.send(json.dumps(request))
+        await self.websocket.send(orjson.dumps(request), text = True)
         await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv())
         # Channel subscription
@@ -598,7 +597,7 @@ class BBTPrivateEventsDataStream(EventsDataStream):
             "op": 'auth',
             "args": [self.client.api_key, ts, signature]
         }
-        await self.websocket.send(json.dumps(request))
+        await self.websocket.send(orjson.dumps(request), text = True)
         await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv())
         # Channel subscription
@@ -633,9 +632,10 @@ class UserEventsDataStream(EventsDataStream):
 
     async def start_wss(self):
         await self.websocket.send(
-            json.dumps(
+            orjson.dumps(
                 compose_binance_ws_auth(self.trade_id, self.client.api_key, self.client.api_secret)
-            )
+            ),
+            text = True
         )
         await asyncio.sleep(0)
         await self._handle_messages(await self.websocket.recv())

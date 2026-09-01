@@ -3,11 +3,11 @@
 """
 Client example for exchanges-wrapper, examples of use of server methods are given
 """
-import ast
 import asyncio
 import toml
 import uuid
-import simplejson as json
+import orjson
+from typing import Any, List
 
 from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
 
@@ -16,6 +16,10 @@ FILE_CONFIG = 'ms_cfg.toml'
 config = toml.load(FILE_CONFIG)
 EXCHANGE = config.get('exchange')
 SYMBOL = 'BNBUSDT'
+
+
+def parse_bytes_response(response: Any) -> List[dict]:
+    return [orjson.loads(item) for item in getattr(response, 'items', [])]
 
 
 async def main(_exchange, _symbol):
@@ -112,7 +116,7 @@ async def on_order_update(_stub, _client_id, _symbol, trade_id):
             trade_id=trade_id,
             client_id=_client_id,
             symbol=_symbol)):
-        print(json.loads(event.result))
+        print(orjson.loads(event.result))
 
 
 async def on_balance_update(_stub, _client_id, _symbol, trade_id):
@@ -128,7 +132,7 @@ async def on_balance_update(_stub, _client_id, _symbol, trade_id):
             trade_id=trade_id,
             client_id=_client_id,
             symbol=_symbol)):
-        print(json.loads(res.event))
+        print(orjson.loads(res.event))
 
 
 async def fetch_open_orders(_stub, _client_id, _symbol):
@@ -140,7 +144,7 @@ async def fetch_open_orders(_stub, _client_id, _symbol):
     :return: https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#current-open-orders-user_data
     """
     _active_orders = await _stub.fetch_open_orders(mr.MarketRequest(client_id=_client_id, symbol=_symbol))
-    active_orders = list(map(json.loads, _active_orders.orders))
+    active_orders = list(map(orjson.loads, _active_orders.orders))
     print(f"active_orders: {active_orders}")
     return active_orders
 
@@ -184,7 +188,7 @@ async def cancel_all_orders(_stub, _client_id, _symbol):
     res = await _stub.cancel_all_orders(mr.MarketRequest(
         client_id=_client_id,
         symbol=_symbol))
-    result = ast.literal_eval(json.loads(res.result))
+    result = orjson.loads(res.result)
     print(f"cancel_all_orders.result: {result}")
 
 
@@ -202,7 +206,7 @@ async def fetch_account_information(_stub, _client_id):
     except Exception as _ex:
         print(f"Exception fetch_account_information: {_ex}")
     else:
-        balances = list(map(json.loads, res.items))
+        balances = parse_bytes_response(res)
         print(f"fetch_account_information.balances: {balances}")
 
 
@@ -221,7 +225,7 @@ async def fetch_funding_wallet(_stub, _client_id):
     except Exception as _ex:
         print(f"fetch_funding_wallet: {_ex}")
     else:
-        funding_wallet = list(map(json.loads, res.items))
+        funding_wallet = parse_bytes_response(res)
         print(f"fetch_funding_wallet.funding_wallet: {funding_wallet}")
 
 
@@ -286,7 +290,7 @@ async def fetch_klines(_stub, _client_id, _symbol, _interval, _limit):
         symbol=_symbol,
         interval=_interval,
         limit=_limit))
-    kline = list(map(json.loads, res.items))
+    kline = parse_bytes_response(res)
     print(f"fetch_klines.kline: {kline}")
 
 
@@ -306,7 +310,7 @@ async def fetch_account_trade_list(_stub, _client_id, _symbol, _limit, _start_ti
         limit=_limit,
         start_time=_start_time_ms)
     )
-    trades = list(map(json.loads, _trades.items))
+    trades = parse_bytes_response(_trades)
     print(f"fetch_account_trade_list.trades: {trades}")
 
 
