@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def on_balance_update(res: {}) -> {}:
+def on_balance_update(res: dict) -> dict:
     return {
         'e': 'balanceUpdate',
         'E': res.get('transactTime'),
@@ -18,11 +18,11 @@ def on_balance_update(res: {}) -> {}:
     }
 
 
-def fetch_server_time(res: {}) -> {}:
+def fetch_server_time(res: dict) -> dict:
     return {'serverTime': res}
 
 
-def exchange_info(server_time: int, _symbol_params) -> {}:
+def exchange_info(server_time: int, _symbol_params) -> dict:
     _tick_size = str(10**(-_symbol_params.get('pp')))
     _price_filter = {
         "filterType": "PRICE_FILTER",
@@ -87,7 +87,7 @@ def orders(res: list, response_type=None) -> list:
     return binance_orders
 
 
-def order(res: {}, response_type=None) -> {}:
+def order(res: dict, response_type=None) -> dict:
     symbol = res.get('symbol').upper()
     order_id = res.get('id')
     order_list_id = -1
@@ -171,7 +171,7 @@ def order(res: {}, response_type=None) -> {}:
         }
 
 
-def order_cancelled(symbol, order_id=None, origin_client_order_id=None,) -> {}:
+def order_cancelled(symbol, order_id=None, origin_client_order_id=None,) -> dict:
     return {
         "symbol": symbol,
         "origClientOrderId": origin_client_order_id,
@@ -190,7 +190,7 @@ def order_cancelled(symbol, order_id=None, origin_client_order_id=None,) -> {}:
     }
 
 
-def account_balances(res: {}) -> {}:
+def account_balances(res: dict) -> dict:
     """
     This function parses the Huobi API response for account information and
     returns a dictionary with relevant details.
@@ -205,7 +205,7 @@ def account_balances(res: {}) -> {}:
     # Filter out balances that have zero value
     res[:] = [i for i in res if i.get('balance') != '0']
 
-    assets = {}
+    assets = dict
     for balance in res:
         asset = balance['currency']
         assets.setdefault(asset, {
@@ -230,12 +230,12 @@ def account_balances(res: {}) -> {}:
     return {"balances": balances}
 
 
-def order_book(res: {}) -> {}:
+def order_book(res: dict) -> dict:
     res["lastUpdateId"] = res.pop("ts")
     return res
 
 
-def order_book_ws(res: {}, symbol: str) -> {}:
+def order_book_ws(res: dict, symbol: str) -> dict:
     return {
         'stream': f"{symbol}@depth5",
         'data': {'lastUpdateId': res['ts'],
@@ -245,14 +245,14 @@ def order_book_ws(res: {}, symbol: str) -> {}:
     }
 
 
-def fetch_symbol_price_ticker(res: {}, symbol) -> {}:
+def fetch_symbol_price_ticker(res: dict, symbol) -> dict:
     return {
         "symbol": symbol,
         "price": str(res.get('data')[0].get('price'))
     }
 
 
-def ticker_price_change_statistics(res: {}, symbol) -> {}:
+def ticker_price_change_statistics(res: dict, symbol) -> dict:
     return {
         "symbol": symbol,
         "priceChange": str(res.get('close') - res.get('open')),
@@ -280,8 +280,8 @@ def ticker_price_change_statistics(res: {}, symbol) -> {}:
     }
 
 
-def ticker(res: {}, symbol: str = None) -> {}:
-    tick = res.get('tick')
+def ticker(res: dict, symbol: str = None) -> dict:
+    tick: dict = res.get('tick')
     return {
         'stream': f"{symbol}@miniTicker",
         'data': {
@@ -350,9 +350,9 @@ def klines(res: list, _interval: str) -> list:
     return binance_klines
 
 
-def candle(res: dict, symbol: str = None, ch_type: str = None) -> {}:
-    tick = res.get('tick')
-    start_time = tick.get('id')
+def candle(res: dict, symbol = '', ch_type = '') -> dict:
+    tick: dict = res.get('tick')
+    start_time = tick.get('id') * 1000
     _interval = ch_type.split('_')[1]
     end_time = start_time + interval2value(interval(_interval)) * 1000 - 1
     return {
@@ -384,7 +384,7 @@ def candle(res: dict, symbol: str = None, ch_type: str = None) -> {}:
     }
 
 
-def on_funds_update(data: {}) -> {}:
+def on_funds_update(data: dict) -> dict:
     event_time = int(time.time() * 1000)
     binance_funds = {
         'e': 'outboundAccountPosition',
@@ -404,7 +404,7 @@ def on_funds_update(data: {}) -> {}:
     return binance_funds
 
 
-def on_order_update(_order: {}) -> {}:
+def on_order_update(_order: dict) -> dict:
     event = _order['lastEvent']
     order_quantity = event.get('orderSize', event.get('orderValue'))
     order_price = event.get('orderPrice', event.get('tradePrice'))

@@ -1,3 +1,7 @@
+## 2.2.4 2026-09-18
+🧹 Chore(exch_srv.py): Remove dead commented `logger.info` line
+🐛 Fix(parsers/huobi.py): Replace `{}` type hints with `dict` and multiply `candle` `start_time` by 1000
+
 ## 2.2.3 2026-09-18
 ⚡ Perf(exch_srv.py/klines): Cache `_event` in local `ev` and pre-allocate `response.candle` before `orjson.dumps`
 ♻️ Refactor(exch_srv.py/ticker): Replace `response.from_pydict()` with direct `open_price`, `last_price`, `close_time` assignments

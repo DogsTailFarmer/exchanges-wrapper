@@ -478,7 +478,6 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnKlinesUpdate: Stop loop for {open_client.name}:{request.symbol}:{_intervals}")
                 return
             else:
-                # logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
                 ev = _event
 
                 response.symbol = ev.symbol
