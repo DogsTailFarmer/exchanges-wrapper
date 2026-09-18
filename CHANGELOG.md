@@ -1,3 +1,11 @@
+## 2.2.3 2026-09-18
+⚡ Perf(exch_srv.py/klines): Cache `_event` in local `ev` and pre-allocate `response.candle` before `orjson.dumps`
+♻️ Refactor(exch_srv.py/ticker): Replace `response.from_pydict()` with direct `open_price`, `last_price`, `close_time` assignments
+🐛 Fix(exch_srv.py/orderbook): Call `.clear()` on `response.bids`/`asks` before `.extend()` to prevent stale data accumulation
+⚡ Perf(exch_srv.py/funds): Pre-allocate `response.event` byte-string before `orjson.dumps`
+⚡ Perf(exch_srv.py/balance): Cache `_event` in local `ev` and pre-allocate `response.event` before serialization
+♻️ Refactor(exch_srv.py/order): Use `_event.__dict__.copy()` over `vars(_event)` and pre-allocate `response.result`
+
 ## 2.2.2 2026-09-01
 📦 Deps(dependencies): Update `crypto-ws-api` to 2.1.15
 🔧 Config(pyproject): Relax flit_core version constraint

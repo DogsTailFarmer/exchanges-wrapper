@@ -479,23 +479,26 @@ class Martin(mr.MartinBase):
                 return
             else:
                 # logger.info(f"OnKlinesUpdate.event: {exchange}:{_event.symbol}:{_event.kline_interval}")
-                response.symbol = _event.symbol
-                response.interval = _event.kline_interval
-                response.candle = orjson.dumps(
-                    [_event.kline_start_time,
-                     _event.kline_open_price,
-                     _event.kline_high_price,
-                     _event.kline_low_price,
-                     _event.kline_close_price,
-                     _event.kline_base_asset_volume,
-                     _event.kline_close_time,
-                     _event.kline_quote_asset_volume,
-                     _event.kline_trades_number,
-                     _event.kline_taker_buy_base_asset_volume,
-                     _event.kline_taker_buy_quote_asset_volume,
-                     _event.kline_ignore
-                     ]
-                )
+                ev = _event
+
+                response.symbol = ev.symbol
+                response.interval = ev.kline_interval
+                response.candle = b""
+                response.candle = orjson.dumps([
+                    ev.kline_start_time,
+                    ev.kline_open_price,
+                    ev.kline_high_price,
+                    ev.kline_low_price,
+                    ev.kline_close_price,
+                    ev.kline_base_asset_volume,
+                    ev.kline_close_time,
+                    ev.kline_quote_asset_volume,
+                    ev.kline_trades_number,
+                    ev.kline_taker_buy_base_asset_volume,
+                    ev.kline_taker_buy_quote_asset_volume,
+                    ev.kline_ignore
+                ])
+
                 yield response
                 _queue.task_done()
 
@@ -544,13 +547,13 @@ class Martin(mr.MartinBase):
                 return
             else:
                 Martin.ticker_update_time[request.trade_id] = time.time()
-                response.from_pydict(
-                    {
-                        'openPrice': _event.open_price,
-                        'lastPrice': _event.close_price,
-                        'closeTime': _event.event_time
-                    }
-                )
+                ev = _event
+                response.open_price = ""
+                response.last_price = ""
+                response.open_price = str(ev.open_price)
+                response.last_price = str(ev.close_price)
+                response.close_time = int(ev.event_time)
+
                 yield response
                 _queue.task_done()
 
@@ -581,10 +584,21 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnOrderBookUpdate: Stop loop for {open_client.name}: {request.symbol}")
                 return
             else:
-                if _event.bids and _event.asks:
+                event_bids = _event.bids
+                event_asks = _event.asks
+
+                if event_bids and event_asks:
                     response.last_update_id = _event.last_update_id
-                    response.bids.extend(orjson.dumps(v) for v in _event.bids)
-                    response.asks.extend(orjson.dumps(v) for v in _event.asks)
+
+                    res_bids = response.bids
+                    res_asks = response.asks
+
+                    res_bids.clear()
+                    res_asks.clear()
+
+                    res_bids.extend(orjson.dumps(v) for v in event_bids)
+                    res_asks.extend(orjson.dumps(v) for v in event_asks)
+
                     yield response
                 _queue.task_done()
 
@@ -604,6 +618,7 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnFundsUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             else:
+                response.event = b""
                 response.event = orjson.dumps(_event.balances)
                 yield response
                 _queue.task_done()
@@ -641,13 +656,18 @@ class Martin(mr.MartinBase):
                     [_events.append(client.events.wrap_event(balance)) for balance in balances]
 
             for _event in _events:
-                if _event.asset in request.symbol:
+                ev = _event
+                ev_asset = ev.asset
+
+                if ev_asset in request.symbol:
                     balance = {
-                        "event_time": _event.event_time,
-                        "asset": _event.asset,
-                        "balance_delta": _event.balance_delta,
-                        "clear_time": _event.clear_time
+                        "event_time": ev.event_time,
+                        "asset": ev_asset,
+                        "balance_delta": ev.balance_delta,
+                        "clear_time": ev.clear_time
                     }
+
+                    response.event = b""
                     response.event = orjson.dumps(balance)
                     yield response
 
@@ -671,10 +691,12 @@ class Martin(mr.MartinBase):
                 logger.info(f"OnOrderUpdate: Stop user stream for {open_client.name}: {request.symbol}")
                 return
             else:
-                event = vars(_event)
-                event.pop('handlers', None)
+                event_dict = _event.__dict__.copy()
+                event_dict.pop('handlers', None)
+                response.result = b""
                 response.success = True
-                response.result = orjson.dumps(event)
+                response.result = orjson.dumps(event_dict)
+
                 yield response
                 _queue.task_done()
 
