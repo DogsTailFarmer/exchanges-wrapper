@@ -1,3 +1,8 @@
+## 2.2.5 2026-10-21
+🏷️ chore(__init__.py): Bump `__version__` to 2.2.5
+📦 chore(pyproject.toml): Bump `aiohttp` from 3.14.3 to 3.14.5
+📦 chore(requirements.txt): Bump `aiohttp` from 3.14.3 to 3.14.5
+
 ## 2.2.4 2026-09-18
 🧹 Chore(exch_srv.py): Remove dead commented `logger.info` line
 🐛 Fix(parsers/huobi.py): Replace `{}` type hints with `dict` and multiply `candle` `start_time` by 1000
