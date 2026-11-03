@@ -1,3 +1,6 @@
+## 2.2.6 2026-11-03
+🔧 fix(exch_srv_cfg.toml.template): Remove `:8443` port from OKX WebSocket endpoints
+
 ## 2.2.5 2026-10-21
 🏷️ chore(__init__.py): Bump `__version__` to 2.2.5
 📦 chore(pyproject.toml): Bump `aiohttp` from 3.14.3 to 3.14.5

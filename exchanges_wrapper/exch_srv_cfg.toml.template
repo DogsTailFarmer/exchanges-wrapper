@@ -29,11 +29,11 @@
     [endpoint.okx]
         api_public = 'https://www.okx.com'
         api_auth = 'https://www.okx.com'
-        ws_public = 'wss://ws.okx.com:8443/ws/v5/public'
-        ws_auth = 'wss://ws.okx.com:8443/ws/v5/private'
-        ws_business = 'wss://ws.okx.com:8443/ws/v5/business'
+        ws_public = 'wss://ws.okx.com/ws/v5/public'
+        ws_auth = 'wss://ws.okx.com/ws/v5/private'
+        ws_business = 'wss://ws.okx.com/ws/v5/business'
         api_test = 'https://www.okx.com'
-        ws_test = 'wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999'
+        ws_test = 'wss://wspap.okx.com/ws/v5/private?brokerId=9999'
 
     [endpoint.bybit]
         api_public = 'https://api.bybit.com'
