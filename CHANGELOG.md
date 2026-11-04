@@ -1,3 +1,6 @@
+## 2.2.7 2026-11-04
+🐛 fix(huobi.py): replace `dict` with `{}` for `assets` initialization
+
 ## 2.2.6 2026-11-03
 🔧 fix(exch_srv_cfg.toml.template): Remove `:8443` port from OKX WebSocket endpoints
 

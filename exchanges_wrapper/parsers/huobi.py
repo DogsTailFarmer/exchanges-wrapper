@@ -205,7 +205,7 @@ def account_balances(res: dict) -> dict:
     # Filter out balances that have zero value
     res[:] = [i for i in res if i.get('balance') != '0']
 
-    assets = dict
+    assets = {}
     for balance in res:
         asset = balance['currency']
         assets.setdefault(asset, {
